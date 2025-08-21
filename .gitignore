@@ -1,0 +1,22 @@
+﻿# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+.env.*
+*.log
+
+# SQLite / lokalne baze
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*-wal
+*-shm
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store

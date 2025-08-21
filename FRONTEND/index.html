@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Sports Analysis</title>
+    <script src="/static/app.js" defer></script>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="date-range">
+            <input type="datetime-local" id="fromDate" />
+            <input type="datetime-local" id="toDate" />
+        </div>
+        <div class="buttons">
+            <button id="analyze1p">Analyze 1+ 1st Half</button>
+            <button id="analyzeGG">Analyze GG 1st Half</button>
+            <button id="analyze2plus" class="btn">Analyze 2+ 1st Half</button>
+            <button id="prepareDay">Prepare day (cache)</button>
+        </div>
+        <div class="results">
+            <div class="section" id="top5">
+                <h3>TOP 5</h3>
+                <div class="placeholder">No analysis results yet.</div>
+            </div>
+            <div class="section" id="other">
+                <h3>OTHER</h3>
+                <div class="placeholder">No analysis results yet.</div>
+            </div>
+        </div>
+        <button id="savePdf">SAVE PDF</button>
+    </div>
+</body>
+</html>

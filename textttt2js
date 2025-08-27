@@ -1,0 +1,356 @@
+// ====== CONFIG ======
+const BACKEND_URL = window.location.origin;
+// ako backend nije isti origin/port, otkomentariši sledeće:
+// const BACKEND_URL = "http://127.0.0.1:8000";
+
+// ====== UI HELPERS ======
+function showLoader() {
+  const top5 = document.getElementById('top5');
+  const other = document.getElementById('other');
+  const loaderHTML = '<div class="loader" style="padding:12px;color:#555">Loading...</div>';
+  if (top5)  top5.innerHTML = loaderHTML;
+  if (other) other.innerHTML = loaderHTML;
+}
+
+const ANALYZE_BUTTON_IDS = ["analyze1p","analyzeGG","analyze2plus","analyzeFT2plus","savePdf","prepareDay"];
+
+function setBusyUI(busy, note = "") {
+  ANALYZE_BUTTON_IDS.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.disabled = busy;
+      if (busy) {
+        el.dataset._origText = el.dataset._origText || el.textContent;
+        if (el.id !== "savePdf") {
+          el.textContent = note || "Analiziram…";
+        }
+        el.style.opacity = "0.6";
+        el.style.cursor = "not-allowed";
+      } else {
+        if (el.dataset._origText) el.textContent = el.dataset._origText;
+        el.style.opacity = "";
+        el.style.cursor = "";
+      }
+    }
+  });
+  document.body.style.cursor = busy ? "progress" : "";
+}
+
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+const fmt = (v, suffix='') => (v === null || v === undefined || Number.isNaN(v)) ? '—' : `${v}${suffix}`;
+
+// ====== GENERIČKA ANALIZA (narativ) ======
+function buildNarrative(m, marketHint) {
+  const d = m.debug || {};
+  const leagueBase = fmt(d.m_league, '%');
+  const prior      = fmt(d.prior_percent, '%');
+  const micro      = fmt(d.micro_percent, '%');
+  const expSOT     = fmt(d.exp_sot1h_total);
+  const expDA      = fmt(d.exp_da1h_total);
+  const pos        = fmt(d.pos_edge_percent, '%');
+  const wshare     = fmt(d.merge_weight_micro);
+  const effPrior   = fmt(d.effn_prior);
+  const effMicro   = fmt(d.effn_micro);
+
+  const isGG  = marketHint === 'gg1h';
+  const isO15_1H = marketHint === '1h_over15';
+  const isO15_FT = marketHint === 'ft_over15';
+
+  let s = `${m.team1} vs ${m.team2}: ligaški baseline je oko ${leagueBase}. `;
+  s += `Prior (recent forma + H2H) procenjuje ${prior}, dok mikro-signali (oček. SOT=${expSOT}, DA=${expDA}, posjed-edge=${pos}) daju ${micro}. `;
+
+  if (isO15_1H) {
+    const lt = fmt(d.lambda_total), lh = fmt(d.lambda_home), la = fmt(d.lambda_away);
+    s += `Za 2+ gola u 1H koristimo Poisson aproksimaciju: λ_total≈${lt} (home ${lh}, away ${la}). `;
+  } else if (isO15_FT) {
+    const lt = fmt(d.lambda_total), lh = fmt(d.lambda_home), la = fmt(d.lambda_away);
+    s += `Za 2+ golova FT koristimo Poisson aproksimaciju: λ_total≈${lt} (home ${lh}, away ${la}). `;
+  } else if (isGG) {
+    const ph = fmt(d.p_home_scores_1h, '%');
+    const pa = fmt(d.p_away_scores_1h, '%');
+    const rho = (d.rho != null) ? `, ρ≈${fmt(d.rho)}` : '';
+    s += `Ind. verovatnoće da oba tima postignu gol u 1H su ${m.team1} ${ph} i ${m.team2} ${pa}${rho}. `;
+  }
+
+  s += `Spajanje je urađeno po preciznosti (effN prior=${effPrior}, micro=${effMicro}; udeo micro≈${wshare}), što daje konačnih ${fmt(m.final_percent, '%')}.`;
+  return s;
+}
+
+// ====== RENDER ======
+function renderResults(data, market) {
+  const currentMarket = market || '1h_over05';
+  window.currentAnalysisResults = data;
+
+  const top5Container = document.getElementById('top5');
+  const otherContainer = document.getElementById('other');
+
+  const total = Array.isArray(data) ? data.length : 0;
+  if (top5Container) top5Container.innerHTML = `<h3>TOP 5 <span style="font-weight:400;color:#666">(${total} ukupno)</span></h3>`;
+  if (otherContainer) otherContainer.innerHTML = '<h3>OTHER</h3>';
+
+  const cardHTML = (m) => {
+    const t1Sample = (m.team1_total>0) ? ` (${m.team1_hits}/${m.team1_total})` : '';
+    const t2Sample = (m.team2_total>0) ? ` (${m.team2_hits}/${m.team2_total})` : '';
+    const h2hSample= (m.h2h_total>0)  ? ` (${m.h2h_hits}/${m.h2h_total})`   : '';
+
+    const shotHome = (m.home_shots_used>0) ? fmt(m.home_shots_percent, '%') : '—';
+    const shotAway = (m.away_shots_used>0) ? fmt(m.away_shots_percent, '%') : '—';
+
+    const attHome  = (m.home_attacks_used>0) ? fmt(m.home_attacks_percent, '%') : '—';
+    const attAway  = (m.away_attacks_used>0) ? fmt(m.away_attacks_percent, '%') : '—';
+
+    const d = m.debug || {};
+    const isGG  = currentMarket === 'gg1h';
+    const isO15 = currentMarket === '1h_over15' || currentMarket === 'ft_over15';
+    const o15Label = currentMarket === 'ft_over15' ? 'Poisson λ (FT)' : 'Poisson λ (1H)';
+
+
+    return `
+      <div class="match" style="border:1px solid #eee;border-radius:10px;padding:12px;margin:10px 0">
+        <div style="font-weight:600;margin-bottom:6px">${fmt(m.league)}: ${fmt(m.team1)} vs ${fmt(m.team2)}</div>
+
+        <div style="margin:6px 0">
+          <div>${fmt(m.team1)} – Last ${fmt(m.team1_total)}: <strong>${fmt(m.team1_percent, '%')}</strong>${t1Sample}</div>
+          <div>${fmt(m.team2)} – Last ${fmt(m.team2_total)}: <strong>${fmt(m.team2_percent, '%')}</strong>${t2Sample}</div>
+          <div>H2H: <strong>${fmt(m.h2h_percent, '%')}</strong>${h2hSample}</div>
+        </div>
+
+        <div style="margin:6px 0">
+          <div><em>1H mikro signali (po timu):</em></div>
+          <div>Shots on Target (1H): Home ${shotHome} (used ${fmt(m.home_shots_used)}), Away ${shotAway} (used ${fmt(m.away_shots_used)})</div>
+          <div>Dangerous Attacks (1H): Home ${attHome} (used ${fmt(m.home_attacks_used)}), Away ${attAway} (used ${fmt(m.away_attacks_used)})</div>
+          <div>Form (sredina dostupnih signala): <strong>${fmt(m.form_percent, '%')}</strong></div>
+        </div>
+
+        <div style="margin:6px 0;padding:8px;background:#fafafa;border-radius:8px">
+          <div style="font-weight:600;margin-bottom:4px">Model breakdown</div>
+          <div>Prior (recent form + H2H): <strong>${fmt(d.prior_percent, '%')}</strong></div>
+          <div>Micro (league-normalized): <strong>${fmt(d.micro_percent, '%')}</strong>
+            <span style="color:#666">[exp SOT total: ${fmt(d.exp_sot1h_total)}, exp DA total: ${fmt(d.exp_da1h_total)}, pos-edge: ${fmt(d.pos_edge_percent, '%')}]</span>
+          </div>
+          ${isGG ? `
+            <div>Team 1 scores 1H: <strong>${fmt(d.p_home_scores_1h, '%')}</strong>,
+                 Team 2: <strong>${fmt(d.p_away_scores_1h, '%')}</strong>
+                 <span style="color:#666">${d.rho!=null?`(ρ=${fmt(d.rho)})`:''}</span>
+            </div>` : ``}
+            ${isO15 ? `
+            <div>${o15Label}: total <strong>${fmt(d.lambda_total)}</strong>
+                <span style="color:#666">(home ${fmt(d.lambda_home)}, away ${fmt(d.lambda_away)})</span>
+            </div>` : ``}
+          <div>Merged (precision-weighted): <span style="color:#333">micro share ≈ ${fmt(d.merge_weight_micro)}</span></div>
+          <div style="color:#666">effN prior: ${fmt(d.effn_prior)}, effN micro: ${fmt(d.effn_micro)}, ligaški baseline: ${fmt(d.m_league, '%')}</div>
+        </div>
+
+        <div style="margin-top:8px">
+          <div><strong>Final Probability: ${fmt(m.final_percent, '%')}</strong></div>
+          <div style="margin-top:6px; font-size:0.92em; line-height:1.35; color:#333;">
+            ${buildNarrative(m, currentMarket)}
+          </div>
+        </div>
+      </div>
+    `;
+  };
+
+  (data || []).forEach((match, index) => {
+    const html = cardHTML(match);
+    if (index < 5) top5Container.innerHTML += html;
+    else otherContainer.innerHTML += html;
+  });
+}
+
+// ====== HELPERS ======
+function normalizeResults(json) {
+  if (Array.isArray(json)) return json;
+  if (json == null) return [];
+  if (Array.isArray(json.results))  return json.results;
+  if (Array.isArray(json.data))     return json.data;
+  if (Array.isArray(json.matches))  return json.matches;
+  return [];
+}
+
+// ====== MAIN ACTION ======
+async function fetchAnalysis(type) {
+  showLoader();
+
+  const fromEl = document.getElementById('fromDate');
+  const toEl   = document.getElementById('toDate');
+
+  if (!fromEl || !toEl || !fromEl.value || !toEl.value) {
+    alert('Please select both From and To dates.');
+    return;
+  }
+
+  const fromDate = new Date(fromEl.value);
+  const toDate   = new Date(toEl.value);
+  if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+    alert('Invalid date values.');
+    return;
+  }
+  if (toDate < fromDate) {
+    alert('End date/time must be after start date/time.');
+    return;
+  }
+
+  const fromIso = fromDate.toISOString();
+  const toIso   = toDate.toISOString();
+
+  const fh = fromDate.getHours();
+  const th = toDate.getHours() + ((toDate.getMinutes() || toDate.getSeconds()) ? 1 : 0);
+
+  //  izaberi market po tipu dugmeta
+  // - 'GG'  -> GG prvo poluvreme
+  // - ostalo (npr. '1p') -> 1+ gol u 1. poluvremenu
+  let market;
+  if (type === 'GG') market = 'gg1h';
+  else if (type === 'O15') market = '1h_over15';
+  else if (type === 'FT_O15') market = 'ft_over15';
+  else market = '1h_over05';
+
+
+  const url = `${BACKEND_URL}/api/analyze`
+    + `?from_date=${encodeURIComponent(fromIso)}`
+    + `&to_date=${encodeURIComponent(toIso)}`
+    + `&from_hour=${fh}`
+    + `&to_hour=${th}`
+    + `&market=${encodeURIComponent(market)}&no_api=0`;
+
+
+  console.log('👉 calling:', url);
+
+  // 🔒 disable UI
+  setBusyUI(true);
+
+  const MAX_RETRIES = 6;
+  let attempt = 0;
+
+  try {
+    while (true) {
+      const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+      const raw = await res.text();
+
+      let json;
+      try { json = JSON.parse(raw); }
+      catch {
+        console.error('Non-JSON response:', raw);
+        alert(`Server vratio nevalidan odgovor (nije JSON):\n${raw.slice(0, 300)}...`);
+        break;
+      }
+
+      if (res.status === 429) {
+        attempt += 1;
+        if (attempt > MAX_RETRIES) {
+          const msg = json?.detail || "Server je trenutno zauzet. Pokušaj ponovo.";
+          alert(msg);
+          break;
+        }
+        const wait = Math.min(1000 * Math.pow(1.6, attempt), 5000);
+        const note = `Zauzeto (${attempt}/${MAX_RETRIES})… čekam ${(wait/1000).toFixed(1)}s`;
+        console.warn(`429, retry in ${wait}ms`);
+        setBusyUI(true, note);
+        await sleep(wait);
+        continue;
+      }
+
+      if (!res.ok) {
+        const msg = json?.detail || json?.error || JSON.stringify(json).slice(0, 300);
+        console.error('Server error:', msg);
+        alert(`Greška sa servera: ${msg}`);
+        break;
+      }
+
+      const data = normalizeResults(json);
+      console.log('🔎 Raw JSON:', json);
+      console.log('✅ Normalized results length:', data.length);
+
+      data.sort((a, b) => (b.final_percent ?? 0) - (a.final_percent ?? 0));
+      renderResults(data, market);
+      break;
+    }
+  } catch (err) {
+    console.error('Fetch/parse error:', err);
+    alert(`Došlo je do greške pri analizi: ${err}`);
+  } finally {
+    setBusyUI(false);
+  }
+}
+
+function localYMD(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+
+async function prepareDay() {
+  try {
+    const fromEl = document.getElementById('fromDate');
+    const toEl   = document.getElementById('toDate');
+
+    // uzmi dan sa UI-a (from, ili to, ili današnji lokalno)
+    let base = new Date();
+    if (fromEl && fromEl.value) base = new Date(fromEl.value);
+    else if (toEl && toEl.value) base = new Date(toEl.value);
+    const dayStr = localYMD(base);
+
+    setBusyUI(true, `Pripremam ${dayStr}…`);
+    const res = await fetch(`${BACKEND_URL}/api/prepare-day`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'Accept':'application/json'},
+      body: JSON.stringify({ date: dayStr, prewarm: true })
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      alert(`Prepare-day error: ${data.detail || data.error || res.status}`);
+      return;
+    }
+
+    // kratki sažetak
+    const s = [
+      `Dan: ${data.day}`,
+      `Fixtures u DB: ${data.fixtures_in_db}`,
+      `Timova: ${data.teams} | Parova: ${data.pairs}`,
+      `Seeded fixtures: ${data.seeded ? 'DA' : 'NE'}`,
+      `Nedostajalo prije: history=${data.history_missing_before}, h2h=${data.h2h_missing_before}`,
+      `Stats missing prije: ${data.stats_missing_before}`
+    ].join('\n');
+    alert(`Done.\n\n${s}`);
+
+  } catch (err) {
+    console.error(err);
+    alert(`Prepare-day greška: ${err}`);
+  } finally {
+    setBusyUI(false);
+  }
+}
+
+// ====== WIRE EVENTS once DOM is ready ======
+document.addEventListener('DOMContentLoaded', () => {
+  const btn1p   = document.getElementById("analyze1p");
+  const btnGG   = document.getElementById("analyzeGG");
+  const btn1pls = document.getElementById("analyze2plus");
+  const btnFT2pl = document.getElementById("analyzeFT2plus");
+  const btnPDF  = document.getElementById("savePdf");
+  const btnPrep = document.getElementById("prepareDay");
+
+  if (btn1p)   btn1p.addEventListener("click", () => fetchAnalysis('1p'));
+  if (btnGG)   btnGG.addEventListener("click", () => fetchAnalysis('GG'));
+  if (btn1pls) btn1pls.addEventListener("click", () => fetchAnalysis('O15'));
+  if (btnFT2pl) btnFT2pl.addEventListener("click", () => fetchAnalysis('FT_O15'));
+  if (btnPrep) btnPrep.addEventListener("click", prepareDay)
+
+  if (btnPDF)  btnPDF.addEventListener("click", () => {
+    fetch(`${BACKEND_URL}/api/save-pdf`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({matches: window.currentAnalysisResults})
+    })
+    .then(r => r.blob())
+    .then(blob => {
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = "analysis_results.pdf";
+      document.body.appendChild(a); a.click(); a.remove();
+    });
+  });
+});

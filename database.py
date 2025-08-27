@@ -2,28 +2,28 @@
 from pathlib import Path
 import sqlite3, json, threading, os
 
-BASE_DIR = os.path.dirname(__file__)
-DATA_DIR = os.path.join(BASE_DIR, "data")
-os.makedirs(DATA_DIR, exist_ok=True)
-DB_PATH = os.path.join(DATA_DIR, "sports_analysis.db")
+BASE_DIR = Path(__file__).resolve().parent
+DB_PATH = BASE_DIR / "app.db"  # koristi jedan path konzistentno
 
 DB_WRITE_LOCK = threading.RLock()
 
 def get_db_connection():
-    conn = sqlite3.connect(DB_PATH)
+    # check_same_thread=False je praktično za FastAPI + threadpool
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA synchronous=NORMAL;")
     conn.execute("PRAGMA busy_timeout=8000;")
     return conn
 
-def create_tables():
-    conn = get_db_connection()
-    cur = conn.cursor()
+def create_all_tables():
+    with DB_WRITE_LOCK:
+        conn = get_db_connection()
+        cur = conn.cursor()
 
-    # === CORE ===
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS fixtures (
+        # osnovna fixtures tabela
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS fixtures(
             id INTEGER PRIMARY KEY,
             date TEXT,
             league_id INTEGER,
@@ -31,95 +31,137 @@ def create_tables():
             team_away_id INTEGER,
             stats_json TEXT,
             fixture_json TEXT
-        );
-    """)
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS team_matches (
-            team_id INTEGER NOT NULL,
-            fixture_id INTEGER NOT NULL,
-            data TEXT,
-            PRIMARY KEY (team_id, fixture_id)
-        );
-    """)
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS h2h_matches (
-            team1_id INTEGER NOT NULL,
-            team2_id INTEGER NOT NULL,
-            fixture_id INTEGER NOT NULL,
-            data TEXT,
-            CHECK (team1_id < team2_id),
-            PRIMARY KEY (team1_id, team2_id, fixture_id)
-        );
-    """)
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS match_statistics (
+        )
+        """)
+
+        # match statistics cache
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS match_statistics(
             fixture_id INTEGER PRIMARY KEY,
             data TEXT,
             updated_at TEXT
-        );
-    """)
-    try:
-        cur.execute("ALTER TABLE match_statistics ADD COLUMN updated_at TEXT;")
-    except sqlite3.OperationalError:
-        pass
+        )
+        """)
 
-    # === CACHES (da analiza bude 100% DB-only) ===
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS team_history_cache (
+        # istorija timova (keš)
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS team_history_cache(
             team_id INTEGER,
             last_n INTEGER,
             data TEXT,
             updated_at TEXT,
-            PRIMARY KEY (team_id, last_n)
-        );
-    """)
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS h2h_cache (
+            PRIMARY KEY(team_id, last_n)
+        )
+        """)
+
+        # h2h cache
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS h2h_cache(
             team1_id INTEGER,
             team2_id INTEGER,
             last_n INTEGER,
             data TEXT,
             updated_at TEXT,
-            PRIMARY KEY (team1_id, team2_id, last_n)
-        );
-    """)
+            PRIMARY KEY(team1_id, team2_id, last_n)
+        )
+        """)
 
-    # === ODDS (market-implied prior za 1H) ===
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS odds_cache (
+        # sirovi "team_matches" (za brz list/slice)
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS team_matches(
+            team_id INTEGER,
             fixture_id INTEGER,
-            market TEXT,               -- npr. 'OU_1H', 'BTTS_1H'
-            data TEXT,                 -- raw JSON sa svih kladionica/marketima
-            updated_at TEXT,
-            PRIMARY KEY (fixture_id, market)
-        );
-    """)
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_odds_updated ON odds_cache(updated_at)")
+            data TEXT,
+            PRIMARY KEY(team_id, fixture_id)
+        )
+        """)
 
-    # (opciono) centralizuj keševe koje sada pravi DataRepo._cache_table dinamčki:
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS venues_cache (
+        # sirovi "h2h_matches" (usklađeno sa insert_h2h_matches)
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS h2h_matches(
+            team1_id INTEGER,
+            team2_id INTEGER,
+            fixture_id INTEGER,
+            data TEXT,
+            PRIMARY KEY(team1_id, team2_id, fixture_id)
+        )
+        """)
+
+        # === Artefakti analitike koje želiš da čuvaš ===
+
+        # league baselines: jedan JSON blob (global + per-league)
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS league_baselines_store(
+            id INTEGER PRIMARY KEY CHECK(id=1),
+            data TEXT,
+            updated_at TEXT
+        )
+        """)
+
+        # team_strengths: po timu
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS team_strengths_store(
+            team_id INTEGER PRIMARY KEY,
+            data TEXT,
+            updated_at TEXT
+        )
+        """)
+
+        # team_profiles (finish/leak/gk_stop/tier/pos itd.)
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS team_profiles_store(
+            team_id INTEGER PRIMARY KEY,
+            data TEXT,
+            updated_at TEXT
+        )
+        """)
+
+        # micro form (po timu i strani)
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS team_micro_form_store(
+            team_id INTEGER,
+            side TEXT CHECK(side IN ('home','away')),
+            data TEXT,
+            updated_at TEXT,
+            PRIMARY KEY(team_id, side)
+        )
+        """)
+
+        # extras per fixture (ref/weather/venue/lineups/injuries...)
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS fixture_extras_store(
+            fixture_id INTEGER PRIMARY KEY,
+            data TEXT,
+            updated_at TEXT
+        )
+        """)
+                # ---- dodatne cache tabele koje koristi DataRepo ----
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS venues_cache(
             venue_id INTEGER PRIMARY KEY,
             data TEXT,
             updated_at TEXT
         )
-    """)
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS lineups_cache (
+        """)
+
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS lineups_cache(
             fixture_id INTEGER PRIMARY KEY,
             data TEXT,
             updated_at TEXT
         )
-    """)
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS injuries_cache (
+        """)
+
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS injuries_cache(
             fixture_id INTEGER PRIMARY KEY,
             data TEXT,
             updated_at TEXT
         )
-    """)
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS referee_cache (
+        """)
+
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS referee_cache(
             ref_name TEXT,
             season INTEGER,
             last_n INTEGER,
@@ -127,44 +169,38 @@ def create_tables():
             updated_at TEXT,
             PRIMARY KEY (ref_name, season, last_n)
         )
-    """)
+        """)
 
-    # (opciono, za brže podizanje modela)
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS league_baselines_cache (
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS odds_cache(
+            fixture_id INTEGER,
+            market TEXT,
+            data TEXT,
+            updated_at TEXT,
+            PRIMARY KEY (fixture_id, market)
+        )
+        """)
+
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS team_stats_cache(
+            team_id INTEGER,
             league_id INTEGER,
             season INTEGER,
             data TEXT,
             updated_at TEXT,
-            PRIMARY KEY (league_id, season)
+            PRIMARY KEY (team_id, league_id, season)
         )
-    """)
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS team_strengths_cache (
-            team_id INTEGER,
-            season INTEGER,
-            data TEXT,
-            updated_at TEXT,
-            PRIMARY KEY (team_id, season)
-        )
-    """)
+        """)
 
+        # ---- korisni indeksi za performanse ----
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_fixtures_date ON fixtures(date)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_fixtures_league ON fixtures(league_id)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_team_matches_team ON team_matches(team_id)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_team_matches_fixture ON team_matches(fixture_id)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_h2h_pair ON h2h_matches(team1_id, team2_id)")
 
-    # === INDEXES za brzinu ===
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_fixtures_date ON fixtures(date)")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_team_matches_team ON team_matches(team_id)")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_team_matches_fixture ON team_matches(fixture_id)")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_h2h_matches_pair ON h2h_matches(team1_id, team2_id)")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_match_stats_updated ON match_statistics(updated_at)")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_thc_team_n ON team_history_cache(team_id, last_n)")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_h2hc_pair_n ON h2h_cache(team1_id, team2_id, last_n)")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_fixtures_league ON fixtures(league_id)")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_fixtures_home ON fixtures(team_home_id)")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_fixtures_away ON fixtures(team_away_id)")
-
-
-    conn.commit()
-    conn.close()
+        conn.commit()
+        conn.close()
 
 # ---------------- INSERT HELPERS ----------------
 
@@ -232,9 +268,6 @@ def try_read_fixture_statistics(fixture_id: int):
         except Exception:
             return None
     return None
-
-def create_all_tables():
-    create_tables()
 
 if __name__ == "__main__":
     create_all_tables()

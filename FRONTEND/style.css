@@ -1,97 +1,439 @@
+/* =========================================
+   Ultra-modern responsive UI (light/dark)
+   Sadrži:
+   - CSS varijable i theming
+   - Sticky header sa blur-om
+   - Panel/kartice, grid layout
+   - Fokus prsten, hover, disabled
+   - Animacije
+   ========================================= */
+
+/* ---------- Reset & base ---------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+:root {
+  --bg: #f6f7fb;
+  --surface: #ffffff;
+  --surface-2: #f0f3f7;
+  --text: #0f172a;
+  --muted: #475569;
+  --border: #e5e7eb;
+
+  --primary: #2563eb;        /* blue-600 */
+  --primary-600: #1d4ed8;    /* blue-700 */
+  --ring: #93c5fd;           /* blue-300 */
+  --danger: #ef4444;
+
+  --shadow: 0 10px 30px rgba(2, 6, 23, 0.08);
+  --radius: 14px;
+
+  --transition: 180ms ease;
+  --transition-fast: 120ms ease;
+
+  --font: "Inter", system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
+}
+
+
+/* Dark mode vars */
+html[data-theme="dark"] {
+  --bg: #0b0f1a;
+  --surface: #0f172a;
+  --surface-2: #0b1220;
+  --text: #e5e7eb;
+  --muted: #94a3b8;
+  --border: #1f2937;
+  --primary: #60a5fa;      /* blue-400 */
+  --primary-600: #3b82f6;  /* blue-500 */
+  --ring: #60a5fa;
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
+/* Auto tema prati OS preferencu */
+@media (prefers-color-scheme: dark) {
+  html[data-theme="auto"] {
+    --bg: #0b0f1a;
+    --surface: #0f172a;
+    --surface-2: #0b1220;
+    --text: #e5e7eb;
+    --muted: #94a3b8;
+    --border: #1f2937;
+    --primary: #60a5fa;
+    --primary-600: #3b82f6;
+    --ring: #60a5fa;
+    --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  }
+}
+
+html, body {
+  height: 100%;
+}
+
 body {
-    font-family: Arial, sans-serif;
-    background-color: #f5f6f7;
-    margin: 0;
-    padding: 0;
+  font-family: var(--font);
+  background: radial-gradient(1200px 600px at 20% -10%, rgba(99,102,241,.10), transparent 60%),
+              radial-gradient(1000px 500px at 120% -20%, rgba(34,211,238,.08), transparent 60%),
+              var(--bg);
+  color: var(--text);
+  margin: 0;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
+/* ---------- Header / Navbar ---------- */
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  backdrop-filter: saturate(130%) blur(8px);
+  background: color-mix(in oklab, var(--surface) 80%, transparent);
+  border-bottom: 1px solid var(--border);
+}
+
+.app-header__inner {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand svg {
+  display: block;
+  fill: var(--primary);
+  filter: drop-shadow(0 2px 6px color-mix(in oklab, var(--primary) 40%, transparent));
+}
+
+.brand__text {
+  display: grid;
+  gap: 2px;
+}
+
+.brand__text strong {
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.brand__text .sub {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ---------- Buttons ---------- */
+button {
+  font-family: inherit;
+}
+
+.icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  transition: transform var(--transition-fast), border-color var(--transition), background var(--transition);
+}
+.icon-btn:hover { transform: translateY(-1px); }
+.icon-btn:active { transform: translateY(0); }
+
+/* default: light → prikaži sunce */
+.icon-sun { display: inline; }
+.icon-moon { display: none; }
+
+/* force dark */
+html[data-theme="dark"] .icon-sun { display: none; }
+html[data-theme="dark"] .icon-moon { display: inline; }
+
+/* auto tema + OS dark → prikaži mjesec */
+@media (prefers-color-scheme: dark) {
+  html[data-theme="auto"] .icon-sun { display: none; }
+  html[data-theme="auto"] .icon-moon { display: inline; }
+}
+
+.primary-ghost,
+#savePdf {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, color-mix(in oklab, var(--surface) 94%, transparent), var(--surface-2));
+  color: var(--text);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  transition: transform var(--transition-fast), box-shadow var(--transition), background var(--transition), border-color var(--transition);
+}
+.primary-ghost:hover,
+#savePdf:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px rgba(2,6,23,0.12);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  box-shadow: var(--shadow);
+  transition: transform var(--transition-fast), background var(--transition), border-color var(--transition);
+}
+.btn:hover { transform: translateY(-1px); }
+.btn:active { transform: translateY(0); }
+
+.btn.primary {
+  background: linear-gradient(135deg, #6366f1, #22d3ee);
+  color: white;
+  border: 0;
+}
+.btn.primary:hover { filter: saturate(110%); }
+
+.btn.subtle {
+  background: var(--surface-2);
+}
+
+.btn.btn-ft {
+  background: linear-gradient(135deg, #f59e0b, #ef4444);
+  color: white;
+  border: 0;
+}
+
+/* Disabled states (kompatibilno s tvojim JS-om) */
+button[disabled],
+.btn[disabled],
+#savePdf[disabled] {
+  opacity: .6 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+}
+
+/* ---------- Layout containers ---------- */
 .container {
-    max-width: 800px;
-    margin: 50px auto;
-    background: #fff;
-    padding: 30px;
-    border-radius: 10px;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  max-width: 1120px;
+  margin: 28px auto;
+  padding: 0 20px 28px;
 }
 
-.date-range {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 20px;
+.panel {
+  background: color-mix(in oklab, var(--surface) 96%, transparent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 18px;
+  animation: panelIn .3s ease both;
 }
 
-.date-range input {
-    flex: 1;
-    padding: 10px;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-    font-size: 14px;
+@keyframes panelIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
-.buttons {
-    margin-bottom: 30px;
+/* ---------- Controls section ---------- */
+.controls__row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
 }
 
-.buttons button {
-    padding: 10px 20px;
-    margin-right: 10px;
-    border: none;
-    background-color: #1e90ff;
-    color: white;
-    font-size: 14px;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: background-color 0.2s ease;
+.field {
+  display: grid;
+  gap: 8px;
 }
 
-.buttons button:hover {
-    background-color: #0d6efd;
+.field label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: .3px;
+}
+
+.field__input {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.field__input svg {
+  color: var(--muted);
+  opacity: .9;
+}
+
+.field__input input[type="datetime-local"] {
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  padding: 0;
+  outline: none;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 10px;
+}
+
+.actions.actions--stack {
+  grid-template-columns: repeat(2, minmax(0,1fr));
+}
+
+@media (min-width: 720px) {
+  .controls__row {
+    grid-template-columns: repeat(12, 1fr);
+    align-items: end;
+  }
+  .field:nth-child(1) { grid-column: span 3; }
+  .field:nth-child(2) { grid-column: span 3; }
+  .actions { grid-column: span 6; grid-template-columns: repeat(5, minmax(0,1fr)); }
+}
+
+/* ---------- Results grid ---------- */
+.results__grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+@media (min-width: 980px) {
+  .results__grid {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 .section {
-    margin-bottom: 30px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  box-shadow: var(--shadow);
 }
 
 .section h3 {
-    margin-bottom: 10px;
-    font-size: 18px;
-    color: #333;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-size: 16px;
+  letter-spacing: .2px;
 }
 
+.section h3 .count {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--primary) 16%, transparent);
+  color: color-mix(in oklab, var(--primary) 85%, var(--text));
+  font-size: 12px;
+}
+
+/* ---------- Placeholders & Loader ---------- */
 .placeholder {
-    color: #888;
-    font-size: 14px;
-    padding: 10px;
-    background-color: #f0f0f0;
-    border-radius: 6px;
+  color: var(--muted);
+  font-size: 14px;
+  padding: 12px;
+  background: var(--surface-2);
+  border: 1px dashed var(--border);
+  border-radius: 10px;
 }
 
-#savePdf {
-    padding: 10px 20px;
-    border: 2px solid red;
-    background: none;
-    color: red;
-    font-weight: bold;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: background-color 0.2s ease, color 0.2s ease;
-}
-
-#savePdf:hover {
-    background-color: red;
-    color: white;
-}
 .loader {
-    text-align: center;
-    padding: 20px;
-    font-size: 18px;
-    color: #333;
-    font-weight: bold;
-}
-.match {
-    background: #f9f9f9;
-    padding: 15px;
-    border-radius: 8px;
-    margin-bottom: 15px;
+  text-align: center;
+  padding: 24px;
+  font-size: 16px;
+  color: var(--muted);
+  font-weight: 600;
 }
 
+/* ---------- Match card (kompatibilno sa postojećim renderom) ---------- */
+.match {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--surface) 92%, transparent), var(--surface-2));
+  padding: 14px;
+  border-radius: 12px;
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  animation: itemIn .28s ease both;
+}
+
+@keyframes itemIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ---------- Save PDF FAB (mobile pomoć) ---------- */
+.fab {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: linear-gradient(135deg, #6366f1, #22d3ee);
+  color: white;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 16px 38px rgba(2,6,23,0.22);
+  cursor: pointer;
+  transition: transform var(--transition-fast), box-shadow var(--transition);
+}
+.fab:hover { transform: translateY(-2px); }
+
+@media (min-width: 820px) {
+  .fab { display: none; }
+}
+
+/* ---------- Focus rings ---------- */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-color: var(--ring);
+}
+
+/* ---------- Legacy compatibility (ako negdje ostane stari layout) ---------- */
+.date-range,
+.buttons {
+  display: none !important; /* sakrij stare blokove ako su ostali u DOM-u */
+}
+
+/* ---------- Utility ---------- */
+.hidden { display: none !important; }

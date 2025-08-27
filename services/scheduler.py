@@ -19,7 +19,7 @@ def start_scheduler(repo, user_tz, last_n=15, h2h_n=10):
             # odmah na bootu — da "danas" nikad ne bude prazan
             repo.ensure_day(
                 datetime.now(user_tz).date(),
-                last_n=last_n, h2h_n=h2h_n, prewarm_stats=False, prewarm_extras=True
+                last_n=last_n, h2h_n=h2h_n, prewarm_stats=False
             )
         except Exception as e:
             print(f"[scheduler] initial ensure_day failed: {e}")
@@ -32,7 +32,7 @@ def start_scheduler(repo, user_tz, last_n=15, h2h_n=10):
                 # 00:01 lokalno → osiguraj novi dan
                 repo.ensure_day(
                     datetime.now(user_tz).date(),
-                    last_n=last_n, h2h_n=h2h_n, prewarm_stats=False, prewarm_extras=True
+                    last_n=last_n, h2h_n=h2h_n, prewarm_stats=False
                 )
                 print("[scheduler] ensure_day done at 00:01")
             except Exception as e:

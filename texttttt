@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone, date
 from fastapi import FastAPI, Query, Request, HTTPException, Body
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
-from typing import List
+from typing import List, Optional
 from fastapi.staticfiles import StaticFiles
 import json
 from reportlab.pdfgen import canvas
@@ -68,16 +68,40 @@ REST_REF_DAYS   = 5.0    # neutralni odmor
 
 WEIGHTS = {
     "BIAS":   0.00,
-    "Z_SOT":  0.55,   # z-score oček. SoT (po timu)
-    "Z_DA":   0.22,   # z-score oček. DA  (po timu)
-    "POS":    0.18,   # posjed share uticaj
-    "FIN":    0.38,   # finishing (g/SoT) tim
-    "LEAK":   0.32,   # leak (primljeni g/SoT) protivnik
-    "REST":   0.06,   # odmor (više → +)
-    "HOME":   0.05,   # home bump za tim domaćina
-    "ATT":    0.25,   # EB napad tima vs ligaški m1h
-    "DEF":    0.25,   # EB def_allow protivnika vs ligaški m1h
+    "Z_SOT":  0.55,
+    "Z_DA":   0.22,
+    "POS":    0.18,
+    "FIN":    0.38,
+    "LEAK":   0.32,
+    "REST":   0.06,
+    "HOME":   0.05,
+    "ATT":    0.25,
+    "DEF":    0.25,
+
+    # Multiplikativni faktori (ulaze kao ln(mult))
+    "REFEREE_MULT": 0.06,
+    "WEATHER_MULT": 0.04,
+    "LINEUP_MULT":  0.08,
+    "PENVAR_MULT":  0.03,
+    "STADIUM_MULT": 0.02,
+
+    # Logit (globalni) adj-ovi — aditivno
+    "REF":         0.08,
+    "ENV_WEATHER": 0.05,  # ← bilo "WEATHER", preimenovano da ne sudara sa *_MULT
+    "VENUE":       0.03,
+    "LINEUPS":     0.05,
+    "INJ":         0.05,
+
+    # novi z-score / normalized signali
+    "Z_SHOTS":   0.18,   # total shots 1H (po timu)
+    "Z_XG":      0.28,   # xG 1H (po timu)
+    "Z_BIGCH":   0.14,   # big chances 1H (po timu)
+    "SETP":      0.10,   # set-piece xG (proxy) 1H (ukupno)
+    "GK":        0.08,   # shot-stopping (save rate) proxy uticaj (suprotno LEAK-u)
+    "CONGEST":   0.06,   # zagušenje rasporeda (− kad je gusto)
+    "IMPORTANCE":0.05,   # važnost meča (global logit adj)
 }
+
 
 CALIBRATION = {
     "TEMP": 1.05,     # temperature scaling na kraju (veće → stišavanje)
@@ -85,11 +109,28 @@ CALIBRATION = {
     "CEIL":  0.98,    # plafon
 }
 
+ALPHA_MODEL = 0.7
+
 # --- NEW: tier/class gap ---
 WEIGHTS["TIER_GAP"] = 0.35   # uticaj razlike ranga (pozitivno -> jači tim)
 CUP_TIER_MULT = 1.35         # u kupovima pojačaj uticaj class-gapa
 DEFAULT_TEAM_TIER = 2        # ako ne znamo, tretiraj kao 2. nivo
 MAX_TIER_GAP = 3             # clamp [-3, +3]
+
+# --- NEW caps/proxies for 1H ---
+SHOTS1H_CAP = 10.0       # total shots per team in 1H (proxy cap)
+XG1H_CAP    = 1.20       # xG per team in 1H (proxy cap)
+BIGCH1H_CAP = 3.0        # big chances per team in 1H (proxy cap)
+CORN1H_CAP  = 6.0        # corners per team in 1H
+FK1H_CAP    = 8.0        # free-kicks per team in 1H
+
+# set-piece xG proxy (tunable)
+SETP_XG_PER_CORNER_1H = 0.025
+SETP_XG_PER_FK_1H     = 0.010
+
+# GK shot-stopping (save%) prior in 1H i EB tau
+GK_SAVE_PRIOR_1H = 0.70
+GK_SAVE_TAU      = 8.0
 
 
 def _rel(n, k=6.0):
@@ -655,27 +696,24 @@ CACHE_TTL_HOURS = 48
 
 def compute_team_profiles(team_last_matches, stats_fn, lam=5.0, max_n=15):
     """
-    Gradi za svaki tim recency-weighted profile:
-    - mean 1H SOT/DA/POS (for & allowed)
-    - finishing = goals_for_1H / SoT_for_1H   (EB shrunk)
-    - leak      = goals_against_1H / SoT_allowed_1H (EB shrunk)
-    - last_match_dt (za odmor)
-    - eff_n (suma težina preko svih korišćenih metrika)
+    Dodato:
+      - finishing_xg: (g_for_1h - xg_for_1h) / max(1, xg) (EB shrink)
+      - gk_stop: save% proxy = 1 - goals_allowed_1h / SoT_allowed_1h (EB shrink na GK_SAVE_PRIOR_1H)
+      - match_dates: liste datuma poslednjih mečeva (za zagušenje rasporeda relativno na fixture dt)
     """
     profiles = {}
     for team_id, matches in (team_last_matches or {}).items():
         arr = sorted(matches or [], key=lambda m: (m.get('fixture') or {}).get('date',''), reverse=True)[:max_n]
 
-        w_sot_for = w_sot_alw = 0.0
-        w_da_for  = w_da_alw  = 0.0
-        w_pos     = 0.0
-        sum_sot_for = sum_sot_alw = 0.0
-        sum_da_for  = sum_da_alw  = 0.0
-        sum_pos     = 0.0
+        w_sot_for = w_sot_alw = w_da_for = w_da_alw = w_pos = 0.0
+        sum_sot_for = sum_sot_alw = sum_da_for = sum_da_alw = sum_pos = 0.0
         g_for_w = g_alw_w = 0.0
+        xg_for_w = xg_alw_w = 0.0
+        sot_alw_w = 0.0
 
         last_match_dt = None
         eff_n = 0.0
+        match_dates = []
 
         for i, m in enumerate(arr):
             w = _exp_w(i, lam)
@@ -696,13 +734,17 @@ def compute_team_profiles(team_last_matches, stats_fn, lam=5.0, max_n=15):
                 if micro.get('sot1h_for') is not None:
                     sum_sot_for += w * micro['sot1h_for']; w_sot_for += w
                 if micro.get('sot1h_allowed') is not None:
-                    sum_sot_alw += w * micro['sot1h_allowed']; w_sot_alw += w
+                    sum_sot_alw += w * micro['sot1h_allowed']; w_sot_alw += w; sot_alw_w += w*micro['sot1h_allowed']
                 if micro.get('da1h_for') is not None:
                     sum_da_for += w * micro['da1h_for']; w_da_for += w
                 if micro.get('da1h_allowed') is not None:
                     sum_da_alw += w * micro['da1h_allowed']; w_da_alw += w
                 if micro.get('pos1h') is not None:
                     sum_pos += w * micro['pos1h']; w_pos += w
+                if micro.get('xg1h_for') is not None:
+                    xg_for_w += w * micro['xg1h_for']
+                if micro.get('xg1h_allowed') is not None:
+                    xg_alw_w += w * micro['xg1h_allowed']
 
             gf, ga = _ht_goals_for_against(m, team_id)
             if gf is not None: g_for_w += w * float(gf)
@@ -711,10 +753,13 @@ def compute_team_profiles(team_last_matches, stats_fn, lam=5.0, max_n=15):
             eff_n += w
             if last_match_dt is None:
                 try:
-                    # ISO strings → aware dt
                     last_match_dt = datetime.fromisoformat((fix.get('date') or '').replace("Z","+00:00"))
                 except Exception:
                     last_match_dt = None
+            try:
+                match_dates.append(datetime.fromisoformat((fix.get('date') or '').replace("Z","+00:00")))
+            except:
+                pass
 
         mean_sot_for = _safe_div(sum_sot_for, w_sot_for, None)
         mean_sot_alw = _safe_div(sum_sot_alw, w_sot_alw, None)
@@ -722,11 +767,20 @@ def compute_team_profiles(team_last_matches, stats_fn, lam=5.0, max_n=15):
         mean_da_alw  = _safe_div(sum_da_alw,  w_da_alw,  None)
         mean_pos     = _safe_div(sum_pos,     w_pos,     None)
 
-        # EB shrink za finishing/leak (Beta prior)
-        fin_raw  = _safe_div(g_for_w, sum_sot_for, FINISH_PRIOR_1H)
-        leak_raw = _safe_div(g_alw_w, sum_sot_alw, LEAK_PRIOR_1H)
         fin  = beta_shrunk_rate(g_for_w,  sum_sot_for if sum_sot_for>0 else None,  m=FINISH_PRIOR_1H, tau=6.0)
         leak = beta_shrunk_rate(g_alw_w,  sum_sot_alw if sum_sot_alw>0 else None, m=LEAK_PRIOR_1H,   tau=6.0)
+
+        # finishing vs xG (ako nema xG -> neutralno 0.0)
+        fin_xg = 0.0
+        if xg_for_w > 0:
+            raw = (g_for_w - xg_for_w) / max(1e-6, xg_for_w)
+            fin_xg = beta_shrunk_rate(max(0.0, raw), eff_n, m=0.0, tau=6.0) - 0.5  # centrira oko 0
+
+        # GK shot-stopping proxy: save% = 1 - goals_allowed/SoT_allowed
+        gk_stop = GK_SAVE_PRIOR_1H
+        if sot_alw_w > 0:
+            save_rate = 1.0 - _safe_div(g_alw_w, sot_alw_w, 0.0)
+            gk_stop = beta_shrunk_rate(save_rate * (eff_n or 1.0), eff_n, m=GK_SAVE_PRIOR_1H, tau=GK_SAVE_TAU)
 
         tier = _infer_team_tier_from_matches(arr, fallback=DEFAULT_TEAM_TIER)
 
@@ -734,15 +788,17 @@ def compute_team_profiles(team_last_matches, stats_fn, lam=5.0, max_n=15):
             "sot_for": mean_sot_for, "sot_allowed": mean_sot_alw,
             "da_for":  mean_da_for,  "da_allowed":  mean_da_alw,
             "pos":     mean_pos,
-            "finish":  fin,  "finish_raw": fin_raw,
-            "leak":    leak, "leak_raw":   leak_raw,
+            "finish":  fin,  "leak": leak,
             "eff_n":   eff_n,
             "last_match_dt": last_match_dt,
-
-            "fin_effn":  max(0.0, float(sum_sot_for)),   # koliko SoT je tim nalupao (težinski)
-            "leak_effn": max(0.0, float(sum_sot_alw)),   # koliko SoT je dopuštao rivalima (težinski)
-
+            "fin_effn":  max(0.0, float(sum_sot_for)),
+            "leak_effn": max(0.0, float(sum_sot_alw)),
             "tier": tier,
+
+            # NEW
+            "fin_xg": fin_xg,        # finishing preko xG (centrirano)
+            "gk_stop": gk_stop,      # shot-stopping proxy
+            "match_dates": match_dates,  # za zagušenje
         }
     return profiles
 
@@ -755,33 +811,175 @@ def _rest_days_until_fixture(profile, fixture_dt_utc):
     except Exception:
         return None
 
-def matchup_features_enhanced(fixture, team_profiles, league_baselines, micro_db=None):
+def _ln_mult(x, default=1.0):
+    """Pretvori multiplikator (≈1.00) u log-skalu radi additivnog unosa u z (robustno)."""
+    try:
+        return math.log(max(1e-6, float(x)))
+    except Exception:
+        return math.log(default)
+
+def _safe_float(x, default=None):
+    try:
+        return float(x)
+    except:
+        return default
+
+# --- Sudija (1H profil): penalnost + golovi + faulovi ---
+def compute_referee_profile_1h(fixture, repo_get_ref_history=None):
+    """Vrati RefereeProfile.multiplier ~ 0.96–1.06 na osnovu 1H penala/golova sudije."""
+    ref_name = ((fixture.get('fixture') or {}).get('referee') 
+                or (fixture.get('league') or {}).get('referee') 
+                or (fixture.get('referee')))
+    if not ref_name:
+        return {"multiplier": 1.00, "fh_goals": None, "fh_pens": None}
+
+    hist = []
+    try:
+        if repo_get_ref_history:
+            hist = repo_get_ref_history(ref_name, limit=30) or []
+    except:
+        hist = []
+
+    # očekivanje: hist su raw fixtures za tog sudiju; ako nema – neutralno
+    if not hist:
+        return {"multiplier": 1.00, "fh_goals": None, "fh_pens": None}
+
+    # gruba procena: 1H golova i penala u mečevima tog sudije
+    g_sum = 0.0; p_sum = 0.0; n = 0
+    for m in hist:
+        ht = ((m.get('score') or {}).get('halftime') or {})
+        g_sum += float(ht.get('home') or 0) + float(ht.get('away') or 0)
+        # penali (ako raspoloživo u tvom zapisu; često nije -> fallback 0)
+        p_sum += float(((m.get('events') or {}).get('pens_first_half')) or 0)
+        n += 1
+    if n == 0:
+        return {"multiplier": 1.00, "fh_goals": None, "fh_pens": None}
+
+    fh_g = g_sum / n
+    fh_p = p_sum / n
+
+    # pretvori na multiplikator okrenut oko 1.0
+    # baseline ~ 0.55 golova/event u 1H i penali ~ 0.10/1H (grubo)
+    g_b = 0.55
+    p_b = 0.10
+    g_k = 0.06
+    p_k = 0.04
+    mult = (1.0 + g_k * (fh_g - g_b)) * (1.0 + p_k * (fh_p - p_b))
+    mult = max(0.94, min(1.06, mult))
+    return {"multiplier": mult, "fh_goals": fh_g, "fh_pens": fh_p}
+
+# --- Vreme ---
+def compute_weather_factor_1h(fixture):
+    wx = ((fixture.get('weather') or {})
+          or ((fixture.get('fixture') or {}).get('weather') or {}))
+    wind = _safe_float(wx.get('wind') or wx.get('wind_kmh'), None)
+    temp = _safe_float(wx.get('temp') or wx.get('temp_c'), None)
+    rain = _safe_float(wx.get('rain') or wx.get('rain_mm'), None)
+
+    mult = 1.00
+    if wind is not None and wind >= 25:    # jak vetar
+        mult *= 0.97
+    if rain is not None and rain > 0.0:    # kiša/sneg
+        mult *= 0.98
+    if temp is not None and (temp <= -2 or temp >= 33):
+        mult *= 0.985
+
+    return {"multiplier": max(0.95, min(1.03, mult)), "wind": wind, "temp": temp, "rain": rain}
+
+# --- Postave / izostanci ---
+def compute_lineup_projection_1h(fixture_id, api_or_repo_get_lineups=None):
+    """Broji ključne izostanke i vraća multiplikator 0.90–1.10."""
+    if not api_or_repo_get_lineups:
+        return {"home": {"multiplier": 1.00}, "away": {"multiplier": 1.00}}
+
+    data = api_or_repo_get_lineups(fixture_id) or {}
+    out = {}
+    for side in ("home", "away"):
+        s = data.get(side) or {}
+        kf = int(s.get("key_forwards_out") or 0)
+        kc = int(s.get("key_creators_out") or 0)
+        kcb= int(s.get("key_cb_out") or 0)
+        gk = bool(s.get("gk_out") or False)
+
+        mult = 1.00
+        mult *= (0.98 ** kf)
+        mult *= (0.985 ** kc)
+        mult *= (0.988 ** kcb)
+        if gk:
+            mult *= 0.97
+        out[side] = {"multiplier": max(0.90, min(1.10, mult)), "kf": kf, "kc": kc, "kcb": kcb, "gk": gk}
+    return out
+
+# --- Penal/VAR profil ---
+def compute_penvar_profile_1h(fixture, team_profiles, referee_profile=None):
+    """Kombinuje penalnost tima & sudije u 1H u multiplikator 0.98–1.04."""
+    # približno: ako su timovi “pen-happy” + sudija “pen-happy” ⇒ >1.00
+    # koristi leak/finish kao zamenu i malu dozu referee
+    fin_h = (team_profiles.get(((fixture.get('teams') or {}).get('home') or {}).get('id'), {}) or {}).get("finish", 0.34)
+    fin_a = (team_profiles.get(((fixture.get('teams') or {}).get('away') or {}).get('id'), {}) or {}).get("finish", 0.34)
+    base = (fin_h + fin_a)/2.0
+    ref_mult = (referee_profile or {}).get("multiplier", 1.00)
+    mult = 1.0 * (1.0 + 0.04*(base - 0.34)) * (1.0 + 0.5*(ref_mult - 1.0))
+    return {"multiplier": max(0.98, min(1.04, mult))}
+
+# --- Stadion / teren ---
+def compute_stadium_pitch_1h(fixture):
+    st = ((fixture.get('stadium') or {})
+          or ((fixture.get('fixture') or {}).get('stadium') or {})
+          or {})
+    alt = _safe_float(st.get("altitude") or st.get("altitude_m"), None)
+    turf = bool(st.get("turf") or st.get("artificial_turf") or False)
+    quality = _safe_float(st.get("pitch_quality"), 0.9)
+
+    mult = 1.0
+    if alt is not None and alt >= 900:
+        mult *= 0.985
+    if turf:
+        mult *= 0.992
+    if quality is not None:
+        mult *= 0.98 + 0.04*quality  # quality 0..1 -> 0.98..1.02
+    return {"multiplier": max(0.98, min(1.03, mult)), "altitude": alt, "turf": turf, "quality": quality}
+
+def matchup_features_enhanced(fixture, team_profiles, league_baselines, micro_db=None, extras: dict | None = None):
     base = _league_base_for_fixture(fixture, league_baselines)
     home_id = ((fixture.get('teams') or {}).get('home') or {}).get('id')
     away_id = ((fixture.get('teams') or {}).get('away') or {}).get('id')
 
-    ph = (team_profiles or {}).get(home_id, {})
-    pa = (team_profiles or {}).get(away_id, {})
+    ph = (team_profiles or {}).get(home_id, {}) or {}
+    pa = (team_profiles or {}).get(away_id, {}) or {}
 
-    # očekivanja po timu (napad × def allowed rivala; geometrijska sredina)
-    exp_sot_h = _geomean(ph.get("sot_for"), pa.get("sot_allowed"))
-    exp_sot_a = _geomean(pa.get("sot_for"), ph.get("sot_allowed"))
-    exp_da_h  = _geomean(ph.get("da_for"),  pa.get("da_allowed"))
-    exp_da_a  = _geomean(pa.get("da_for"),  ph.get("da_allowed"))
+    # očekivanja po timu (geometrijska sredina sa allowed)
+    def _geox_h(f_for, a_alw): return _geomean(ph.get(f_for), pa.get(a_alw))
+    def _geox_a(f_for, a_alw): return _geomean(pa.get(f_for), ph.get(a_alw))
 
-    # league-aware cap (po timu)
-    exp_sot_h = _cap_league_per_team(exp_sot_h, base.get("q95_sot1h"), SOT1H_CAP)
-    exp_sot_a = _cap_league_per_team(exp_sot_a, base.get("q95_sot1h"), SOT1H_CAP)
-    exp_da_h  = _cap_league_per_team(exp_da_h,  base.get("q95_da1h"),  DA1H_CAP)
-    exp_da_a  = _cap_league_per_team(exp_da_a,  base.get("q95_da1h"),  DA1H_CAP)
+    exp_sot_h = _cap_league_per_team(_geox_h("sot_for", "sot_allowed"), (base.get("q95_sot1h") or 6.0), SOT1H_CAP)
+    exp_sot_a = _cap_league_per_team(_geox_a("sot_for", "sot_allowed"), (base.get("q95_sot1h") or 6.0), SOT1H_CAP)
+    exp_da_h  = _cap_league_per_team(_geox_h("da_for",  "da_allowed"),  (base.get("q95_da1h")  or 65.0), DA1H_CAP)
+    exp_da_a  = _cap_league_per_team(_geox_a("da_for",  "da_allowed"),  (base.get("q95_da1h")  or 65.0), DA1H_CAP)
+
+    # dodatne mikro metrike (shots/xG/bigch/corners/fk) ako postoje u micro_db
+    mh = (micro_db or {}).get(home_id, {}).get("home", {}) if micro_db else {}
+    ma = (micro_db or {}).get(away_id, {}).get("away", {}) if micro_db else {}
+
+    shots_h = mh.get("shots1h_for");  shots_a = ma.get("shots1h_for")
+    xg_h    = mh.get("xg1h_for");     xg_a    = ma.get("xg1h_for")
+    big_h   = mh.get("bigch1h_for");  big_a   = ma.get("bigch1h_for")
+    corn_h  = mh.get("corn1h_for");   corn_a  = ma.get("corn1h_for")
+    fk_h    = mh.get("fk1h_for");     fk_a    = ma.get("fk1h_for")
+
+    # set-piece xG proxy (1H total)
+    setp_xg_total = 0.0
+    for val in (corn_h, corn_a):
+        if val is not None: setp_xg_total += val * SETP_XG_PER_CORNER_1H
+    for val in (fk_h, fk_a):
+        if val is not None: setp_xg_total += val * SETP_XG_PER_FK_1H
 
     # posjed edge
-    pos_h = ph.get("pos"); pos_a = pa.get("pos")
     pos_edge = None
-    if pos_h is not None and pos_a is not None:
-        pos_edge = max(-1.0, min(1.0, (float(pos_h) - float(pos_a)) / 100.0))
+    if ph.get("pos") is not None and pa.get("pos") is not None:
+        pos_edge = max(-1.0, min(1.0, (float(ph["pos"]) - float(pa["pos"])) / 100.0))
 
-    # odmor
+    # fixture dt (za odmor & zagušenje)
     try:
         fixture_dt_utc = datetime.fromisoformat(((fixture.get('fixture') or {}).get('date') or '').replace("Z","+00:00"))
     except Exception:
@@ -789,109 +987,160 @@ def matchup_features_enhanced(fixture, team_profiles, league_baselines, micro_db
     rest_h = _rest_days_until_fixture(ph, fixture_dt_utc)
     rest_a = _rest_days_until_fixture(pa, fixture_dt_utc)
 
-    # finishing/leak + “dokaz”
-    fin_h, fin_a   = ph.get("finish"),  pa.get("finish")
-    leak_h, leak_a = ph.get("leak"),    pa.get("leak")
-    fin_eff_h, fin_eff_a   = ph.get("fin_effn", 0.0), pa.get("fin_effn", 0.0)
-    leak_eff_h, leak_eff_a = ph.get("leak_effn",0.0), pa.get("leak_effn",0.0)
+    # zagušenje: broj mečeva u prethodnih 7/14 dana pre fixture-a
+    def _congestion(profile):
+        ds = profile.get("match_dates") or []
+        if not fixture_dt_utc: return 0.0
+        c7 = sum(1 for d in ds if (fixture_dt_utc - d).total_seconds()/(3600*24) <= 7.0 and d < fixture_dt_utc)
+        c14= sum(1 for d in ds if (fixture_dt_utc - d).total_seconds()/(3600*24) <= 14.0 and d < fixture_dt_utc)
+        # mapiraj u [-1, +1] – 0 = normalno (2 u 14d ~ ok)
+        overload = max(0.0, (c7-2)*0.5 + (c14-4)*0.25)
+        return min(1.0, overload)
+    congest_h = _congestion(ph)
+    congest_a = _congestion(pa)
 
-    # coverage modulatori (SOT/DA/POS)
-    cov_sot = cov_da = cov_pos = 1.0
-    if micro_db is not None:
-        mh = (micro_db.get(home_id) or {}).get("home") or {}
-        ma = (micro_db.get(away_id) or {}).get("away") or {}
-        cov_sot = math.sqrt(_rel(mh.get("used_sot",0), k=6.0) * _rel(ma.get("used_sot",0), k=6.0)) or 0.0
-        cov_da  = math.sqrt(_rel(mh.get("used_da",0),  k=6.0) * _rel(ma.get("used_da",0),  k=6.0))  or 0.0
-        cov_pos = math.sqrt(_rel(mh.get("used_pos",0), k=6.0) * _rel(ma.get("used_pos",0), k=6.0)) or 0.0
-        cov_sot = max(0.0, min(1.0, cov_sot))
-        cov_da  = max(0.0, min(1.0, cov_da))
-        cov_pos = max(0.0, min(1.0, cov_pos))
+    # reliabilnosti za FIN/LEAK
+    fin_rel_h  = _rel(ph.get("fin_effn",0),   k=25.0)
+    fin_rel_a  = _rel(pa.get("fin_effn",0),   k=25.0)
+    leak_rel_h = _rel(ph.get("leak_effn",0),  k=25.0)
+    leak_rel_a = _rel(pa.get("leak_effn",0),  k=25.0)
 
-    # reliabilnost za FIN/LEAK – koristimo SoT bazu
-    fin_rel_h  = _rel(fin_eff_h,  k=25.0); fin_rel_a  = _rel(fin_eff_a,  k=25.0)
-    leak_rel_h = _rel(leak_eff_h, k=25.0); leak_rel_a = _rel(leak_eff_a, k=25.0)
-
-    # --- NEW: class gap (tier razlika) + info da li je kup ---
+    # class gap & cup
     lgname_raw = ((fixture.get('league') or {}).get('name') or '')
     is_cup = _is_cup(lgname_raw) or ((fixture.get('league') or {}).get('type','').lower()=='cup')
+    tier_h = int(ph.get("tier") or DEFAULT_TEAM_TIER); tier_h = max(1, min(4, tier_h))
+    tier_a = int(pa.get("tier") or DEFAULT_TEAM_TIER); tier_a = max(1, min(4, tier_a))
+    tier_gap_home = max(-MAX_TIER_GAP, min(MAX_TIER_GAP, (tier_a - tier_h)))
+    tier_gap_away = max(-MAX_TIER_GAP, min(MAX_TIER_GAP, (tier_h - tier_a)))
 
-    tier_h = int(ph.get("tier") or DEFAULT_TEAM_TIER)
-    tier_a = int(pa.get("tier") or DEFAULT_TEAM_TIER)
-    tier_h = max(1, min(4, tier_h))
-    tier_a = max(1, min(4, tier_a))
+    # FIN/LEAK + GK stop
+    fin_h  = ph.get("finish", FINISH_PRIOR_1H);     fin_a  = pa.get("finish", FINISH_PRIOR_1H)
+    leak_h = ph.get("leak",   LEAK_PRIOR_1H);       leak_a = pa.get("leak",   LEAK_PRIOR_1H)
+    gk_h   = ph.get("gk_stop", GK_SAVE_PRIOR_1H);   gk_a   = pa.get("gk_stop", GK_SAVE_PRIOR_1H)
+    finxg_h= ph.get("fin_xg", 0.0);                 finxg_a= pa.get("fin_xg", 0.0)
 
-    # gap za svaku stranu: pozitivan znači "moja strana je jača"
-    tier_gap_home = max(-MAX_TIER_GAP, min(MAX_TIER_GAP, (tier_a - tier_h)))       # ✅ jači home ⇒ +
-    tier_gap_away = max(-MAX_TIER_GAP, min(MAX_TIER_GAP, (tier_h - tier_a)))       # ✅ jači away ⇒ +
-    return {
+    # lineup multiplikator (sada stvarno povuci postave)
+    lineup   = compute_lineup_projection_1h(((fixture.get('fixture') or {}).get('id')),
+                api_or_repo_get_lineups=lambda fid: repo.get_lineups(fid, no_api=False))
+    # sudija/vreme/penvar/stadion kao i ranije
+    ref_prof = compute_referee_profile_1h(fixture, repo_get_ref_history=None)
+    wx = compute_weather_factor_1h({"fixture": {"weather": (extras or {}).get("weather_obj")}}) \
+        if (extras and extras.get("weather_obj")) else compute_weather_factor_1h(fixture)
+    penvar   = compute_penvar_profile_1h(fixture, team_profiles, referee_profile=ref_prof)
+    stadium  = compute_stadium_pitch_1h(fixture)
+
+    # važnost meča (0..10) → normalizovan adj u [-0.5, +0.5] oko “5”
+    try:
+        imp_raw = float(calculate_match_importance(((fixture.get('fixture') or {}).get('id'))))
+    except:
+        imp_raw = 5.0
+    importance_adj = max(-0.5, min(0.5, (imp_raw - 5.0) / 5.0))
+
+    out = {
         "exp_sot1h_home": exp_sot_h, "exp_sot1h_away": exp_sot_a,
         "exp_da1h_home":  exp_da_h,  "exp_da1h_away":  exp_da_a,
         "pos_edge": pos_edge,
         "fin_home": fin_h, "fin_away": fin_a,
         "leak_home": leak_h, "leak_away": leak_a,
+        "gk_home": gk_h,   "gk_away": gk_a,
+        "finxg_home": finxg_h, "finxg_away": finxg_a,
         "rest_home": rest_h, "rest_away": rest_a,
         "pace_sot_total": (exp_sot_h or 0) + (exp_sot_a or 0),
         "pace_da_total":  (exp_da_h  or 0) + (exp_da_a  or 0),
+        "tier_gap_home": tier_gap_home, "tier_gap_away": tier_gap_away, "is_cup": is_cup,
 
-        "cov_sot": cov_sot, "cov_da": cov_da, "cov_pos": cov_pos,
-        "fin_rel_home": fin_rel_h, "fin_rel_away": fin_rel_a,
-        "leak_rel_home": leak_rel_h, "leak_rel_away": leak_rel_a,
+        # NEW per-team mikro prosjeci
+        "shots1h_home": shots_h, "shots1h_away": shots_a,
+        "xg1h_home": xg_h,       "xg1h_away": xg_a,
+        "bigch1h_home": big_h,   "bigch1h_away": big_a,
+        "setp_xg_total": setp_xg_total,
+        "congest_home": congest_h, "congest_away": congest_a,
 
-        # NEW:
-        "tier_gap_home": tier_gap_home,
-        "tier_gap_away": tier_gap_away,
-        "is_cup": is_cup,
+        # multiplikatori (ln(mult))
+        "ref_mult": ref_prof.get("multiplier", 1.0),
+        "weather_mult": wx.get("multiplier", 1.0),
+        "penvar_mult": penvar.get("multiplier", 1.0),
+        "stadium_mult": stadium.get("multiplier", 1.0),
+        "lineup_mult_home": (lineup.get("home") or {}).get("multiplier", 1.0),
+        "lineup_mult_away": (lineup.get("away") or {}).get("multiplier", 1.0),
+
+        # logit adj okruženja
+        "ref_adj":     (extras or {}).get("ref_adj", 0.0),
+        "ref_used":    (extras or {}).get("ref_used", 0.0),
+        "ref_name":    (extras or {}).get("ref_name"),
+        "weather_adj": (extras or {}).get("weather_adj", 0.0),
+        "venue_adj":   (extras or {}).get("venue_adj", 0.0),
+        "lineup_adj":  (extras or {}).get("lineup_adj", 0.0),
+        "lineups_have": bool((extras or {}).get("lineups_have", False)),
+        "lineups_fw_count": (extras or {}).get("lineups_fw_count"),
+        "inj_adj":     (extras or {}).get("inj_adj", 0.0),
+        "inj_count":   (extras or {}).get("inj_count"),
+
+        # new global adj
+        "importance_adj": importance_adj,
     }
+    return out
 
 def predict_team_scores1h_enhanced(fixture, feats, league_baselines, team_strengths, side='home'):
     base = _league_base_for_fixture(fixture, league_baselines)
     m = base["m1h"]
 
-    mu_sot_h = (base["mu_sot1h"] or 0.0) / 2.0
-    sd_sot_h = max(1e-6, (base["sd_sot1h"] or 1.0) / (2**0.5))
-    mu_da_h  = (base["mu_da1h"]  or 0.0) / 2.0
-    sd_da_h  = max(1e-6, (base["sd_da1h"]  or 1.0) / (2**0.5))
+    # per-team z-osnove iz league baseline (SOT/DA)
+    mu_sot_h = (base.get("mu_sot1h") or 0.0) / 2.0
+    sd_sot_h = max(1e-6, (base.get("sd_sot1h") or 1.0) / (2**0.5))
+    mu_da_h  = (base.get("mu_da1h")  or 0.0) / 2.0
+    sd_da_h  = max(1e-6, (base.get("sd_da1h")  or 1.0) / (2**0.5))
+
+    # fallback global baseline za nove signale (konzervativno)
+    mu_shots_h, sd_shots_h = 5.0, 2.0
+    mu_xg_h,    sd_xg_h    = 0.55, 0.30
+    mu_big_h,   sd_big_h   = 0.7,  0.8
 
     if side == 'home':
         exp_sot = feats.get('exp_sot1h_home'); exp_da = feats.get('exp_da1h_home')
+        shots   = feats.get('shots1h_home');   xg     = feats.get('xg1h_home'); big = feats.get('bigch1h_home')
         fin     = feats.get('fin_home');       leak_opp = feats.get('leak_away')
-        rest    = feats.get('rest_home')
+        gk_me   = feats.get('gk_home');        finxg   = feats.get('finxg_home', 0.0)
+        rest    = feats.get('rest_home');      congest = feats.get('congest_home', 0.0)
         pos_share = feats.get('pos_edge') or 0.0
-
-        cov_sot = feats.get('cov_sot', 1.0)
-        cov_da  = feats.get('cov_da',  1.0)
-        cov_pos = feats.get('cov_pos', 1.0)
-        fin_rel = feats.get('fin_rel_home', 1.0)
-        leak_rel= feats.get('leak_rel_away',1.0)
-
-        # NEW: class gap za HOME
         tier_gap = float(feats.get('tier_gap_home') or 0.0)
+        lineup_mult = feats.get('lineup_mult_home', 1.0)
     else:
         exp_sot = feats.get('exp_sot1h_away'); exp_da = feats.get('exp_da1h_away')
+        shots   = feats.get('shots1h_away');   xg     = feats.get('xg1h_away'); big = feats.get('bigch1h_away')
         fin     = feats.get('fin_away');       leak_opp = feats.get('leak_home')
-        rest    = feats.get('rest_away')
+        gk_me   = feats.get('gk_away');        finxg   = feats.get('finxg_away', 0.0)
+        rest    = feats.get('rest_away');      congest = feats.get('congest_away', 0.0)
         pos_share = -(feats.get('pos_edge') or 0.0)
-
-        cov_sot = feats.get('cov_sot', 1.0)
-        cov_da  = feats.get('cov_da',  1.0)
-        cov_pos = feats.get('cov_pos', 1.0)
-        fin_rel = feats.get('fin_rel_away', 1.0)
-        leak_rel= feats.get('leak_rel_home',1.0)
-
-        # NEW: class gap za AWAY
         tier_gap = float(feats.get('tier_gap_away') or 0.0)
+        lineup_mult = feats.get('lineup_mult_away', 1.0)
 
+    # z-score klasici
     z_sot = _z(exp_sot, mu_sot_h, sd_sot_h)
     z_da  = _z(exp_da,  mu_da_h,  sd_da_h)
 
+    # novi z-score (fallback baseline)
+    z_shots = 0.0 if shots is None else _z(shots, mu_shots_h, sd_shots_h)
+    z_xg    = 0.0 if xg    is None else _z(xg,    mu_xg_h,    sd_xg_h)
+    z_big   = 0.0 if big   is None else _z(big,   mu_big_h,   sd_big_h)
+
+    # finishing/leak kao i ranije (logit space)
     fin_adj  = _logit(min(0.99, max(0.01, fin or FINISH_PRIOR_1H)))    - _logit(FINISH_PRIOR_1H)
     leak_adj = _logit(min(0.99, max(0.01, leak_opp or LEAK_PRIOR_1H))) - _logit(LEAK_PRIOR_1H)
 
-    if rest is None:
-        rest_z = 0.0
-    else:
-        rest_z = max(-1.0, min(1.0, (float(rest) - REST_REF_DAYS) / 5.0))
+    # gk (save%) – pomeraj oko priora
+    gk_adj = (float(gk_me or GK_SAVE_PRIOR_1H) - GK_SAVE_PRIOR_1H)
 
+    # finishing vs xG (centrirano oko 0)
+    finxg_adj = float(finxg or 0.0)
+
+    # odmor i zagušenje
+    rest_z = 0.0
+    if rest is not None:
+        rest_z = max(-1.0, min(1.0, (float(rest) - REST_REF_DAYS) / 5.0))
+    congest_adj = -float(congest or 0.0)  # više mečeva → minus
+
+    # strength baseline (att tim & def_allow protivnik)
     home_id = ((fixture.get('teams') or {}).get('home') or {}).get('id')
     away_id = ((fixture.get('teams') or {}).get('away') or {}).get('id')
     team_id = home_id if side=='home' else away_id
@@ -899,45 +1148,93 @@ def predict_team_scores1h_enhanced(fixture, feats, league_baselines, team_streng
 
     sT  = (team_strengths or {}).get(team_id, {"att": m, "def_allow": m})
     sOpp = (team_strengths or {}).get(opp_id, {"att": m, "def_allow": m})
-    att_adj  = _logit(sT['att'])           - _logit(m)
-    defo_adj = _logit(sOpp['def_allow'])   - _logit(m)
+    att_adj  = _logit(sT['att'])         - _logit(m)
+    defo_adj = _logit(sOpp['def_allow']) - _logit(m)
 
-    # težine uz coverage/reliability
+    # multiplikativni faktori → ln(mult)
+    ln_ref   = _ln_mult(feats.get("ref_mult", 1.0))
+    ln_wx    = _ln_mult(feats.get("weather_mult", 1.0))
+    ln_line  = _ln_mult(lineup_mult)
+    ln_pen   = _ln_mult(feats.get("penvar_mult", 1.0))
+    ln_stad  = _ln_mult(feats.get("stadium_mult", 1.0))
+
+    class_weight = WEIGHTS["TIER_GAP"] * (CUP_TIER_MULT if feats.get("is_cup") else 1.0)
+
+    # coverage/reliability
+    cov_sot = feats.get('cov_sot', 1.0)
+    cov_da  = feats.get('cov_da',  1.0)
+    cov_pos = feats.get('cov_pos', 1.0)
+    fin_rel = feats.get('fin_rel_home' if side=='home' else 'fin_rel_away', 1.0)
+    leak_rel= feats.get('leak_rel_away' if side=='home' else 'leak_rel_home',1.0)
+
+    # težine
     w_zsot = WEIGHTS["Z_SOT"] * cov_sot
     w_zda  = WEIGHTS["Z_DA"]  * cov_da
     w_pos  = WEIGHTS["POS"]   * cov_pos
     w_fin  = WEIGHTS["FIN"]   * fin_rel
     w_leak = WEIGHTS["LEAK"]  * leak_rel
 
-    # NEW: class/tier efekt (pojačan u kupovima)
-    class_weight = WEIGHTS["TIER_GAP"] * (CUP_TIER_MULT if feats.get("is_cup") else 1.0)
+    # novi signali
+    w_shots = WEIGHTS["Z_SHOTS"]
+    w_xg    = WEIGHTS["Z_XG"]
+    w_big   = WEIGHTS["Z_BIGCH"]
+    w_setp  = WEIGHTS["SETP"]
+    w_gk    = WEIGHTS["GK"]
+    w_cong  = WEIGHTS["CONGEST"]
+
+    # global adj (primeni samo jednom — u 'home' pozivu)
+    global_adj = 0.0
+    if side == 'home':
+        global_adj += WEIGHTS.get("REF",0.0)         * float(feats.get("ref_adj") or 0.0)
+        global_adj += WEIGHTS.get("ENV_WEATHER",0.0) * float(feats.get("weather_adj") or 0.0)
+        global_adj += WEIGHTS.get("VENUE",0.0)       * float(feats.get("venue_adj") or 0.0)
+        global_adj += WEIGHTS.get("LINEUPS",0.0)     * float(feats.get("lineup_adj") or 0.0)
+        global_adj += WEIGHTS.get("INJ",0.0)         * float(feats.get("inj_adj") or 0.0)
+        global_adj += WEIGHTS.get("IMPORTANCE",0.0)  * float(feats.get("importance_adj") or 0.0)
+        # set-piece total (ukupan doprinos utakmice, ne stranican → dodaj ovde)
+        global_adj += w_setp * float(feats.get("setp_xg_total") or 0.0)
 
     z = (
         _logit(m) + WEIGHTS["BIAS"]
-        + w_zsot*z_sot
-        + w_zda *z_da
-        + w_pos *pos_share
-        + w_fin *fin_adj
-        + w_leak*leak_adj
-        + WEIGHTS["REST"]*rest_z
+        + w_zsot*z_sot + w_zda*z_da + w_pos*pos_share
+        + w_fin*fin_adj + w_leak*leak_adj
+        + WEIGHTS["REST"]*rest_z + w_cong*congest_adj
         + (WEIGHTS["HOME"] if side=='home' else 0.0)
-        + WEIGHTS["ATT"]*att_adj
-        + WEIGHTS["DEF"]*defo_adj
-        + class_weight * tier_gap           # ⇐ NEW
+        + WEIGHTS["ATT"]*att_adj + WEIGHTS["DEF"]*defo_adj
+        + class_weight * tier_gap
+        # novi z-score dodaci
+        + w_shots*z_shots + w_xg*z_xg + w_big*z_big
+        # finishing vs xG i GK
+        + w_gk*gk_adj + 0.5*WEIGHTS["FIN"]*finxg_adj
+        # multiplikatori
+        + WEIGHTS["REFEREE_MULT"] * ln_ref
+        + WEIGHTS["WEATHER_MULT"] * ln_wx
+        + WEIGHTS["LINEUP_MULT"]  * ln_line
+        + WEIGHTS["PENVAR_MULT"]  * ln_pen
+        + WEIGHTS["STADIUM_MULT"] * ln_stad
+        + global_adj
     )
 
     p = _inv_logit(z)
     p = _calibrate(p, temp=CALIBRATION["TEMP"], floor=CALIBRATION["FLOOR"], ceil=CALIBRATION["CEIL"])
-    return p, {
-        "z_sot": round(z_sot,3), "z_da": round(z_da,3),
+    dbg = {
+        "z_sot": round(z_sot,3), "z_da": round(z_da,3), "z_shots": round(z_shots,3),
+        "z_xg": round(z_xg,3), "z_big": round(z_big,3),
         "pos_share": round(pos_share,3), "fin_adj": round(fin_adj,3),
-        "leak_adj": round(leak_adj,3), "rest_z": round(rest_z,3),
+        "leak_adj": round(leak_adj,3), "gk_adj": round(gk_adj,3), "finxg": round(finxg_adj,3),
+        "rest_z": round(rest_z,3), "congest": round(congest_adj,3),
         "att_adj": round(att_adj,3), "def_adj": round(defo_adj,3),
-        "cov_sot": round(cov_sot,3), "cov_da": round(cov_da,3), "cov_pos": round(cov_pos,3),
-        "fin_rel": round(fin_rel,3), "leak_rel": round(leak_rel,3),
-        # NEW:
+        "ln_ref": round(ln_ref,3), "ln_wx": round(ln_wx,3), "ln_line": round(ln_line,3),
+        "ln_pen": round(ln_pen,3), "ln_stad": round(ln_stad,3),
+        "ref_adj": round(float(feats.get("ref_adj") or 0.0), 3),
+        "weather_adj": round(float(feats.get("weather_adj") or 0.0), 3),
+        "venue_adj": round(float(feats.get("venue_adj") or 0.0), 3),
+        "lineup_adj": round(float(feats.get("lineup_adj") or 0.0), 3),
+        "inj_adj": round(float(feats.get("inj_adj") or 0.0), 3),
+        "importance_adj": round(float(feats.get("importance_adj") or 0.0), 3),
         "tier_gap": round(tier_gap,3), "is_cup": bool(feats.get("is_cup")),
     }
+    return p, dbg
 
 def get_or_fetch_team_history(team_id: int, last_n: int = 30, force_refresh: bool = False, no_api: bool = False):
     conn = get_db_connection()
@@ -1145,35 +1442,52 @@ def _first_half_or_half_of_full(block, name_full_list, name_1h_list, cap=None):
     return val
 
 def _extract_match_micro_for_team(stats_response, team_id, opp_id):
-    """Iz jednog meča izvuci 1H SOT/DA/POS za tim i 'allowed' (preko protivnika)."""
+    """Iz jednog meča izvuci 1H mikro metrike za tim i 'allowed' preko protivnika.
+       Dodato: total shots, xG, big chances, korneri, slobodnjaci (1H ako postoji; inače full/2)."""
     tb = _team_block(stats_response, team_id)
     ob = _team_block(stats_response, opp_id)
     if not tb or not ob:
         return None
 
+    def one_half_or_half(block, full_list, half_list, cap=None):
+        v = _first_half_or_half_of_full(block, [n.lower() for n in full_list],
+                                        [n.lower() for n in half_list], cap=cap)
+        return v
+
     # Shots on Target (1H)
-    sot1h_for     = _first_half_or_half_of_full(tb,
-                        name_full_list=["shots on goal"],
-                        name_1h_list =["1st half shots on goal", "shots on goal 1st half", "first half shots on goal"],
+    sot1h_for     = one_half_or_half(tb,
+                        ["shots on goal", "shots on target"],
+                        ["1st half shots on goal", "shots on goal 1st half", "first half shots on goal",
+                         "1st half shots on target", "shots on target 1st half", "first half shots on target"],
                         cap=SOT1H_CAP)
-    sot1h_allowed = _first_half_or_half_of_full(ob,
-                        name_full_list=["shots on goal"],
-                        name_1h_list =["1st half shots on goal", "shots on goal 1st half", "first half shots on goal"],
+    sot1h_allowed = one_half_or_half(ob,
+                        ["shots on goal", "shots on target"],
+                        ["1st half shots on goal", "shots on goal 1st half", "first half shots on goal",
+                         "1st half shots on target", "shots on target 1st half", "first half shots on target"],
                         cap=SOT1H_CAP)
+
+    # Total shots (1H)
+    shots1h_for   = one_half_or_half(tb,
+                        ["total shots", "shots total", "shots"],
+                        ["1st half total shots", "shots 1st half", "first half total shots"],
+                        cap=SHOTS1H_CAP)
+    shots1h_allowed = one_half_or_half(ob,
+                        ["total shots", "shots total", "shots"],
+                        ["1st half total shots", "shots 1st half", "first half total shots"],
+                        cap=SHOTS1H_CAP)
 
     # Dangerous Attacks (1H)
-    da1h_for      = _first_half_or_half_of_full(tb,
-                        name_full_list=["dangerous attacks"],
-                        name_1h_list =["1st half dangerous attacks", "dangerous attacks 1st half", "first half dangerous attacks"],
+    da1h_for      = one_half_or_half(tb,
+                        ["dangerous attacks"],
+                        ["1st half dangerous attacks", "dangerous attacks 1st half", "first half dangerous attacks"],
                         cap=DA1H_CAP)
-    da1h_allowed  = _first_half_or_half_of_full(ob,
-                        name_full_list=["dangerous attacks"],
-                        name_1h_list =["1st half dangerous attacks", "dangerous attacks 1st half", "first half dangerous attacks"],
+    da1h_allowed  = one_half_or_half(ob,
+                        ["dangerous attacks"],
+                        ["1st half dangerous attacks", "dangerous attacks 1st half", "first half dangerous attacks"],
                         cap=DA1H_CAP)
 
-    # Ball Possession (1H) — procena za tim; ako nema 1H -> full/2 NE; posjed je već %
-    # Pazimo da ne prepolovimo procenat; za posjed koristimo 1H ako postoji, inače full-match % kao proxy za 1H.
-    pos1h = _stat_from_block(tb, ["1st half possession", "possession 1st half", "first half possession", 
+    # Possession (1H) – kao i ranije
+    pos1h = _stat_from_block(tb, ["1st half possession", "possession 1st half", "first half possession",
                                   "1st half ball possession", "ball possession 1st half"])
     if pos1h is None:
         pos_full = _stat_from_block(tb, ["ball possession", "possession", "possession %", "ball possession %"])
@@ -1181,14 +1495,56 @@ def _extract_match_micro_for_team(stats_response, team_id, opp_id):
     if pos1h is not None:
         pos1h = max(POS_MIN, min(POS_MAX, float(pos1h)))
 
-    return {
-        "sot1h_for": sot1h_for,
-        "sot1h_allowed": sot1h_allowed,
-        "da1h_for": da1h_for,
-        "da1h_allowed": da1h_allowed,
-        "pos1h": pos1h
-    }
+    # xG (1H) – ako nema 1H: full/2 (API-ju ime zna varirati)
+    xg1h_for = one_half_or_half(tb,
+                    ["expected goals", "xg", "xg expected"],
+                    ["1st half xg", "xg 1st half", "first half xg"],
+                    cap=XG1H_CAP)
+    xg1h_allowed = one_half_or_half(ob,
+                    ["expected goals", "xg", "xg expected"],
+                    ["1st half xg", "xg 1st half", "first half xg"],
+                    cap=XG1H_CAP)
 
+    # Big chances (1H) – ako API ne daje, ostaje None
+    bigch1h_for = one_half_or_half(tb,
+                    ["big chances", "big chances created"],
+                    ["1st half big chances", "big chances 1st half", "first half big chances"],
+                    cap=BIGCH1H_CAP)
+    bigch1h_allowed = one_half_or_half(ob,
+                    ["big chances", "big chances created"],
+                    ["1st half big chances", "big chances 1st half", "first half big chances"],
+                    cap=BIGCH1H_CAP)
+
+    # Set-pieces: korneri & slobodnjaci (1H)
+    corn1h_for = one_half_or_half(tb,
+                    ["corner kicks", "corners"],
+                    ["1st half corners", "corners 1st half", "first half corners"],
+                    cap=CORN1H_CAP)
+    corn1h_allowed = one_half_or_half(ob,
+                    ["corner kicks", "corners"],
+                    ["1st half corners", "corners 1st half", "first half corners"],
+                    cap=CORN1H_CAP)
+
+    fk1h_for = one_half_or_half(tb,
+                    ["free kicks", "free-kicks"],
+                    ["1st half free kicks", "free kicks 1st half", "first half free kicks"],
+                    cap=FK1H_CAP)
+    fk1h_allowed = one_half_or_half(ob,
+                    ["free kicks", "free-kicks"],
+                    ["1st half free kicks", "free kicks 1st half", "first half free kicks"],
+                    cap=FK1H_CAP)
+
+    return {
+        "sot1h_for": sot1h_for,          "sot1h_allowed": sot1h_allowed,
+        "shots1h_for": shots1h_for,      "shots1h_allowed": shots1h_allowed,
+        "da1h_for": da1h_for,            "da1h_allowed": da1h_allowed,
+        "pos1h": pos1h,
+        "xg1h_for": xg1h_for,            "xg1h_allowed": xg1h_allowed,
+        "bigch1h_for": bigch1h_for,      "bigch1h_allowed": bigch1h_allowed,
+        "corn1h_for": corn1h_for,        "corn1h_allowed": corn1h_allowed,
+        "fk1h_for": fk1h_for,            "fk1h_allowed": fk1h_allowed,
+    }
+    
 def _ht_total_ge2(m):
     ht = ((m.get('score') or {}).get('halftime') or {})
     h = ht.get('home') or 0
@@ -1224,29 +1580,30 @@ def h2h_1h_over15_stats(h2h_matches):
 
 def _aggregate_team_micro(team_id, matches, get_stats_fn, context="all"):
     """
-    Sabira mikro metrike kroz zadnje mečeve.
-    Vraća odvojene brojače: used_sot, used_da, used_pos, i 'used_any' (bilo šta).
-    Proseke računa sa odgovarajućim brojačem, ne sa 'used_any'.
+    Sabira mikro kroz zadnje mečeve. Dodato: shots total, xG, big chances, korneri, free kicks.
     """
-    sum_sot_for = sum_sot_alw = 0.0; cnt_sot = 0
-    sum_da_for  = sum_da_alw  = 0.0; cnt_da  = 0
-    sum_pos     = 0.0;                    cnt_pos = 0
-    used_any    = 0
+    sums = {
+        "sot_for":0.0,"sot_alw":0.0,"da_for":0.0,"da_alw":0.0,"pos":0.0,
+        "shots_for":0.0,"shots_alw":0.0,
+        "xg_for":0.0,"xg_alw":0.0,
+        "bigch_for":0.0,"bigch_alw":0.0,
+        "corn_for":0.0,"corn_alw":0.0,
+        "fk_for":0.0,"fk_alw":0.0,
+    }
+    cnt  = {k:0 for k in ["sot","da","pos","shots","xg","bigch","corn","fk"]}
+    used_any = 0
 
     for m in matches or []:
-        fix = m.get("fixture", {}) or {}
+        fix = m.get("fixture") or {}
         fid = fix.get("id")
-        teams = m.get("teams", {}) or {}
+        teams = m.get("teams") or {}
         th = (teams.get("home") or {}).get("id")
         ta = (teams.get("away") or {}).get("id")
         if not fid or (th is None) or (ta is None):
             continue
 
-        # filter uloga
-        if context == "home" and th != team_id:
-            continue
-        if context == "away" and ta != team_id:
-            continue
+        if context == "home" and th != team_id:  continue
+        if context == "away" and ta != team_id:  continue
 
         opp_id = ta if th == team_id else th
         stats_response = get_stats_fn(fid)
@@ -1257,57 +1614,71 @@ def _aggregate_team_micro(team_id, matches, get_stats_fn, context="all"):
         if not micro:
             continue
 
-        any_this_match = False
+        any_this = False
+
+        # helpers
+        def _acc(pair, key_for, key_alw, cap):
+            nonlocal any_this
+            v_for = micro.get(key_for); v_alw = micro.get(key_alw)
+            if (v_for is not None) and (v_alw is not None):
+                sums[pair[0]] += v_for; sums[pair[1]] += v_alw; return True
+            return False
 
         # SOT
-        if micro.get("sot1h_for") is not None and micro.get("sot1h_allowed") is not None:
-            sum_sot_for += micro["sot1h_for"]
-            sum_sot_alw += micro["sot1h_allowed"]
-            cnt_sot += 1
-            any_this_match = True
-
+        if _acc(("sot_for","sot_alw"), "sot1h_for","sot1h_allowed", SOT1H_CAP): cnt["sot"] += 1; any_this = True
         # DA
-        if micro.get("da1h_for") is not None and micro.get("da1h_allowed") is not None:
-            sum_da_for += micro["da1h_for"]
-            sum_da_alw += micro["da1h_allowed"]
-            cnt_da += 1
-            any_this_match = True
-
-        # POS
+        if _acc(("da_for","da_alw"), "da1h_for","da1h_allowed", DA1H_CAP): cnt["da"] += 1; any_this = True
+        # POS (samo for)
         if micro.get("pos1h") is not None:
-            sum_pos += micro["pos1h"]
-            cnt_pos += 1
-            any_this_match = True
+            sums["pos"] += micro["pos1h"]; cnt["pos"] += 1; any_this = True
+        # SHOTS
+        if _acc(("shots_for","shots_alw"), "shots1h_for","shots1h_allowed", SHOTS1H_CAP): cnt["shots"] += 1; any_this = True
+        # xG
+        if _acc(("xg_for","xg_alw"), "xg1h_for","xg1h_allowed", XG1H_CAP): cnt["xg"] += 1; any_this = True
+        # Big chances
+        if _acc(("bigch_for","bigch_alw"), "bigch1h_for","bigch1h_allowed", BIGCH1H_CAP): cnt["bigch"] += 1; any_this = True
+        # Corners
+        if _acc(("corn_for","corn_alw"), "corn1h_for","corn1h_allowed", CORN1H_CAP): cnt["corn"] += 1; any_this = True
+        # Free kicks
+        if _acc(("fk_for","fk_alw"), "fk1h_for","fk1h_allowed", FK1H_CAP): cnt["fk"] += 1; any_this = True
 
-        if any_this_match:
-            used_any += 1
-
+        if any_this: used_any += 1
         time.sleep(0.00)
 
-    def _avg(vsum, cnt):
-        return None if cnt == 0 else round(vsum / cnt, 3)
+    def _avg(k1, k2, ckey):
+        return None if cnt[ckey]==0 else round(sums[k1]/cnt[ckey],3)
 
     return {
-        "used": used_any,           # bilo šta
-        "used_sot": cnt_sot,        # samo mečevi gde imamo SOT for+allowed
-        "used_da": cnt_da,          # samo mečevi gde imamo DA for+allowed
-        "used_pos": cnt_pos,        # samo mečevi gde imamo posjed
+        "used": used_any,
+        "used_sot": cnt["sot"], "used_da": cnt["da"], "used_pos": cnt["pos"],
+        "used_shots": cnt["shots"], "used_xg": cnt["xg"], "used_bigch": cnt["bigch"],
+        "used_corn": cnt["corn"], "used_fk": cnt["fk"],
 
-        "sot1h_for": _avg(sum_sot_for, cnt_sot),
-        "sot1h_allowed": _avg(sum_sot_alw, cnt_sot),
-        "da1h_for": _avg(sum_da_for, cnt_da),
-        "da1h_allowed": _avg(sum_da_alw, cnt_da),
-        "pos1h": _avg(sum_pos, cnt_pos),
+        "sot1h_for": _avg("sot_for","sot_alw","sot"),
+        "sot1h_allowed": _avg("sot_alw","sot_for","sot"),
+        "da1h_for": _avg("da_for","da_alw","da"),
+        "da1h_allowed": _avg("da_alw","da_for","da"),
+        "pos1h": None if cnt["pos"]==0 else round(sums["pos"]/cnt["pos"],3),
+
+        "shots1h_for": _avg("shots_for","shots_alw","shots"),
+        "shots1h_allowed": _avg("shots_alw","shots_for","shots"),
+        "xg1h_for": _avg("xg_for","xg_alw","xg"),
+        "xg1h_allowed": _avg("xg_alw","xg_for","xg"),
+        "bigch1h_for": _avg("bigch_for","bigch_alw","bigch"),
+        "bigch1h_allowed": _avg("bigch_alw","bigch_for","bigch"),
+        "corn1h_for": _avg("corn_for","corn_alw","corn"),
+        "corn1h_allowed": _avg("corn_alw","corn_for","corn"),
+        "fk1h_for": _avg("fk_for","fk_alw","fk"),
+        "fk1h_allowed": _avg("fk_alw","fk_for","fk"),
     }
 
-def build_micro_db(team_last_matches, no_api: bool = False):
+def build_micro_db(team_last_matches, stats_fn):
     """
     Za SVAKI tim izgradi home/away mikro formu.
-    Ako je no_api=True → koristi samo lokalni keš za statistiku (bez API-ja).
+    Ovdje *uvijek* koristi prosleđeni stats_fn (repo-backed).
     """
-    stats_fn = get_fixture_statistics_cached_only if no_api else get_or_fetch_fixture_statistics
     micro = {}
-    for team_id, matches in team_last_matches.items():
+    for team_id, matches in (team_last_matches or {}).items():
         micro[team_id] = {
             "home": _aggregate_team_micro(team_id, matches, stats_fn, context="home"),
             "away": _aggregate_team_micro(team_id, matches, stats_fn, context="away"),
@@ -1399,6 +1770,17 @@ def _logit(p):
 
 def _inv_logit(z):
     return 1.0 / (1.0 + math.exp(-z))
+
+def blend_with_market(prob_model: float, odds_market: Optional[float], alpha: float = ALPHA_MODEL) -> float:
+    """
+    odds_market = decimal odds za traženi market (očisti marginu izvan ove funkcije ako imaš obe strane).
+    Ako nemamo kvotu → vrati prob_model.
+    """
+    if not odds_market or odds_market <= 1.0:
+        return prob_model
+    p_mkt = 1.0 / odds_market
+    z = alpha * _logit(prob_model) + (1.0 - alpha) * _logit(p_mkt)
+    return _inv_logit(z)
 
 # =============== NEW: Recency, EB shrink, league baselines, strengths, precision-merge ===============
 
@@ -1552,7 +1934,13 @@ def compute_league_baselines(team_last_matches, stats_fn, max_scan_per_league=15
             if v is None:
                 base[k] = global_base.get(k)
 
+    # zapamti global m1h za druge module (referee profile)
+    try:
+        compute_league_baselines._last_global_m1h = float(global_base.get("m1h") or 0.55)
+    except Exception:
+        compute_league_baselines._last_global_m1h = 0.55
     return {"global": global_base, "leagues": leagues}
+
 
 def compute_team_strengths(team_last_matches, lam=5.0, max_n=15, m_global=0.55):
     """Napad (1H score >=1) i def_allow (1H conceded >=1) po timu, EB shrink na m_global."""
@@ -1564,6 +1952,188 @@ def compute_team_strengths(team_last_matches, lam=5.0, max_n=15, m_global=0.55):
         def_allow = beta_shrunk_rate(h_con, w_con, m=m_global, tau=8.0)
         strengths[team_id] = {"att": att, "def_allow": def_allow, "eff_n": (w_sc or 0)+(w_con or 0)}
     return strengths
+
+# ====== EXTRA SIGNALS: referee / weather / venue / lineups / injuries ======
+
+def _is_gg1h(m):
+    ht = ((m.get('score') or {}).get('halftime') or {})
+    return (ht.get('home') or 0) > 0 and (ht.get('away') or 0) > 0
+
+@lru_cache(maxsize=2000)
+def compute_referee_profile(ref_name: str, season: int | None) -> dict:
+    """
+    Povuče sezonske mečeve tog sudije (preko DataRepo) i vrati bias-e:
+      - p1h_ge1, p1h_ge2, p1h_gg  (EB shrink na global m1h)
+      - logit delte vs m1h za 1H≥1 (to koristimo kao 'ref_adj')
+    Ako nema podataka → neutralno (0 adja).
+    """
+    try:
+        if not ref_name:
+            return {"p1h_ge1": None, "p1h_ge2": None, "p1h_gg": None, "ref_adj": 0.0, "used": 0.0}
+        year = season or datetime.utcnow().year
+        arr = repo.get_referee_fixtures(ref_name, season=year, last_n=200, no_api=False) or []
+        # recency ponder (lakši)
+        h1, w1, _ = _weighted_counts(sorted(arr, key=lambda m: (m.get('fixture') or {}).get('date',''), reverse=True),
+                                     _ht_total_ge1, lam=8.0, max_n=200)
+        h2, w2, _ = _weighted_counts(sorted(arr, key=lambda m: (m.get('fixture') or {}).get('date',''), reverse=True),
+                                     _ht_total_ge2, lam=8.0, max_n=200)
+        hg, wg, _ = _weighted_counts(sorted(arr, key=lambda m: (m.get('fixture') or {}).get('date',''), reverse=True),
+                                     _is_gg1h, lam=8.0, max_n=200)
+        # global m1h
+        m_global = (compute_league_baselines.__dict__.get("_last_global_m1h")  # mali hack: setovaćemo ispod
+                    if compute_league_baselines.__dict__.get("_last_global_m1h") is not None else 0.55)
+
+        p1 = beta_shrunk_rate(h1, w1, m=m_global, tau=10.0) if w1 > 0 else m_global
+        p2 = beta_shrunk_rate(h2, w2, m=max(0.05, m_global*m_global), tau=10.0) if w2 > 0 else max(0.05, m_global*m_global)
+        pg = beta_shrunk_rate(hg, wg, m=(m_global*m_global*0.8 + 0.02), tau=10.0) if wg > 0 else (m_global*m_global*0.8 + 0.02)
+
+        ref_adj = (_logit(min(0.99, max(0.01, p1))) - _logit(min(0.99, max(0.01, m_global))))
+        return {"p1h_ge1": p1, "p1h_ge2": p2, "p1h_gg": pg, "ref_adj": ref_adj, "used": float(w1)}
+    except Exception:
+        return {"p1h_ge1": None, "p1h_ge2": None, "p1h_gg": None, "ref_adj": 0.0, "used": 0.0}
+
+def _coerce_float(x):
+    try:
+        if x is None: return None
+        if isinstance(x, (int,float)): return float(x)
+        s = str(x)
+        if s.endswith("km/h"): s = s.replace("km/h","").strip()
+        if s.endswith("%"): s = s[:-1].strip()
+        return float(s)
+    except:
+        return None
+
+def _extract_weather(fx_full: dict) -> dict:
+    """
+    Vrati dict: {"temp_c":..., "wind_kmh":..., "humidity":...}
+    API-Football ume da vrati 'weather' sa raznim ključevima; budimo tolerantni.
+    """
+    w = ((fx_full or {}).get("fixture") or {}).get("weather") or {}
+    if not isinstance(w, dict):
+        w = {}
+    temp = _coerce_float(w.get("temperature") or w.get("temp") or w.get("temperature_c") or w.get("temp_c"))
+    wind = _coerce_float(w.get("wind") or w.get("wind_kmh") or w.get("windSpeed") or w.get("wind_speed"))
+    hum  = _coerce_float(w.get("humidity") or w.get("humid") or w.get("humidity_percent"))
+    return {"temp_c": temp, "wind_kmh": wind, "humidity": hum}
+
+def _weather_adj(temp_c: float | None, wind_kmh: float | None, humidity: float | None) -> float:
+    """
+    Daj mali logit adj u [-0.5, +0.5] ~ tempo.
+      - vetar > 30 km/h → -0.25
+      - ekstremne temp (<0 ili >30) → -0.20
+      - vrlo ugodno (12..20C, vetar <15) → +0.08
+    """
+    adj = 0.0
+    if wind_kmh is not None:
+        if wind_kmh >= 35: adj -= 0.25
+        elif wind_kmh >= 25: adj -= 0.12
+    if temp_c is not None:
+        if temp_c <= -2 or temp_c >= 32: adj -= 0.20
+        elif 12 <= temp_c <= 20: adj += 0.08
+    if humidity is not None and humidity >= 90:
+        adj -= 0.05
+    return max(-0.5, min(0.5, adj))
+
+def _venue_adj(venue_obj: dict | None) -> float:
+    """
+    Blagi adj:
+      - artificial / turf → +0.04 (brža lopta)
+      - elevation > 1000m → -0.06 (umor, ređi vazduh → ponekad suprotno, ali budimo konzervativni)
+    """
+    if not venue_obj: return 0.0
+    surf = (venue_obj.get("surface") or "").lower()
+    elev = _coerce_float(venue_obj.get("elevation") or venue_obj.get("elevation_m"))
+    adj = 0.0
+    if "artificial" in surf or "turf" in surf: adj += 0.04
+    if elev is not None and elev > 1000: adj -= 0.06
+    return max(-0.2, min(0.2, adj))
+
+def _lineups_adj(lineups: list | None) -> tuple[float, dict]:
+    """
+    Ako su lineup-ovi dostupni, proceni napadački sastav:
+      - prebroj 'F'/'FW'/'Attacker' u startnih 11 oba tima; <2 ukupno → -0.12 ; >=4 → +0.06
+    Ako lineups nije spreman → adj=0.0
+    """
+    try:
+        if not lineups or len(lineups) < 1: 
+            return 0.0, {"fw_count": None, "have": False}
+        starters = 0
+        fw = 0
+        for team in lineups:
+            sx = (team.get("startXI") or []) if isinstance(team, dict) else []
+            for p in sx:
+                pos = ((p.get("player") or {}).get("pos") or (p.get("player") or {}).get("position") or "" ).upper()
+                grid = (p.get("player") or {}).get("grid") or ""
+                starters += 1
+                if pos in ("F","FW","ATTACKER") or ("-3-" in str(grid) or "-2-" in str(grid)):  # grubi heur.
+                    fw += 1
+        adj = 0.0
+        if starters >= 18:  # lineup realno objavljen
+            if fw <= 1: adj -= 0.12
+            elif fw >= 4: adj += 0.06
+            return adj, {"fw_count": fw, "have": True}
+        return 0.0, {"fw_count": None, "have": False}
+    except Exception:
+        return 0.0, {"fw_count": None, "have": False}
+
+def _injuries_adj(inj_list: list | None) -> tuple[float, dict]:
+    """
+    Nađi ukupan broj prijavljenih povreda/suspenzija; >6 → -0.10 ; >10 → -0.18
+    """
+    try:
+        n = len(inj_list or [])
+        adj = 0.0
+        if n > 10: adj -= 0.18
+        elif n > 6: adj -= 0.10
+        return adj, {"inj_count": n}
+    except Exception:
+        return 0.0, {"inj_count": None}
+
+def build_extras_for_fixture(fixture: dict, no_api: bool=False) -> dict:
+    """
+    Skupi: referee profile, weather, venue, lineups, injuries.
+    Vraća dict sa adj-ovima (logit skala) i info za debug.
+    """
+    fid = ((fixture.get("fixture") or {}).get("id")) or ((fixture.get("fixture") or {}).get("id"))
+    season = ((fixture.get("league") or {}).get("season"))
+    fx_full = repo.get_fixture_full(fid, no_api=no_api)  # osvežava fixture_json ako treba
+    # referee
+    ref_name = (((fx_full or {}).get("fixture") or {}).get("referee") or
+                ((fixture.get("fixture") or {}).get("referee")))
+    ref_prof = compute_referee_profile(ref_name, season) if ref_name and not no_api else {"ref_adj": 0.0, "used": 0.0}
+    # venue
+    ven_id = (((fx_full or {}).get("fixture") or {}).get("venue") or {}).get("id") or \
+             (((fixture.get("fixture") or {}).get("venue") or {}).get("id"))
+    ven = repo.get_venue(ven_id, no_api=no_api) if ven_id else None
+    ven_adj = _venue_adj(ven or {})
+    # weather
+    ww = _extract_weather(fx_full or {})
+    w_adj = _weather_adj(ww.get("temp_c"), ww.get("wind_kmh"), ww.get("humidity"))
+    # lineups (samo ako API dozvoljen; inače 0)
+    lu = repo.get_lineups(fid, no_api=no_api) if not no_api else None
+    lu_adj, lu_dbg = _lineups_adj(lu)
+    # injuries
+    inj = repo.get_injuries(fid, no_api=no_api) if not no_api else None
+    inj_adj, inj_dbg = _injuries_adj(inj)
+
+    return {
+        "ref_adj": float(ref_prof.get("ref_adj") or 0.0),
+        "ref_used": float(ref_prof.get("used") or 0.0),
+        "ref_name": ref_name,
+
+        "weather_adj": float(w_adj),
+        "weather_obj": ww,
+
+        "venue_adj": float(ven_adj),
+        "venue_obj": ven,
+
+        "lineup_adj": float(lu_adj),
+        "lineups_have": bool(lu_dbg.get("have")),
+        "lineups_fw_count": lu_dbg.get("fw_count"),
+
+        "inj_adj": float(inj_adj),
+        "inj_count": inj_dbg.get("inj_count"),
+    }
 
 def _weight_from_effn(p, eff_n):
     """Precizija ~ 1/Var(logit(p)). Aproksimiramo Var(p)=p(1-p)/eff_n, Var(logit)=Var(p)/(p^2(1-p)^2)."""
@@ -2163,7 +2733,9 @@ def calculate_match_importance(fixture_id):
     return min(importance_score, 10)
 
 def calculate_final_probability(fixture, team_last_matches, h2h_results, micro_db,
-                                league_baselines, team_strengths, team_profiles, no_api: bool = False):
+                                league_baselines, team_strengths, team_profiles,
+                                extras: dict | None = None, no_api: bool = False,
+                                market_odds_over05_1h: Optional[float] = None):
     """
     Finalna vjerovatnoća za 1H Over 0.5, sa konzervativnijim H2H i class-gap korekcijom korelacije.
     - H2H EB tau=12.0, eff_n skaliran 0.4x, w<2.5 -> ignorišemo H2H
@@ -2204,7 +2776,7 @@ def calculate_final_probability(fixture, team_last_matches, h2h_results, micro_d
     )
 
     # --- MICRO: p(home scores) & p(away scores) + korelacija (tempo × class-gap) ---
-    feats = matchup_features_enhanced(fixture, team_profiles, league_baselines, micro_db=micro_db)
+    feats = matchup_features_enhanced(fixture, team_profiles, league_baselines, micro_db=micro_db, extras=extras)
 
     # totals za UI
     exp_sot_total = None
@@ -2271,11 +2843,21 @@ def calculate_final_probability(fixture, team_last_matches, h2h_results, micro_d
         "effn_micro": round(effn_micro, 3),
         "exp_sot1h_total": exp_sot_total,
         "exp_da1h_total": exp_da_total,
+        "ref_name": feats.get('ref_name'),
+        "ref_used": feats.get('ref_used'),
+        "weather": feats.get('weather_adj'),
+        "venue": feats.get('venue_adj'),
+        "lineups_have": feats.get('lineups_have'),
+        "lineups_fw_count": feats.get('lineups_fw_count'),
+        "inj_count": feats.get('inj_count'),
     }
-    return round(p_final*100,2), debug
+    p_final_market = blend_with_market(p_final, market_odds_over05_1h, alpha=ALPHA_MODEL)
+    return round(p_final_market*100,2), debug
 
 def calculate_final_probability_gg(fixture, team_last_matches, h2h_results, micro_db,
-                                   league_baselines, team_strengths, team_profiles, no_api: bool = False):
+                                   league_baselines, team_strengths, team_profiles,
+                                   extras: dict | None = None, no_api: bool = False,
+                                   market_odds_btts_1h: Optional[float] = None):
     """
     Finalna vjerovatnoća za 1H GG, sa konzervativnijim H2H i class-gap korekcijom korelacije.
     - H2H EB tau=12.0, eff_n skaliran 0.4x, w<2.5 -> ignorišemo H2H
@@ -2312,7 +2894,7 @@ def calculate_final_probability_gg(fixture, team_last_matches, h2h_results, micr
         p_h2h = (p_home_base * p_away_base)
 
     # --- MICRO: p(home scores) & p(away scores) + korelacija (tempo × class-gap) ---
-    feats = matchup_features_enhanced(fixture, team_profiles, league_baselines, micro_db=micro_db)
+    feats = matchup_features_enhanced(fixture, team_profiles, league_baselines, micro_db=micro_db, extras=extras)
 
     exp_sot_total = None
     if feats.get('exp_sot1h_home') is not None or feats.get('exp_sot1h_away') is not None:
@@ -2376,11 +2958,21 @@ def calculate_final_probability_gg(fixture, team_last_matches, h2h_results, micr
         "effn_micro": round(effn_micro, 3),
         "exp_sot1h_total": exp_sot_total,
         "exp_da1h_total": exp_da_total,
+        "ref_name": feats.get('ref_name'),
+        "ref_used": feats.get('ref_used'),
+        "weather": feats.get('weather_adj'),
+        "venue": feats.get('venue_adj'),
+        "lineups_have": feats.get('lineups_have'),
+        "lineups_fw_count": feats.get('lineups_fw_count'),
+        "inj_count": feats.get('inj_count'),
     }
-    return round(p_final*100,2), debug
+    p_final_market = blend_with_market(p_final, market_odds_btts_1h, alpha=ALPHA_MODEL)
+    return round(p_final_market*100,2), debug
 
 def calculate_final_probability_over15(fixture, team_last_matches, h2h_results, micro_db,
-                                       league_baselines, team_strengths, team_profiles, no_api: bool = False):
+                                       league_baselines, team_strengths, team_profiles,
+                                       extras: dict | None = None, no_api: bool = False,
+                                       market_odds_over15_1h: Optional[float] = None):
     """
     Finalna vjerovatnoća za 1H Over 1.5:
     - PRIOR: history (oba tima) + H2H (jače skupljen i skaliran)
@@ -2424,7 +3016,7 @@ def calculate_final_probability_over15(fixture, team_last_matches, h2h_results, 
     )
 
     # --- MICRO: iz p(score≥1) → λ_home, λ_away → λ_total, uz class-gap “synergy” ---
-    feats = matchup_features_enhanced(fixture, team_profiles, league_baselines, micro_db=micro_db)
+    feats = matchup_features_enhanced(fixture, team_profiles, league_baselines, micro_db=micro_db, extras=extras)
 
     exp_sot_total = None
     if feats.get('exp_sot1h_home') is not None or feats.get('exp_sot1h_away') is not None:
@@ -2493,8 +3085,16 @@ def calculate_final_probability_over15(fixture, team_last_matches, h2h_results, 
         "m_league": round(m*100, 2),
         "exp_sot1h_total": exp_sot_total,
         "exp_da1h_total": exp_da_total,
+        "ref_name": feats.get('ref_name'),
+        "ref_used": feats.get('ref_used'),
+        "weather": feats.get('weather_adj'),
+        "venue": feats.get('venue_adj'),
+        "lineups_have": feats.get('lineups_have'),
+        "lineups_fw_count": feats.get('lineups_fw_count'),
+        "inj_count": feats.get('inj_count'),
     }
-    return round(p_final*100,2), debug
+    p_final_market = blend_with_market(p_final, market_odds_over15_1h, alpha=ALPHA_MODEL)
+    return round(p_final_market*100,2), debug
 
 def _select_existing_fixture_ids(fid_list):
     if not fid_list:
@@ -2565,7 +3165,10 @@ def prewarm_statistics_cache(team_last_matches, max_workers=2, max_warm=1200):
 
 # ------------------------- FINAL PIPELINE ---------------------------
 def analyze_fixtures(start_date: datetime, end_date: datetime, from_hour=None, to_hour=None,
-                     market: str = "1h_over05", no_api: bool = True):
+                     market: str = "1h_over05", no_api: bool = True,
+                     odds_over05_1h: float | None = None,
+                     odds_over15_1h: float | None = None,
+                     odds_btts_1h: float | None = None):
     """
     Analiza mečeva u datom vremenskom opsegu.
     - Ako je no_api=False: repo će po DANIMA osigurati da fixtures postoje u bazi (fetch + upis),
@@ -2647,7 +3250,7 @@ def analyze_fixtures(start_date: datetime, end_date: datetime, from_hour=None, t
     team_profiles = compute_team_profiles(team_last_matches, stats_fn, lam=5.0, max_n=15)
 
     # 5) Mikro forma (SOT/DA/POS agregati)
-    micro_db = build_micro_db(team_last_matches, no_api=no_api)
+    micro_db = build_micro_db(team_last_matches, stats_fn)
 
     # 6) Per-fixture obračun za traženi market
     results = []
@@ -2656,6 +3259,9 @@ def analyze_fixtures(start_date: datetime, end_date: datetime, from_hour=None, t
         away_id = fixture['teams']['away']['id']
         a, b = sorted([home_id, away_id])
         h2h_key = f"{a}-{b}"
+        # EXTRAS (ref/venue/weather/lineups/injuries)
+        extras = build_extras_for_fixture(fixture, no_api=no_api)
+
 
         # (a) istorijske % po marketu
         if market == "gg1h":
@@ -2698,21 +3304,25 @@ def analyze_fixtures(start_date: datetime, end_date: datetime, from_hour=None, t
             form_vals.append((away_shots_pct + away_attacks_pct) / 2.0)
         form_percent = round(sum(form_vals)/len(form_vals), 2) if form_vals else 0.0
 
-        # (c) konačna vjerovatnoća
+
+        # (c) konačna vjerovatnoća (prosledi kvote po marketu)
         if market == "gg1h":
             final_percent, debug = calculate_final_probability_gg(
                 fixture, team_last_matches, h2h_results, micro_db,
-                league_baselines, team_strengths, team_profiles, no_api=no_api
+                league_baselines, team_strengths, team_profiles, extras=extras, no_api=no_api,
+                market_odds_btts_1h=odds_btts_1h
             )
         elif market == "1h_over15":
             final_percent, debug = calculate_final_probability_over15(
                 fixture, team_last_matches, h2h_results, micro_db,
-                league_baselines, team_strengths, team_profiles, no_api=no_api
+                league_baselines, team_strengths, team_profiles, extras=extras, no_api=no_api,
+                market_odds_over15_1h=odds_over15_1h
             )
-        else:
+        else:  # "1h_over05"
             final_percent, debug = calculate_final_probability(
                 fixture, team_last_matches, h2h_results, micro_db,
-                league_baselines, team_strengths, team_profiles, no_api=no_api
+                league_baselines, team_strengths, team_profiles, extras=extras, no_api=no_api,
+                market_odds_over05_1h=odds_over05_1h
             )
 
         # (d) paket za UI
@@ -2786,11 +3396,32 @@ def analyze(request: Request):
         to_hour_q   = request.query_params.get("to_hour")
         fh = int(from_hour_q) if from_hour_q is not None else None
         th = int(to_hour_q)   if to_hour_q   is not None else None
-        market = request.query_params.get("market") or "1h_over05"
 
+        market = request.query_params.get("market") or "1h_over05"
         no_api_flag = str(request.query_params.get("no_api", "1")).lower() in ("1", "true", "yes", "y")
 
-        results = analyze_fixtures(from_date, to_date, fh, th, market, no_api=no_api_flag)
+        # --- NOVO: opcione kvote iz query stringa ---
+        odds_over05 = request.query_params.get("odds_over05_1h")
+        odds_over15 = request.query_params.get("odds_over15_1h")
+        odds_btts1h = request.query_params.get("odds_btts_1h")
+        try:
+            odds_over05 = float(odds_over05) if odds_over05 else None
+        except:
+            odds_over05 = None
+        try:
+            odds_over15 = float(odds_over15) if odds_over15 else None
+        except:
+            odds_over15 = None
+        try:
+            odds_btts1h = float(odds_btts1h) if odds_btts1h else None
+        except:
+            odds_btts1h = None
+
+        results = analyze_fixtures(
+            from_date, to_date, fh, th, market, no_api=no_api_flag,
+            odds_over05_1h=odds_over05, odds_over15_1h=odds_over15, odds_btts_1h=odds_btts1h
+        )
+
         if results is None:
             results = []
 

@@ -1,34 +1,128 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="auto">
 <head>
-    <meta charset="UTF-8">
-    <title>Sports Analysis</title>
-    <script src="/static/app.js" defer></script>
-    <link rel="stylesheet" href="/static/style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="color-scheme" content="light dark" />
+  <title>Sports Analysis</title>
+
+  <!-- Fonts (optional, feel free to remove if ne želiš eksterno) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- App styles & script -->
+  <link rel="stylesheet" href="/static/style.css" />
+  <script src="/static/app.js" defer></script>
 </head>
 <body>
-    <div class="container">
-        <div class="date-range">
-            <input type="datetime-local" id="fromDate" />
-            <input type="datetime-local" id="toDate" />
+  <!-- ===== Header / Navbar ===== -->
+  <header class="app-header">
+    <div class="app-header__inner">
+      <div class="brand">
+        <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 2a10 10 0 1 0 10 10A10.012 10.012 0 0 0 12 2Zm0 3a7 7 0 1 1-7 7 7.008 7.008 0 0 1 7-7Zm0 2.25a1.25 1.25 0 1 0 1.25 1.25A1.251 1.251 0 0 0 12 7.25Zm-3.5 7.5a.75.75 0 0 0 .75.75h5.5a.75.75 0 0 0 0-1.5h-1.97l.9-3.15a.75.75 0 1 0-1.44-.41l-1.06 3.56H9.25a.75.75 0 0 0-.75.75Z"/>
+        </svg>
+        <div class="brand__text">
+          <strong>Sports Analysis</strong>
+          <span class="sub">1H & FT market explorer</span>
         </div>
-        <div class="buttons">
-            <button id="analyze1p">Analyze 1+ 1st Half</button>
-            <button id="analyzeGG">Analyze GG 1st Half</button>
-            <button id="analyze2plus" class="btn">Analyze 2+ 1st Half</button>
-            <button id="prepareDay">Prepare day (cache)</button>
-        </div>
-        <div class="results">
-            <div class="section" id="top5">
-                <h3>TOP 5</h3>
-                <div class="placeholder">No analysis results yet.</div>
-            </div>
-            <div class="section" id="other">
-                <h3>OTHER</h3>
-                <div class="placeholder">No analysis results yet.</div>
-            </div>
-        </div>
-        <button id="savePdf">SAVE PDF</button>
+      </div>
+
+      <div class="header-actions">
+        <!-- Theme toggle (JS ćemo ubaciti kasnije) -->
+        <button class="icon-btn" id="themeToggle" title="Toggle theme" aria-label="Toggle theme">
+          <svg class="icon-sun" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.76 4.84l-1.8-1.79-1.41 1.41 1.79 1.8 1.42-1.42zm10.48 14.32l1.79 1.8 1.41-1.41-1.8-1.79-1.4 1.4zM12 4V1h-1v3h1zm0 19v-3h-1v3h1zM4 13H1v-1h3v1zm19 0h-3v-1h3v1zM6.76 19.16l-1.42 1.42-1.79-1.8 1.41-1.41 1.8 1.79zM20.45 4.46l-1.41-1.41-1.8 1.79 1.42 1.42 1.79-1.8zM12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10z"/></svg>
+          <svg class="icon-moon" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 1 0 9.79 9.79z"/></svg>
+        </button>
+        <button id="savePdf" class="primary-ghost" title="Export as PDF">
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16l4-4h10a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+          <span>Save PDF</span>
+        </button>
+      </div>
     </div>
+  </header>
+
+  <!-- ===== Main Content ===== -->
+  <main class="container">
+    <!-- Controls -->
+    <section class="panel controls">
+      <div class="controls__row">
+        <div class="field">
+          <label for="fromDate">From</label>
+          <div class="field__input">
+            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10h5v5H7z"/><path d="M19 4h-1V2h-2v2H8V2H6v2H5a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3Zm1 15a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V10h16Zm0-11H4V7a1 1 0 0 1 1-1h1v1h2V6h8v1h2V6h1a1 1 0 0 1 1 1Z"/></svg>
+            <input type="datetime-local" id="fromDate" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="toDate">To</label>
+          <div class="field__input">
+            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10h5v5H7z"/><path d="M19 4h-1V2h-2v2H8V2H6v2H5a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3Zm1 15a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V10h16Zm0-11H4V7a1 1 0 0 1 1-1h1v1h2V6h8v1h2V6h1a1 1 0 0 1 1 1Z"/></svg>
+            <input type="datetime-local" id="toDate" />
+          </div>
+        </div>
+
+        <div class="actions actions--stack">
+          <button id="analyze1p" class="btn primary">
+            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h18v2H3z"/><path d="M12 3l3 4h-2v7h-2V7H9l3-4z"/></svg>
+            <span>Analyze 1+ 1st Half</span>
+          </button>
+          <button id="analyzeGG" class="btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10v10H7z"/><path d="M5 5h14v14H5z" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+            <span>Analyze GG 1st Half</span>
+          </button>
+          <button id="analyze2plus" class="btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 11h10v2H7z"/><path d="M12 6l2 3h-1v8h-2V9h-1l2-3z"/></svg>
+            <span>Analyze 2+ 1st Half</span>
+          </button>
+          <button id="analyzeFT2plus" class="btn btn-ft">
+            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v2H4zM4 11h16v2H4zM4 16h16v2H4z"/></svg>
+            <span>Analyze 2+ FT</span>
+          </button>
+          <button id="prepareDay" class="btn subtle">
+            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 4h-4l-2-2H5a1 1 0 0 0-1 1v16h16V5a1 1 0 0 0-1-1z"/></svg>
+            <span>Prepare day (cache)</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Results -->
+    <section class="panel results">
+      <div class="results__grid">
+        <article class="section" id="top5">
+          <h3>
+            TOP 5
+            <span class="count" aria-live="polite"></span>
+          </h3>
+          <div class="placeholder">No analysis results yet.</div>
+        </article>
+
+        <article class="section" id="other">
+          <h3>OTHER</h3>
+          <div class="placeholder">No analysis results yet.</div>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <!-- Toasts (optional, for future JS use) -->
+  <div id="toast-root" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- Floating Save (mobile assist) -->
+  <button id="savePdfFab" class="fab" aria-label="Save PDF (floating)" title="Save PDF">
+    <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16l4-4h10a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+  </button>
+
+  <!-- Small helper to mirror FAB to main Save button without mijenjanja tvog JS-a -->
+  <script>
+    // Mirror FAB click to #savePdf (tvoj app.js sluša #savePdf)
+    document.addEventListener('DOMContentLoaded', () => {
+      const fab = document.getElementById('savePdfFab');
+      const mainBtn = document.getElementById('savePdf');
+      if (fab && mainBtn) fab.addEventListener('click', () => mainBtn.click());
+    });
+  </script>
 </body>
 </html>

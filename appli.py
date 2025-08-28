@@ -392,7 +392,7 @@ def _read_fixture_json(fixture_id: int) -> dict | None:
     with DB_WRITE_LOCK:
         conn = get_db_connection()
         cur = conn.cursor()
-        cur.execute("SELECT fixture_json FROM fixtures WHERE json_extract(fixture_json,'$.fixture.id')=?", (int(fixture_id),))
+        cur.execute("SELECT fixture_json FROM fixtures WHERE id=%s", (int(fixture_id),))
         row = cur.fetchone()
         conn.close()
     if not row:
@@ -1489,7 +1489,7 @@ def _db_has_fixtures_for_day(d: date) -> bool:
     s, e = _day_bounds_utc(d)
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("SELECT 1 FROM fixtures WHERE date>=? AND date<=? LIMIT 1",
+    cur.execute("SELECT 1 FROM fixtures WHERE date>=%s AND date<=%s LIMIT 1",
                 (s.isoformat(), e.isoformat()))
     row = cur.fetchone()
     conn.close()
@@ -1518,14 +1518,15 @@ HEADERS = {'x-apisports-key': API_KEY}
 
 ANALYZE_LOCK = threading.Lock()
 
-from database import (
-    get_db_connection,
+from db_backend import (
+    get_connection,
     insert_team_matches,
     insert_h2h_matches,
-    DB_WRITE_LOCK,                 # ✅ sad postoji
-    try_read_fixture_statistics,   # ✅ samo čitanje
-    create_all_tables,             # ili create_tables()
+    DB_WRITE_LOCK,
+    try_read_fixture_statistics,
+    create_all_tables,
 )
+
 
 @app.post("/admin/seed-day")
 def admin_seed_day(date_str: str | None = None):
@@ -1616,7 +1617,7 @@ def purge_fixtures_for_day(d: date):
     with DB_WRITE_LOCK:
         conn = get_db_connection()
         cur = conn.cursor()
-        cur.execute("DELETE FROM fixtures WHERE date>=? AND date<=?", (s.isoformat(), e.isoformat()))
+        cur.execute("DELETE FROM fixtures WHERE date>=%s AND date<=%s", (s.isoformat(), e.isoformat()))
         conn.commit()
         conn.close()
     print(f"🧹 purged fixtures for {d}")
@@ -2714,7 +2715,7 @@ def get_or_fetch_team_history(team_id: int, last_n: int = 30, force_refresh: boo
     now = datetime.utcnow()
     if not force_refresh:
         # 1) tačan ključ (team_id, last_n)
-        cur.execute("SELECT data, updated_at FROM team_history_cache WHERE team_id=? AND last_n=?", (team_id, last_n))
+        cur.execute("SELECT data, updated_at FROM team_history_cache WHERE team_id=%s AND last_n=%s", (team_id, last_n))
         row = cur.fetchone()
         if row:
             try:
@@ -2778,7 +2779,7 @@ def get_or_fetch_h2h(team_a: int, team_b: int, last_n: int = 10, no_api: bool = 
         conn.commit()
 
     now = datetime.utcnow()
-    cur.execute("SELECT data, updated_at FROM h2h_cache WHERE team1_id=? AND team2_id=? AND last_n=?", (a,b,last_n))
+    cur.execute("SELECT data, updated_at FROM h2h_cache WHERE team1_id=%s AND team2_id=%s AND last_n=%s", (a,b,last_n))
     row = cur.fetchone()
     if row:
         try:
@@ -3210,7 +3211,7 @@ def _read_fixtures_from_db(start_dt: datetime, end_dt: datetime):
     # u bazi je ISO string; leksikografski BETWEEN radi za ISO-8601
     s = start_dt.replace(tzinfo=timezone.utc).isoformat()
     e = end_dt.replace(tzinfo=timezone.utc).isoformat()
-    cur.execute("SELECT fixture_json FROM fixtures WHERE date >= ? AND date <= ?", (s, e))
+    cur.execute("SELECT fixture_json FROM fixtures WHERE date >= %s AND date <= %s", (s, e))
     rows = cur.fetchall()
     conn.close()
     out = []
@@ -4030,7 +4031,7 @@ def _history_missing(team_ids, last_n: int, ttl_h: int):
 
     missing = []
     for tid in team_ids:
-        cur.execute("SELECT updated_at FROM team_history_cache WHERE team_id=? AND last_n=?", (tid, last_n))
+        cur.execute("SELECT updated_at FROM team_history_cache WHERE team_id=%s AND last_n=%s", (tid, last_n))
         row = cur.fetchone()
         if not row: 
             missing.append(tid); 
@@ -4064,7 +4065,7 @@ def _h2h_missing(pairs, last_n: int, ttl_h: int):
     missing = []
     for a, b in pairs:
         x, y = sorted([a, b])
-        cur.execute("SELECT updated_at FROM h2h_cache WHERE team1_id=? AND team2_id=? AND last_n=?", (x, y, last_n))
+        cur.execute("SELECT updated_at FROM h2h_cache WHERE team1_id=%s AND team2_id=%s AND last_n=%s", (x, y, last_n))
         row = cur.fetchone()
         if not row:
             missing.append((x, y))
@@ -4311,7 +4312,7 @@ def h2h_1h_gg_stats(h2h_matches):
 def get_fixture_details(fixture_id):
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("SELECT fixture_json FROM fixtures WHERE id=?", (fixture_id,))
+    cur.execute("SELECT fixture_json FROM fixtures WHERE id=%s", (fixture_id,))
     row = cur.fetchone()
     conn.close()
     if not row or not row[0]:

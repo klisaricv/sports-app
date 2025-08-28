@@ -23,6 +23,50 @@ dbconfig = {
 
 _connection_pool = None 
 
+def _load_env():
+    """
+    Učita konfiguraciju iz os.environ i iz /etc/statsfk.env (KEY=VALUE).
+    Ignoriše prazne linije i komentare. Trimuje navodnike.
+    """
+    cfg = {}
+
+    # 1) start od postojećeg env-a (ako si već export-ovao nešto)
+    for k in (
+        "DB_HOST","DB_PORT","DB_USER","DB_PASSWORD","DB_PASS","DB_NAME","DB_SSL_CA"
+    ):
+        v = os.environ.get(k)
+        if v:
+            cfg[k] = v
+
+    # 2) dopuni iz .env fajla (ako postoji)
+    try:
+        with open(ENV_FILE, "r") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, v = line.split("=", 1)
+                k = k.strip()
+                v = v.strip().strip('"').strip("'")
+                # nemoj pregaziti već postavljene iz os.environ
+                if k and v and k not in cfg:
+                    cfg[k] = v
+    except FileNotFoundError:
+        pass
+
+    # 3) validacija minimalnog skupa
+    missing = []
+    if not cfg.get("DB_HOST"): missing.append("DB_HOST")
+    if not cfg.get("DB_PORT"): missing.append("DB_PORT")
+    if not cfg.get("DB_USER"): missing.append("DB_USER")
+    if not cfg.get("DB_NAME"): missing.append("DB_NAME")
+    if not (cfg.get("DB_PASSWORD") or cfg.get("DB_PASS")):
+        missing.append("DB_PASSWORD/DB_PASS")
+    if missing:
+        raise RuntimeError(f"Missing DB env vars: {', '.join(missing)}")
+
+    return cfg
+    
 def _build_dbconfig():
     cfg = _load_env()
     host = cfg.get("DB_HOST") or cfg.get("MYSQL_HOST") or "127.0.0.1"

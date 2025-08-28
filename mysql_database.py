@@ -106,3 +106,175 @@ def try_read_fixture_statistics(fixture_id: int):
         except Exception:
             return None
     return None
+
+def create_all_tables():
+    """Kreira SVE tabele iz sqlite varijante, ali u MySQL-u."""
+    conn = get_mysql_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS fixtures (
+        id BIGINT PRIMARY KEY,
+        date DATE,
+        league_id INT,
+        team_home_id INT,
+        team_away_id INT,
+        stats_json JSON,
+        fixture_json JSON,
+        INDEX idx_fixtures_date (date),
+        INDEX idx_fixtures_league (league_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS match_statistics (
+        fixture_id BIGINT PRIMARY KEY,
+        data JSON,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS team_history_cache (
+        team_id INT NOT NULL,
+        last_n INT NOT NULL,
+        data JSON,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (team_id, last_n)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS h2h_cache (
+        team1_id INT NOT NULL,
+        team2_id INT NOT NULL,
+        last_n INT NOT NULL,
+        data JSON,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (team1_id, team2_id, last_n)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS team_matches (
+        team_id INT NOT NULL,
+        fixture_id BIGINT NOT NULL,
+        data JSON,
+        PRIMARY KEY (team_id, fixture_id),
+        INDEX idx_team_matches_team (team_id),
+        INDEX idx_team_matches_fixture (fixture_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS h2h_matches (
+        team1_id INT NOT NULL,
+        team2_id INT NOT NULL,
+        fixture_id BIGINT NOT NULL,
+        data JSON,
+        PRIMARY KEY (team1_id, team2_id, fixture_id),
+        INDEX idx_h2h_pair (team1_id, team2_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS league_baselines_store (
+        id TINYINT PRIMARY KEY,
+        data JSON,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS team_strengths_store (
+        team_id INT PRIMARY KEY,
+        data JSON,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS team_profiles_store (
+        team_id INT PRIMARY KEY,
+        data JSON,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS team_micro_form_store (
+        team_id INT NOT NULL,
+        side ENUM('home','away') NOT NULL,
+        data JSON,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (team_id, side)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS fixture_extras_store (
+        fixture_id BIGINT PRIMARY KEY,
+        data JSON,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS venues_cache (
+        venue_id INT PRIMARY KEY,
+        data JSON,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS lineups_cache (
+        fixture_id BIGINT PRIMARY KEY,
+        data JSON,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS injuries_cache (
+        fixture_id BIGINT PRIMARY KEY,
+        data JSON,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS referee_cache (
+        ref_name VARCHAR(128) NOT NULL,
+        season INT NOT NULL,
+        last_n INT NOT NULL,
+        data JSON,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (ref_name, season, last_n)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS odds_cache (
+        fixture_id BIGINT NOT NULL,
+        market VARCHAR(64) NOT NULL,
+        data JSON,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (fixture_id, market)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS team_stats_cache (
+        team_id INT NOT NULL,
+        league_id INT NOT NULL,
+        season INT NOT NULL,
+        data JSON,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (team_id, league_id, season)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """)
+
+    conn.commit()
+    cur.close()
+    conn.close()

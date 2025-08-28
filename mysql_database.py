@@ -54,14 +54,17 @@ def _load_env():
     except FileNotFoundError:
         pass
 
-    # 3) validacija minimalnog skupa
+    # 3) validacija minimalnog skupa (DB_SSL_CA JE OPCIONO!)
     missing = []
-    if not cfg.get("DB_HOST"): missing.append("DB_HOST")
-    if not cfg.get("DB_PORT"): missing.append("DB_PORT")
-    if not cfg.get("DB_USER"): missing.append("DB_USER")
-    if not cfg.get("DB_NAME"): missing.append("DB_NAME")
+    # obavezni
+    required = ["DB_HOST", "DB_PORT", "DB_USER", "DB_NAME"]
+    for k in required:
+        if not cfg.get(k):
+            missing.append(k)
+    # lozinka: prihvati i DB_PASSWORD i DB_PASS
     if not (cfg.get("DB_PASSWORD") or cfg.get("DB_PASS")):
         missing.append("DB_PASSWORD/DB_PASS")
+
     if missing:
         raise RuntimeError(f"Missing DB env vars: {', '.join(missing)}")
 

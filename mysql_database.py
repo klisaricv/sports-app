@@ -28,7 +28,27 @@ connection_pool = pooling.MySQLConnectionPool(
 )
 
 def get_mysql_connection():
-    return connection_pool.get_connection()
+    cfg = _load_env()
+    host = cfg.get("DB_HOST") or cfg.get("MYSQL_HOST") or "127.0.0.1"
+    user = cfg.get("DB_USER") or cfg.get("MYSQL_USER") or "root"
+    password = cfg.get("DB_PASSWORD") or cfg.get("DB_PASS") or cfg.get("MYSQL_PASSWORD") or ""
+    database = cfg.get("DB_NAME") or cfg.get("MYSQL_DATABASE") or "statsfk_db"
+    port = int(cfg.get("DB_PORT") or cfg.get("MYSQL_PORT") or "3306")
+    ssl_ca = cfg.get("DB_SSL_CA") or cfg.get("MYSQL_SSL_CA")
+
+    kwargs = dict(
+        host=host,
+        port=port,
+        user=user,
+        password=password,
+        database=database,
+        autocommit=False,
+    )
+    if ssl_ca:
+        kwargs["ssl_ca"] = ssl_ca
+        kwargs["ssl_disabled"] = False
+
+    return mysql.connector.connect(**kwargs)
 
 def insert_team_matches(team_id: int, matches: list):
     if not matches:

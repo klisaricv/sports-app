@@ -41,7 +41,7 @@ def _select_existing_fixture_ids(fixture_ids: Iterable[int]) -> Set[int]:
         chunk = 900  # rezerva za SQLite var limit
         for i in range(0, len(ids), chunk):
             part = ids[i:i+chunk]
-            placeholders = ",".join(["?"] * len(part))
+            placeholders = ",".join(["%s"] * len(part))
             cur.execute(f"SELECT fixture_id FROM match_statistics WHERE fixture_id IN ({placeholders})", part)
             rows = cur.fetchall()
             for (fid,) in rows:
@@ -178,14 +178,6 @@ def _init_on_startup():
     # ali ona se IGNORIŠE jer je strict uključen
     # _refresh_league_whitelist(force=True)
 
-    # index radi brzine
-    with DB_WRITE_LOCK:
-        conn = get_db_connection()
-        cur = conn.cursor()
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_fixtures_date ON fixtures(date)")
-        conn.commit()
-        conn.close()
-
     # inicijalni ensure dana + warm stats (ako može)
     try:
         repo.ensure_day(
@@ -212,13 +204,13 @@ def ensure_model_outputs_table():
         cur = conn.cursor()
         cur.execute("""
             CREATE TABLE IF NOT EXISTS model_outputs (
-                fixture_id INTEGER NOT NULL,
-                market     TEXT    NOT NULL,
-                prob       REAL    NOT NULL,
-                debug_json TEXT    NOT NULL,
-                updated_at TEXT    NOT NULL,
+                fixture_id BIGINT NOT NULL,
+                market     VARCHAR(64) NOT NULL,
+                prob       DOUBLE NOT NULL,
+                debug_json JSON NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 PRIMARY KEY (fixture_id, market)
-            )
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         """)
         conn.commit()
         conn.close()
@@ -228,8 +220,12 @@ def upsert_model_output(fixture_id: int, market: str, prob: float, debug: dict):
         conn = get_db_connection()
         cur = conn.cursor()
         cur.execute("""
-            INSERT OR REPLACE INTO model_outputs(fixture_id, market, prob, debug_json, updated_at)
-            VALUES (?, ?, ?, ?, datetime('now'))
+            INSERT INTO model_outputs (fixture_id, market, prob, debug_json, updated_at)
+            VALUES (%s, %s, %s, %s, NOW())
+            ON DUPLICATE KEY UPDATE
+                prob=VALUES(prob),
+                debug_json=VALUES(debug_json),
+                updated_at=NOW()
         """, (int(fixture_id), str(market), float(prob), json.dumps(debug, ensure_ascii=False)))
         conn.commit()
         conn.close()
@@ -372,34 +368,44 @@ from dataclasses import dataclass
 def _read_model_output_row(fixture_id: int, market: str) -> dict | None:
     with DB_WRITE_LOCK:
         conn = get_db_connection()
-        cur = conn.cursor()
+        cur = conn.cursor(dictionary=True)
         cur.execute("""
             SELECT prob, debug_json, updated_at
             FROM model_outputs
-            WHERE fixture_id=? AND market=?
+            WHERE fixture_id=%s AND market=%s
         """, (int(fixture_id), str(market)))
         row = cur.fetchone()
         conn.close()
     if not row:
         return None
-    try:
-        dbg = json.loads(row["debug_json"] or "{}")
-    except:
-        dbg = {}
+
+    val = row.get("debug_json")
+    if isinstance(val, (dict, list)):
+        dbg = val
+    else:
+        try:
+            dbg = json.loads(val or "{}")
+        except Exception:
+            dbg = {}
     return {"prob": float(row["prob"]), "debug": dbg, "updated_at": row["updated_at"]}
+
 
 def _read_fixture_json(fixture_id: int) -> dict | None:
     with DB_WRITE_LOCK:
         conn = get_db_connection()
-        cur = conn.cursor()
+        cur = conn.cursor(dictionary=True)
         cur.execute("SELECT fixture_json FROM fixtures WHERE id=%s", (int(fixture_id),))
         row = cur.fetchone()
         conn.close()
     if not row:
         return None
+
+    val = row.get("fixture_json")
+    if isinstance(val, (dict, list)):
+        return val
     try:
-        return json.loads(row["fixture_json"])
-    except:
+        return json.loads(val or "{}")
+    except Exception:
         return None
 
 def _odds_from_prob(p: float) -> float | None:
@@ -1489,8 +1495,7 @@ def _db_has_fixtures_for_day(d: date) -> bool:
     s, e = _day_bounds_utc(d)
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("SELECT 1 FROM fixtures WHERE date>=%s AND date<=%s LIMIT 1",
-                (s.isoformat(), e.isoformat()))
+    cur.execute("SELECT 1 FROM fixtures WHERE `date` >= %s AND `date` <= %s LIMIT 1", (s, e))
     row = cur.fetchone()
     conn.close()
     return row is not None
@@ -1519,7 +1524,7 @@ HEADERS = {'x-apisports-key': API_KEY}
 ANALYZE_LOCK = threading.Lock()
 
 from db_backend import (
-    get_connection,
+    get_connection as get_db_connection,
     insert_team_matches,
     insert_h2h_matches,
     DB_WRITE_LOCK,
@@ -1617,7 +1622,7 @@ def purge_fixtures_for_day(d: date):
     with DB_WRITE_LOCK:
         conn = get_db_connection()
         cur = conn.cursor()
-        cur.execute("DELETE FROM fixtures WHERE date>=%s AND date<=%s", (s.isoformat(), e.isoformat()))
+        cur.execute("DELETE FROM fixtures WHERE `date` >= %s AND `date` <= %s", (s, e))
         conn.commit()
         conn.close()
     print(f"🧹 purged fixtures for {d}")
@@ -1698,14 +1703,11 @@ def serve_home():
         return {"error": f"index.html not found at {index_path}"}
     return FileResponse(str(index_path))
 
-
+ALLOWED_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o.strip()]
 # CORS – da frontend može da pristupi backendu
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:8001",
-        "http://127.0.0.1:8001"   # ← bez “/”
-    ],
+    allow_origins=ALLOWED_ORIGINS or ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -2697,135 +2699,111 @@ def predict_team_scores1h_enhanced(fixture, feats, league_baselines, team_streng
 
 def get_or_fetch_team_history(team_id: int, last_n: int = 30, force_refresh: bool = False, no_api: bool = False):
     conn = get_db_connection()
-    cur = conn.cursor()
-
-    # CREATE TABLE – zaključaj jer menja šemu
-    with DB_WRITE_LOCK:
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS team_history_cache (
-                team_id INTEGER,
-                last_n INTEGER,
-                data TEXT,
-                updated_at TEXT,
-                PRIMARY KEY (team_id, last_n)
-            )
-        """)
-        conn.commit()
+    cur = conn.cursor(dictionary=True)
 
     now = datetime.utcnow()
     if not force_refresh:
-        # 1) tačan ključ (team_id, last_n)
         cur.execute("SELECT data, updated_at FROM team_history_cache WHERE team_id=%s AND last_n=%s", (team_id, last_n))
         row = cur.fetchone()
         if row:
-            try:
-                updated_at = datetime.fromisoformat(row["updated_at"])
-            except Exception:
-                updated_at = now - timedelta(hours=CACHE_TTL_HOURS+1)
+            updated_at = row["updated_at"]
+            if isinstance(updated_at, str):
+                try: updated_at = datetime.fromisoformat(updated_at)
+                except: updated_at = now - timedelta(hours=CACHE_TTL_HOURS+1)
             if (now - updated_at) <= timedelta(hours=CACHE_TTL_HOURS) or no_api:
                 conn.close()
                 return json.loads(row["data"])[:last_n]
 
-        # 2) superset fallback (najveći last_n za taj tim)
         cur.execute("""
             SELECT data, updated_at, last_n FROM team_history_cache
-            WHERE team_id=? ORDER BY last_n DESC LIMIT 1
+            WHERE team_id=%s ORDER BY last_n DESC LIMIT 1
         """, (team_id,))
         row2 = cur.fetchone()
         if row2:
-            try:
-                updated_at2 = datetime.fromisoformat(row2["updated_at"])
-            except Exception:
-                updated_at2 = now - timedelta(hours=CACHE_TTL_HOURS+1)
-            have_n = row2["last_n"] or 0
+            updated_at2 = row2["updated_at"]
+            if isinstance(updated_at2, str):
+                try: updated_at2 = datetime.fromisoformat(updated_at2)
+                except: updated_at2 = now - timedelta(hours=CACHE_TTL_HOURS+1)
+            have_n = row2.get("last_n") or 0
             if have_n >= last_n and ((now - updated_at2) <= timedelta(hours=CACHE_TTL_HOURS) or no_api):
                 conn.close()
                 return json.loads(row2["data"])[:last_n]
 
     if no_api:
         conn.close()
-        return []  # striktno bez API-ja
+        return []
 
     resp = rate_limited_request(f"{BASE_URL}/fixtures",
                                 params={'team': team_id, 'last': last_n, 'timezone': 'UTC'})
     data = resp.get('response', []) if resp else []
 
     with DB_WRITE_LOCK:
+        cur = conn.cursor()
         cur.execute("""
-            INSERT OR REPLACE INTO team_history_cache(team_id,last_n,data,updated_at)
-            VALUES(?,?,?,?)
-        """, (team_id, last_n, json.dumps(data, ensure_ascii=False), now.isoformat()))
+            INSERT INTO team_history_cache(team_id,last_n,data,updated_at)
+            VALUES(%s,%s,%s,NOW())
+            ON DUPLICATE KEY UPDATE data=VALUES(data), updated_at=NOW()
+        """, (team_id, last_n, json.dumps(data, ensure_ascii=False)))
         conn.commit()
 
     conn.close()
     return data
 
+
 def get_or_fetch_h2h(team_a: int, team_b: int, last_n: int = 10, no_api: bool = False):
     a, b = sorted([team_a, team_b])
     conn = get_db_connection()
-    cur = conn.cursor()
-
-    with DB_WRITE_LOCK:
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS h2h_cache (
-                team1_id INTEGER,
-                team2_id INTEGER,
-                last_n INTEGER,
-                data TEXT,
-                updated_at TEXT,
-                PRIMARY KEY (team1_id, team2_id, last_n)
-            )
-        """)
-        conn.commit()
+    cur = conn.cursor(dictionary=True)
 
     now = datetime.utcnow()
     cur.execute("SELECT data, updated_at FROM h2h_cache WHERE team1_id=%s AND team2_id=%s AND last_n=%s", (a,b,last_n))
     row = cur.fetchone()
     if row:
-        try:
-            updated_at = datetime.fromisoformat(row["updated_at"])
-        except Exception:
-            updated_at = now - timedelta(hours=CACHE_TTL_HOURS+1)
+        updated_at = row["updated_at"]
+        if isinstance(updated_at, str):
+            try: updated_at = datetime.fromisoformat(updated_at)
+            except: updated_at = now - timedelta(hours=CACHE_TTL_HOURS+1)
         if (now - updated_at) <= timedelta(hours=CACHE_TTL_HOURS) or no_api:
             conn.close()
             return json.loads(row["data"])
 
     if no_api:
         conn.close()
-        return []  # striktno bez API-ja
+        return []
 
     h2h_key = f"{a}-{b}"
     resp = rate_limited_request(f"{BASE_URL}/fixtures/headtohead", params={'h2h': h2h_key, 'last': last_n})
     data = resp.get('response', []) if resp else []
 
     with DB_WRITE_LOCK:
+        cur = conn.cursor()
         cur.execute("""
-            INSERT OR REPLACE INTO h2h_cache(team1_id,team2_id,last_n,data,updated_at)
-            VALUES(?,?,?,?,?)
-        """, (a,b,last_n,json.dumps(data, ensure_ascii=False), now.isoformat()))
+            INSERT INTO h2h_cache(team1_id,team2_id,last_n,data,updated_at)
+            VALUES(%s,%s,%s,%s,NOW())
+            ON DUPLICATE KEY UPDATE data=VALUES(data), updated_at=NOW()
+        """, (a,b,last_n,json.dumps(data, ensure_ascii=False)))
         conn.commit()
 
     conn.close()
     return data
 
 def get_or_fetch_fixture_statistics(fixture_id: int):
-    # 1) probaj da ČITAŠ iz DB keša (bez upisa)
     existing = try_read_fixture_statistics(fixture_id)
     if existing is not None:
         return existing
 
-    # 2) nema u kešu -> pozovi API
     response = rate_limited_request(f"{BASE_URL}/fixtures/statistics", params={"fixture": fixture_id})
     stats = (response or {}).get('response') or None
 
-    # 3) upiši u bazu pod lock-om (jedini WRITE ovde)
     with DB_WRITE_LOCK:
         conn = get_db_connection()
         cur = conn.cursor()
-        cur.execute("BEGIN IMMEDIATE;")
         cur.execute("""
-            INSERT OR REPLACE INTO match_statistics(fixture_id, data, updated_at)
-            VALUES (?, ?, datetime('now'))
+            INSERT INTO match_statistics (fixture_id, data, updated_at)
+            VALUES (%s, %s, NOW())
+            ON DUPLICATE KEY UPDATE
+                data=VALUES(data),
+                updated_at=NOW()
         """, (fixture_id, json.dumps(stats, ensure_ascii=False, default=str)))
         conn.commit()
         conn.close()
@@ -3992,7 +3970,7 @@ def store_fixture_data_in_db(fixtures):
             cur.execute("""
                 INSERT OR REPLACE INTO fixtures
                 (id, date, league_id, team_home_id, team_away_id, stats_json, fixture_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
             """, (
                 fixture_id, fixture_date, league_id, team_home_id, team_away_id, stats_json, fixture_json
             ))
@@ -4700,19 +4678,22 @@ def calculate_final_probability_over15(
 
     return float(p_final * 100.0), debug
 
-def _select_existing_fixture_ids(fid_list):
-    if not fid_list:
+def _select_existing_fixture_ids(fixture_ids):
+    ids = [int(x) for x in set(fixture_ids) if x is not None]
+    if not ids:
         return set()
-    conn = get_db_connection()
-    cur = conn.cursor()
     existing = set()
-    CHUNK = 900  # < 999 zbog SQLite limita za placeholder-e
-    for i in range(0, len(fid_list), CHUNK):
-        chunk = fid_list[i:i+CHUNK]
-        placeholders = ",".join("?" * len(chunk))
-        cur.execute(f"SELECT fixture_id FROM match_statistics WHERE fixture_id IN ({placeholders})", chunk)
-        existing.update(r[0] for r in cur.fetchall())
-    conn.close()
+    with DB_WRITE_LOCK:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        chunk = 900
+        for i in range(0, len(ids), chunk):
+            part = ids[i:i+chunk]
+            placeholders = ",".join(["%s"] * len(part))
+            cur.execute(f"SELECT fixture_id FROM match_statistics WHERE fixture_id IN ({placeholders})", tuple(part))
+            for (fid,) in cur.fetchall():
+                existing.add(int(fid))
+        conn.close()
     return existing
 
 def prewarm_statistics_cache(team_last_matches: dict[int, list], max_workers: int = 2) -> dict:
@@ -5056,9 +5037,9 @@ async def save_pdf(data: dict):
         y -= 15
         c.drawString(50, y, f"{match['team1']} ({match['team1_full']}) vs {match['team2']} ({match['team2_full']})")
         y -= 15
-        c.drawString(60, y, f"{match['team1']}: {match['team1_percent']}% (Last {match.get('team1_total','?')})")
+        c.drawString(60, y, f"{match['team1']}: {match['team1_percent']}% (Last {match.get('team1_total','%s')})")
         y -= 15
-        c.drawString(60, y, f"{match['team2']}: {match['team2_percent']}% (Last {match.get('team2_total','?')})")
+        c.drawString(60, y, f"{match['team2']}: {match['team2_percent']}% (Last {match.get('team2_total','%s')})")
         y -= 15
         c.drawString(60, y, f"H2H: {match['h2h_percent']}% | Form: {match['form_percent']}%")
         y -= 15

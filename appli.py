@@ -231,8 +231,10 @@ def upsert_model_output(fixture_id: int, market: str, prob: float, debug: dict):
         conn.close()
 
 # Koliko istorije i H2H nam treba da bi analize radile bez API-ja
-DAY_PREFETCH_LAST_N = 15
+DAY_PREFETCH_LAST_N = 30
 DAY_PREFETCH_H2H_N  = 10
+
+ALLOW_API_DURING_ANALYZE = False
 
 # --- NEW: conversion priors & weights ---
 FINISH_PRIOR_1H = 0.34   # ~g/SoT u 1. poluvremenu (emp. prior; možeš mijenjati)
@@ -4977,7 +4979,11 @@ def analyze(request: Request):
         th = int(to_hour_q)   if to_hour_q   is not None else None
 
         market = request.query_params.get("market") or "1h_over05"
-        no_api_flag = str(request.query_params.get("no_api", "1")).lower() in ("1", "true", "yes", "y")
+        if not ALLOW_API_DURING_ANALYZE:
+            # Uvek DB-only tokom analize; API se koristi isključivo u /api/prepare-day
+            no_api_flag = True
+        else:
+            no_api_flag = str(request.query_params.get("no_api", "1")).lower() in ("1", "true", "yes", "y")
 
         # --- NOVO: opcione kvote iz query stringa ---
         odds_over05 = request.query_params.get("odds_over05_1h")

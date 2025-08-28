@@ -455,7 +455,7 @@ async function fetchAnalysis(type) {
     `&to_date=${encodeURIComponent(toIso)}` +
     `&from_hour=${fh}` +
     `&to_hour=${th}` +
-    `&market=${encodeURIComponent(market)}&no_api=0`;
+    `&market=${encodeURIComponent(market)}&no_api=1`;
 
   console.log("👉 calling:", url);
 

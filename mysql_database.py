@@ -21,34 +21,42 @@ dbconfig = {
     "ssl_ca": os.getenv("DB_SSL_CA"),
 }
 
-connection_pool = pooling.MySQLConnectionPool(
-    pool_name="statsfk_pool",
-    pool_size=5,
-    **dbconfig
-)
+_connection_pool = None 
 
-def get_mysql_connection():
+def _build_dbconfig():
     cfg = _load_env()
     host = cfg.get("DB_HOST") or cfg.get("MYSQL_HOST") or "127.0.0.1"
     user = cfg.get("DB_USER") or cfg.get("MYSQL_USER") or "root"
     password = cfg.get("DB_PASSWORD") or cfg.get("DB_PASS") or cfg.get("MYSQL_PASSWORD") or ""
     database = cfg.get("DB_NAME") or cfg.get("MYSQL_DATABASE") or "statsfk_db"
     port = int(cfg.get("DB_PORT") or cfg.get("MYSQL_PORT") or "3306")
-    ssl_ca = cfg.get("DB_SSL_CA") or cfg.get("MYSQL_SSL_CA")
 
-    kwargs = dict(
+    kw = dict(
         host=host,
         port=port,
         user=user,
         password=password,
         database=database,
         autocommit=False,
+        ssl_disabled=False,   # SSL je obavezan (REQUIRED), ali bez verifikacije ako nemamo CA
     )
-    if ssl_ca:
-        kwargs["ssl_ca"] = ssl_ca
-        kwargs["ssl_disabled"] = False
 
-    return mysql.connector.connect(**kwargs)
+    # dodaj ssl_ca SAMO ako fajl stvarno postoji i nije prazan
+    ssl_ca = cfg.get("DB_SSL_CA") or cfg.get("MYSQL_SSL_CA")
+    if ssl_ca and os.path.isfile(ssl_ca) and os.path.getsize(ssl_ca) > 0:
+        kw["ssl_ca"] = ssl_ca  # VERIFY_CA će važiti samo ako je CA stvaran
+
+    return kw
+
+def get_mysql_connection():
+    global _connection_pool
+    if _connection_pool is None:
+        _connection_pool = pooling.MySQLConnectionPool(
+            pool_name="statsfk_pool",
+            pool_size=5,
+            **_build_dbconfig()
+        )
+    return _connection_pool.get_connection()
 
 def insert_team_matches(team_id: int, matches: list):
     if not matches:

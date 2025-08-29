@@ -224,7 +224,6 @@ async function parseJsonSafe(resp) {
   throw new Error(`HTTP ${resp.status}: ${txt.substring(0, 200)}`);
 }
 
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 function setBusyUI(busy, note = "") {
   ANALYZE_BUTTON_IDS.forEach((id) => {
@@ -548,7 +547,7 @@ async function prepareDay() {
     setBusyUI(true, `Pripremam ${dayStr}…`);
 
     // 1) enqueue
-    const resp = await fetch(`${BACKEND_URL}/api/prepare-day`, {
+    const resp = await fetch(`/api/prepare-day`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({ date: dayStr, prewarm: true })
@@ -563,7 +562,7 @@ async function prepareDay() {
     let lastProgress = -1;
     while (true) {
       await sleep(3000);
-      const sResp = await fetch(`${BACKEND_URL}/api/prepare-day/status?job_id=${encodeURIComponent(jobId)}`, {
+      const sResp = await fetch(`/api/prepare-day/status?job_id=${encodeURIComponent(jobId)}`, {
         headers: { Accept: "application/json" }
       });
       const sData = await parseJsonSafe(sResp);

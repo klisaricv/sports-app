@@ -170,36 +170,52 @@ def admin_load_league_whitelist_from_file(path: str = Body(..., embed=True)):
 
 @app.on_event("startup")
 def _init_on_startup():
+    # -- tabele
     create_all_tables()
     ensure_model_outputs_table()
-    ensure_analysis_cache_table() 
-    ensure_prepare_jobs_table() 
+    ensure_analysis_cache_table()
+    ensure_prepare_jobs_table()
 
-    # 1) Učitaj STROGI whitelist sa diska (samo ovo važi!)
+    # -- whitelist sa diska (strogo)
     _load_strict_whitelist_from_file(WHITELIST_FILE)
 
-    # (opciono) ako želiš da i dalje izračunavaš dinamičku listu — ostavi,
-    # ali ona se IGNORIŠE jer je strict uključen
-    # _refresh_league_whitelist(force=True)
-
-    # inicijalni ensure dana + warm stats (ako može)
-    PREWARM_ON_START = os.getenv("PREWARM_ON_START", "0") == "1"
+    # -- odmah očisti stare analize (72h)
     try:
-        repo.ensure_day(
-            datetime.now(USER_TZ).date(),
-            last_n=DAY_PREFETCH_LAST_N,
-            h2h_n=DAY_PREFETCH_H2H_N,
-            prewarm_stats=PREWARM_ON_START  # default off
-        )
+        purge_old_analyses()
     except Exception as e:
-        print(f"initial ensure_day failed: {e}")
+        print(f"initial purge_old_analyses failed: {e}")
 
-    # pokreni JEDAN scheduler iz services/scheduler.py
-    start_scheduler(
-        repo, USER_TZ,
-        last_n=DAY_PREFETCH_LAST_N,
-        h2h_n=DAY_PREFETCH_H2H_N
-    )
+    # -- PREWARM/ENSURE na startu je po defaultu ISKLJUČEN (da se ne troše API pozivi)
+    #    Uključi samo ako eksplicitno postaviš PREWARM_ON_START=1 u env
+    PREWARM_ON_START = os.getenv("PREWARM_ON_START", "0") == "1"
+    if PREWARM_ON_START:
+        try:
+            repo.ensure_day(
+                datetime.now(USER_TZ).date(),
+                last_n=DAY_PREFETCH_LAST_N,
+                h2h_n=DAY_PREFETCH_H2H_N,
+                prewarm_stats=True
+            )
+        except Exception as e:
+            print(f"initial ensure_day failed: {e}")
+
+    # -- Scheduler: pokreći samo ako je eksplicitno zatražen i samo u JEDNOM workeru
+    #    (inače će svaki uvicorn proces pokrenuti svoj)
+    if os.getenv("SCHEDULER_ENABLED", "0") == "1":
+        if acquire_db_lock("scheduler_runner", 0):
+            start_scheduler(
+                repo, USER_TZ,
+                last_n=DAY_PREFETCH_LAST_N,
+                h2h_n=DAY_PREFETCH_H2H_N
+            )
+        else:
+            print("[startup] scheduler already running in another worker")
+
+    # -- TTL sweeper: pokreni jednom (sa DB lock-om), radi na 60min
+    if acquire_db_lock("ttl_sweeper_runner", 0):
+        start_ttl_sweeper_thread()
+    else:
+        print("[startup] ttl sweeper already running in another worker")
 
 ACTIVE_MARKETS = {"1h_over05", "gg1h", "1h_over15", "ft_over15"}  # + FT market
 
@@ -396,6 +412,16 @@ ANALYSIS_VERSION = "v2025-08-29-01"
 # koliko traje cache rezultata (u satima)
 CACHE_TTL_HOURS_TODAY = 6
 CACHE_TTL_HOURS_PAST  = 48
+
+
+CACHE_TTL_HOURS = 48
+# === HARD MOD ===
+# Analiza na /api/analyze NIKADA ne računa niti zove API; samo čita prekomputovane rezultate
+ANALYZE_PRECOMPUTED_ONLY = True
+
+# TTL brisanje analiza (strogo) – u satima
+ANALYSIS_TTL_HOURS = 72
+
 
 
 # --- NEW: conversion priors & weights ---
@@ -965,6 +991,131 @@ def _aggregate_team_micro_ft(team_id, matches, get_stats_fn, context="all"):
         "used_pos": cnt_pos,
     }
 
+def purge_old_analyses():
+    """Brisanje analiza starijih od ANALYSIS_TTL_HOURS iz model_outputs i analysis_cache."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM model_outputs WHERE created_at < DATE_SUB(NOW(), INTERVAL %s HOUR)", (ANALYSIS_TTL_HOURS,))
+    # analysis_cache: brišemo po created_at i/ili expires_at
+    cur.execute("""
+        DELETE FROM analysis_cache
+        WHERE created_at < DATE_SUB(NOW(), INTERVAL %s HOUR)
+           OR (expires_at IS NOT NULL AND expires_at < NOW())
+    """, (ANALYSIS_TTL_HOURS,))
+    conn.commit()
+    conn.close()
+
+def start_ttl_sweeper_thread():
+    def _loop():
+        while True:
+            try:
+                purge_old_analyses()
+            except Exception as e:
+                try: print("TTL sweeper error:", e)
+                except: pass
+            # spavaj 1h
+            time.sleep(3600)
+    t = threading.Thread(target=_loop, daemon=True)
+    t.start()
+
+def read_precomputed_results(from_dt: datetime, to_dt: datetime, fh, th, market: str) -> list[dict]:
+    """
+    Čita isključivo iz model_outputs.debug JSON-a:
+
+    - debug.kickoff (ISO) → filtracija po datumu + from_hour/to_hour (lokalna satnica)
+    - debug.league, debug.team1, debug.team2
+    - prob → final_percent
+    - Ovo vraća isti oblik kao analyze_fixtures, da frontend ništa ne menja
+    """
+    # pripremi UTC opseg; satnice filtriramo u lokalnoj zoni
+    f_utc = from_dt.astimezone(timezone.utc).replace(tzinfo=None)
+    t_utc = to_dt.astimezone(timezone.utc).replace(tzinfo=None)
+
+    conn = get_db_connection()
+    cur  = conn.cursor()
+
+    # Izvuci sve za dati market i kickoff u dt-opsegu
+    # kickoff je u debug JSON-u kao ISO string; kastujemo u DATETIME
+    cur.execute(f"""
+        SELECT fixture_id, prob, debug
+        FROM model_outputs
+        WHERE market=%s
+          AND (
+                JSON_EXTRACT(debug, '$.kickoff') IS NOT NULL
+            AND CAST(JSON_UNQUOTE(JSON_EXTRACT(debug, '$.kickoff')) AS DATETIME) BETWEEN %s AND %s
+          )
+    """, (market, f_utc, t_utc))
+    rows = cur.fetchall()
+    conn.close()
+
+    out = []
+    # filtracija po from_hour/to_hour u LOKALNOM vremenu (ako su zadati)
+    use_fh = fh not in (None, "", "null")
+    use_th = th not in (None, "", "null")
+    fh = int(fh) if use_fh else None
+    th = int(th) if use_th else None
+
+    for (fixture_id, prob, dbg) in rows or []:
+        try:
+            d = dbg if isinstance(dbg, dict) else json.loads(dbg or "{}")
+        except Exception:
+            d = {}
+        kickoff_iso = d.get("kickoff")
+        if not kickoff_iso:
+            continue
+        try:
+            k_dt = datetime.fromisoformat(kickoff_iso.replace("Z", "+00:00"))
+        except Exception:
+            # fallback: pokušaj bez TZ
+            try:
+                k_dt = datetime.fromisoformat(kickoff_iso)
+                k_dt = k_dt.replace(tzinfo=timezone.utc)
+            except Exception:
+                continue
+
+        # filtriraj po satnici u LOKALNOJ zoni ako tražiš from_hour/to_hour
+        if use_fh or use_th:
+            k_local = k_dt.astimezone(USER_TZ)
+            if use_fh and k_local.hour < fh:
+                continue
+            if use_th and k_local.hour > th:
+                continue
+
+        league = d.get("league")
+        t1 = d.get("team1")
+        t2 = d.get("team2")
+
+        out.append({
+            "fixture_id": int(fixture_id),
+            "kickoff": kickoff_iso,
+            "debug": d,
+            "league": league,
+            "team1": t1,
+            "team2": t2,
+            "team1_full": t1,
+            "team2_full": t2,
+
+            # polja koja frontend očekuje
+            "team1_percent": d.get("team1_percent"),
+            "team2_percent": d.get("team2_percent"),
+            "team1_hits": d.get("team1_hits"), "team1_total": d.get("team1_total"),
+            "team2_hits": d.get("team2_hits"), "team2_total": d.get("team2_total"),
+            "h2h_percent": d.get("h2h_percent"),
+            "h2h_hits": d.get("h2h_hits"), "h2h_total": d.get("h2h_total"),
+            "home_shots_percent": d.get("home_shots_percent"),
+            "home_attacks_percent": d.get("home_attacks_percent"),
+            "home_shots_used": d.get("home_shots_used"),
+            "home_attacks_used": d.get("home_attacks_used"),
+            "away_shots_percent": d.get("away_shots_percent"),
+            "away_attacks_percent": d.get("away_attacks_percent"),
+            "away_shots_used": d.get("away_shots_used"),
+            "away_attacks_used": d.get("away_attacks_used"),
+            "form_percent": d.get("form_percent"),
+
+            "final_percent": round(float(prob or 0) * 100.0, 2),
+        })
+    return out
+
 def run_prepare_job(job_id: str, day_iso: str, prewarm: bool = True, *_args, **_kwargs):
     """
     Pozadinski prepare:
@@ -1046,14 +1197,14 @@ def run_prepare_job(job_id: str, day_iso: str, prewarm: bool = True, *_args, **_
         rows_by_market = {}
 
         update_prepare_job(job_id, progress=45, detail="ft_over15 compute")
-        rows_ft = compute_ft_over15_for_range(start_dt, end_dt, no_api=True)
+        rows_ft = compute_ft_over15_for_range(start_dt, end_dt, no_api=False)
         persist_ft_over15(rows_ft)
         market_summaries["ft_over15"] = len(rows_ft or [])
         rows_by_market["ft_over15"] = rows_ft or []
 
         for mk, prog in [("1h_over05", 65), ("1h_over15", 80), ("gg1h", 90)]:
             update_prepare_job(job_id, progress=prog, detail=f"{mk} compute")
-            rows = analyze_fixtures(start_dt, end_dt, None, None, mk, no_api=True) or []
+            rows = analyze_fixtures(start_dt, end_dt, None, None, mk, no_api=False) or []
             persist_market_outputs_from_results(mk, rows)
             market_summaries[mk] = len(rows)
             rows_by_market[mk] = rows
@@ -1158,11 +1309,19 @@ def persist_market_outputs_from_results(market: str, results: list[dict]):
         fid = r.get("fixture_id")
         if not fid:
             continue
+        dbg = dict(r.get("debug") or {})
+        # obogati debug da bismo sve čitali ISKLJUČIVO iz model_outputs
+        dbg.setdefault("league", r.get("league"))
+        dbg.setdefault("team1", r.get("team1"))
+        dbg.setdefault("team2", r.get("team2"))
+        if r.get("kickoff"):
+            dbg["kickoff"] = r["kickoff"]  # ISO string
+
         upsert_model_output(
             fixture_id=int(fid),
             market=market,
-            prob=float(r.get("final_percent", 0)) / 100.0,  # final_percent je u %
-            debug=r.get("debug") or {}
+            prob=float(r.get("final_percent", 0)) / 100.0,  # final_percent = 0–100
+            debug=dbg
         )
 
 # ---------- league baselines (FT totals) ----------
@@ -2367,8 +2526,6 @@ def _infer_team_tier_from_matches(matches, fallback=DEFAULT_TEAM_TIER):
         return fallback
     # uzmi NAJNIŽI broj (najviši rang) koji je tim realno igrao; cap na [1..4]
     return int(max(1, min(4, min(levels))))
-
-CACHE_TTL_HOURS = 48
 
 def compute_team_profiles(team_last_matches, stats_fn, lam=5.0, max_n=15):
     """
@@ -5177,7 +5334,8 @@ def analyze_fixtures(start_date: datetime, end_date: datetime, from_hour=None, t
 
         # (d) paket za UI
         results.append({
-            "fixture_id": int((fixture.get('fixture') or {}).get('id')),  # <— DODATO
+            "fixture_id": int((fixture.get('fixture') or {}).get('id')),
+            "kickoff":    (fixture.get('fixture') or {}).get('date'),  # ISO datetime, npr. "2025-08-29T18:30:00+00:00"
 
             "debug": debug,
             "league": fixture['league']['name'],
@@ -5211,114 +5369,58 @@ def analyze_fixtures(start_date: datetime, end_date: datetime, from_hour=None, t
     return results
 
 @app.get("/api/analyze")
-def analyze(request: Request):
-    if not ANALYZE_LOCK.acquire(blocking=False):
-        return JSONResponse(
-            status_code=429,
-            content={"error": "busy", "detail": "Analiza već traje, pokušaj za par sekundi."}
-        )
-
-    print("✅ USAO U /api/analyze (lock acquired)")
-
+async def api_analyze(request: Request):
+    """
+    INSTANT: vraća isključivo prekomputovane analize iz model_outputs / analysis_cache.
+    Nikada ne računa i ne zove API (ANALYZE_PRECOMPUTED_ONLY = True).
+    Ako nema prekomputovanog, vraća prazan niz + prepared=false (200 OK) ili 425 po želji.
+    """
     try:
-        from_date_str = request.query_params.get("from_date")
-        to_date_str   = request.query_params.get("to_date")
+        q = request.query_params
+        market   = (q.get("market") or "1h_over05").strip()
+        fh       = q.get("from_hour")
+        th       = q.get("to_hour")
+        from_s   = q.get("from_date")
+        to_s     = q.get("to_date")
 
-        def parse_date(date_str):
-            if not date_str:
-                raise ValueError("Datum nije prosleđen.")
-            s = date_str.strip().replace("Z", "+00:00")
-            try:
-                dt = datetime.fromisoformat(s)
-            except ValueError:
-                dt = datetime.strptime(s.split(".")[0], "%Y-%m-%dT%H:%M:%S")
-                dt = dt.replace(tzinfo=timezone.utc)
-            if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
-            return dt
-
-        try:
-            from_date = parse_date(from_date_str)
-            to_date   = parse_date(to_date_str)
-        except Exception as e:
-            print("DATUM PARSING ERROR ===>", e)
-            raise HTTPException(status_code=422, detail=f"Neispravan datum: {e}")
-
-        from_hour_q = request.query_params.get("from_hour")
-        to_hour_q   = request.query_params.get("to_hour")
-        fh = int(from_hour_q) if from_hour_q is not None else None
-        th = int(to_hour_q)   if to_hour_q   is not None else None
-
-        market = request.query_params.get("market") or "1h_over05"
-        if not ALLOW_API_DURING_ANALYZE:
-            # Uvek DB-only tokom analize; API se koristi isključivo u /api/prepare-day
-            no_api_flag = True
+        # default opseg: danas lokalno
+        if from_s:
+            from_date = datetime.fromisoformat(from_s)
         else:
-            no_api_flag = str(request.query_params.get("no_api", "1")).lower() in ("1", "true", "yes", "y")
+            from_date = datetime.now(USER_TZ).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
 
-        # --- NOVO: opcione kvote iz query stringa ---
-        odds_over05 = request.query_params.get("odds_over05_1h")
-        odds_over15 = request.query_params.get("odds_over15_1h")
-        odds_btts1h = request.query_params.get("odds_btts_1h")
-        try:
-            odds_over05 = float(odds_over05) if odds_over05 else None
-        except:
-            odds_over05 = None
-        try:
-            odds_over15 = float(odds_over15) if odds_over15 else None
-        except:
-            odds_over15 = None
-        try:
-            odds_btts1h = float(odds_btts1h) if odds_btts1h else None
-        except:
-            odds_btts1h = None
+        if to_s:
+            to_date = datetime.fromisoformat(to_s)
+        else:
+            to_date = datetime.now(USER_TZ).replace(hour=23, minute=59, second=59, microsecond=0).astimezone(timezone.utc)
 
-        # 1) Odluči da li keširati: ako su unete kvote, preskačemo cache (personalizovan rezultat)
-        use_cache = not (odds_over05 or odds_over15 or odds_btts1h)
-
-        # 2) Sastavi parametre za ključ
+        # 1) Probaj cache po paramima (ako postoji — instant)
         params = {
             "from_date": from_date.isoformat(),
             "to_date": to_date.isoformat(),
-            "from_hour": fh,
-            "to_hour": th,
+            "from_hour": int(fh) if fh not in (None, "", "null") else None,
+            "to_hour":   int(th) if th not in (None, "", "null") else None,
             "market": market,
         }
+        cache_key = _build_cache_key(params)
+        hit = read_analysis_cache(cache_key)
+        if hit is not None:
+            return JSONResponse(content=hit, status_code=200)
 
-        # 3) Ako sme cache → probaj da pročitaš
-        if use_cache:
-            cache_key = _build_cache_key(params)
-            hit = read_analysis_cache(cache_key)
-            if hit is not None:
-                return JSONResponse(content=hit, status_code=200)
+        # 2) Nema cache? — pročitaj isključivo iz model_outputs (precomputed)
+        results = read_precomputed_results(from_date, to_date, fh, th, market)
 
-        # 4) Inače izračunaj
-        results = analyze_fixtures(
-            from_date, to_date, fh, th, market, no_api=no_api_flag,
-            odds_over05_1h=odds_over05, odds_over15_1h=odds_over15, odds_btts_1h=odds_btts1h
-        ) or []
+        prepared = len(results) > 0
+        # Ako želiš da frontend zna da nije “prepared”, vrati info-flagu
+        return JSONResponse(status_code=200, content={
+            "prepared": prepared,
+            "results": results
+        })
 
-        # 5) Upis u cache (TTL: danas kraće, prošlost duže)
-        if use_cache:
-            today_local = datetime.now(USER_TZ).date()
-            end_local = to_date.astimezone(USER_TZ).date()
-            ttl = CACHE_TTL_HOURS_TODAY if end_local >= today_local else CACHE_TTL_HOURS_PAST
-            write_analysis_cache(cache_key, params, results, ttl_hours=ttl)
-
-        return JSONResponse(content=results, status_code=200)
-
-    except HTTPException:
-        raise
     except Exception as e:
-        print("❌ ANALYZE FAILED:", e)
+        print("analyze error:", e)
         print(traceback.format_exc())
-        return JSONResponse(
-            status_code=500,
-            content={"error": "internal_error", "detail": str(e)}
-        )
-    finally:
-        ANALYZE_LOCK.release()
-        print("🔓 analyze: lock released")
+        return JSONResponse(status_code=500, content={"error": "analyze_failed", "detail": str(e)})
 
 @app.post("/api/save-pdf")
 async def save_pdf(data: dict):

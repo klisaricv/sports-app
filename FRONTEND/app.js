@@ -210,6 +210,15 @@ const ANALYZE_BUTTON_IDS = [
   "prepareDay",
 ];
 
+async function parseJsonSafe(resp) {
+  const ct = resp.headers.get("content-type") || "";
+  if (ct.includes("application/json")) return await resp.json();
+  const txt = await resp.text();
+  throw new Error(`HTTP ${resp.status}: ${txt.substring(0, 200)}`);
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
 function setBusyUI(busy, note = "") {
   ANALYZE_BUTTON_IDS.forEach((id) => {
     const el = document.getElementById(id);
@@ -518,40 +527,65 @@ async function fetchAnalysis(type) {
 }
 
 async function prepareDay() {
+  setBusyUI(true);
   try {
-    const fromEl = document.getElementById("fromDate");
-    const toEl = document.getElementById("toDate");
+    const dayStr = document.querySelector("#fromDate").value.split(" ")[0];
 
-    // uzmi dan sa UI-a (from, ili to, ili današnji lokalno)
-    let base = new Date();
-    if (fromEl && fromEl.value) base = new Date(fromEl.value);
-    else if (toEl && toEl.value) base = new Date(toEl.value);
-    const dayStr = localYMD(base);
-
-    setBusyUI(true, `Pripremam ${dayStr}…`);
-    const res = await fetch(`${BACKEND_URL}/api/prepare-day`, {
+    // 1) enqueue
+    const resp = await fetch("prepare-day", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({ date: dayStr, prewarm: true }),
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ day: dayStr })
     });
+    const data = await parseJsonSafe(resp);
+    if (!data.ok || !data.job_id) throw new Error("Neuspešno pokretanje prepare posla");
 
-    const data = await res.json();
-    if (!res.ok) {
-      alert(`Prepare-day error: ${data.detail || data.error || res.status}`);
-      showToast("Prepare-day greška", "error");
-      return;
+    const jobId = data.job_id;
+    showToast(`Pripremam ${dayStr}...`, "info");
+
+    // 2) poll status
+    let lastProgress = -1;
+    while (true) {
+      await sleep(3000);
+      const sResp = await fetch(`prepare-day/status?job_id=${encodeURIComponent(jobId)}`);
+      const sData = await parseJsonSafe(sResp);
+
+      if (sData.status === "running" || sData.status === "queued") {
+        if (sData.progress !== lastProgress) {
+          lastProgress = sData.progress;
+          showToast(`Pripremam... ${sData.progress}% (${sData.detail || ""})`, "info");
+        }
+        continue;
+      }
+
+      if (sData.status === "done") {
+        const r = sData.result || {};
+        const s = [
+          `Dan: ${r.day}`,
+          `Fixtures u DB: ${r.fixtures_in_db}`,
+          `Timova: ${r.teams} | Parova: ${r.pairs}`,
+          `Seeded fixtures: ${r.seeded ? "DA" : "NE"}`,
+          `Nedostajalo prije: history=${r.history_missing_before}, h2h=${r.h2h_missing_before}`,
+          `Stats missing prije: ${r.stats_missing_before}`,
+          r.computed ? `Computed: ${Object.entries(r.computed).map(([k,v]) => `${k}: ${v}`).join(", ")}` : ""
+        ].join("\n");
+        alert(`Done.\n\n${s}`);
+        showToast("Cache pre-warm završen", "success");
+        break;
+      }
+
+      if (sData.status === "skipped") {
+        alert("Prepare je već u toku za taj dan. Pokušaj za par sekundi.");
+        break;
+      }
+
+      if (sData.status === "error") {
+        throw new Error(`Prepare-day greška: ${sData.detail || "nepoznato"}`);
+      }
+
+      // fallback
+      await sleep(2000);
     }
-
-    const s = [
-      `Dan: ${data.day}`,
-      `Fixtures u DB: ${data.fixtures_in_db}`,
-      `Timova: ${data.teams} | Parova: ${data.pairs}`,
-      `Seeded fixtures: ${data.seeded ? "DA" : "NE"}`,
-      `Nedostajalo prije: history=${data.history_missing_before}, h2h=${data.h2h_missing_before}`,
-      `Stats missing prije: ${data.stats_missing_before}`,
-    ].join("\n");
-    alert(`Done.\n\n${s}`);
-    showToast("Cache pre-warm završen");
   } catch (err) {
     console.error(err);
     alert(`Prepare-day greška: ${err}`);
@@ -560,6 +594,7 @@ async function prepareDay() {
     setBusyUI(false);
   }
 }
+
 
 // ====== WIRE EVENTS once DOM is ready ======
 document.addEventListener("DOMContentLoaded", () => {

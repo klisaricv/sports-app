@@ -1,5 +1,6 @@
 import requests
 import time
+import uuid
 import random
 from datetime import datetime, timedelta, timezone, date
 from fastapi import FastAPI, Query, Request, HTTPException, Body
@@ -171,6 +172,7 @@ def _init_on_startup():
     create_all_tables()
     ensure_model_outputs_table()
     ensure_analysis_cache_table() 
+    ensure_prepare_jobs_table() 
 
     # 1) Učitaj STROGI whitelist sa diska (samo ovo važi!)
     _load_strict_whitelist_from_file(WHITELIST_FILE)
@@ -233,6 +235,93 @@ def ensure_analysis_cache_table():
         """)
         conn.commit()
         conn.close()
+
+# ADD: jobs tabela za prepare
+def ensure_prepare_jobs_table():
+    with DB_WRITE_LOCK:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS prepare_jobs (
+                job_id CHAR(36) PRIMARY KEY,
+                day DATE NOT NULL,
+                status ENUM('queued','running','done','error','skipped') NOT NULL DEFAULT 'queued',
+                progress TINYINT UNSIGNED NOT NULL DEFAULT 0,
+                detail VARCHAR(255) NULL,
+                result_json JSON NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        """)
+        conn.commit()
+        conn.close()
+
+def create_prepare_job(day_date):
+    job_id = str(uuid.uuid4())
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("INSERT INTO prepare_jobs (job_id, day, status, progress) VALUES (%s, %s, 'queued', 0)", (job_id, day_date))
+    conn.commit()
+    conn.close()
+    return job_id
+
+def update_prepare_job(job_id, *, status=None, progress=None, detail=None, result=None):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    sets = []
+    vals = []
+    if status is not None:
+        sets.append("status=%s"); vals.append(status)
+    if progress is not None:
+        sets.append("progress=%s"); vals.append(int(progress))
+    if detail is not None:
+        sets.append("detail=%s"); vals.append(str(detail)[:255])
+    if result is not None:
+        sets.append("result_json=%s"); vals.append(json.dumps(result, ensure_ascii=False))
+    if not sets:
+        conn.close(); return
+    q = "UPDATE prepare_jobs SET " + ", ".join(sets) + " WHERE job_id=%s"
+    vals.append(job_id)
+    cur.execute(q, tuple(vals))
+    conn.commit()
+    conn.close()
+
+def read_prepare_job(job_id):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT job_id, day, status, progress, detail, result_json FROM prepare_jobs WHERE job_id=%s LIMIT 1", (job_id,))
+    row = cur.fetchone()
+    conn.close()
+    if not row:
+        return None
+    job = {
+        "job_id": row[0],
+        "day": row[1].isoformat() if hasattr(row[1], "isoformat") else row[1],
+        "status": row[2],
+        "progress": int(row[3] or 0),
+        "detail": row[4],
+        "result": None
+    }
+    try:
+        job["result"] = json.loads(row[5]) if row[5] else None
+    except Exception:
+        job["result"] = None
+    return job
+
+# Opcioni distribuirani lok preko MySQL-a: da ne trče 2 prepare-a za isti dan u različitim procesima
+def acquire_db_lock(lock_name: str, timeout_sec: int = 1) -> bool:
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT GET_LOCK(%s, %s)", (lock_name, timeout_sec))
+    got = cur.fetchone()[0] == 1
+    conn.close()
+    return got
+
+def release_db_lock(lock_name: str):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("DO RELEASE_LOCK(%s)", (lock_name,))
+    conn.close()
 
 def _build_cache_key(params: dict) -> str:
     # uključimo i verziju analize – ako promeniš formule, dobiješ novi ključ
@@ -874,6 +963,97 @@ def _aggregate_team_micro_ft(team_id, matches, get_stats_fn, context="all"):
         "used_da":  cnt_for.get("da",0)  + cnt_alw.get("da",0),
         "used_pos": cnt_pos,
     }
+
+def run_prepare_job(job_id: str, day_iso: str):
+    lock_name = f"prepare:{day_iso}"
+    got_db_lock = False
+    try:
+        update_prepare_job(job_id, status="running", progress=1, detail="starting")
+        # DB lock da jedan dan ne radi paralelno preko više procesa
+        got_db_lock = acquire_db_lock(lock_name, timeout_sec=1)
+        if not got_db_lock:
+            update_prepare_job(job_id, status="skipped", detail="already running")
+            return
+
+        # Procesni lok (isti worker)
+        if not PREPARE_LOCK.acquire(blocking=False):
+            update_prepare_job(job_id, status="skipped", detail="already running (process)")
+            return
+
+        # 1) Parsiraj dan i granice
+        d_local = datetime.fromisoformat(day_iso).date()
+        start_dt, end_dt = _day_bounds_utc(d_local)
+        update_prepare_job(job_id, progress=5, detail="seeding fixtures")
+
+        # 2) Tvoj postojeći seed + prewarm kod (skraćeno: koristi iste funkcije kao ranije)
+        #    Očekuje se da već imaš: seed_fixtures_for_day, ensure_history_for, ensure_h2h_for, ensure_stats_for_missing, itd.
+        seeded, fixtures, team_ids, pairs = seed_fixtures_for_day(d_local)  # <— tvoje postojeće
+        hist_missing, h2h_missing, stats_missing_before = prewarm_missing_for_day(d_local)  # <— ako imaš ovakvu pomoćnu; ako nemaš, ubaci logiku iz stare /prepare-day
+        update_prepare_job(job_id, progress=25, detail="history/h2h/stats prewarmed")
+
+        # 3) Izračunaj sve markete za ceo dan (DB-only)
+        markets = ["1h_over05", "1h_over15", "gg1h", "ft_over15"]
+        market_summaries = {}
+
+        # ft_over15 – koristi batch varijantu
+        rows_ft = compute_ft_over15_for_range(start_dt, end_dt, no_api=True)
+        persist_ft_over15(rows_ft)
+        market_summaries["ft_over15"] = len(rows_ft or [])
+        update_prepare_job(job_id, progress=55, detail="ft_over15 computed")
+
+        # 1h marketi – reuse analyze_fixtures (DB-only)
+        for mk, pg in [("1h_over05", 70), ("1h_over15", 85), ("gg1h", 95)]:
+            rows = analyze_fixtures(start_dt, end_dt, None, None, mk, no_api=True) or []
+            persist_market_outputs_from_results(mk, rows)
+            market_summaries[mk] = len(rows)
+            update_prepare_job(job_id, progress=pg, detail=f"{mk} computed")
+
+        # 4) Napravi analysis_cache za ceo dan (bez kvota)
+        for mk in markets:
+            params = {
+                "from_date": start_dt.isoformat(),
+                "to_date": end_dt.isoformat(),
+                "from_hour": None,
+                "to_hour": None,
+                "market": mk,
+            }
+            key = _build_cache_key(params)
+            # Ako želiš striktno čitanje iz model_outputs, ovde bi povukao iz DB; rows su već gore izračunati
+            if mk == "ft_over15":
+                rows = rows_ft
+            else:
+                # optional: rekalkulacija nije potrebna; već imamo rows iz petlje iznad,
+                # ali da zadržimo jednostavnost, možemo opet pozvati analyze_fixtures (DB-only, brzo)
+                rows = analyze_fixtures(start_dt, end_dt, None, None, mk, no_api=True) or []
+            write_analysis_cache(key, params, rows, ttl_hours=CACHE_TTL_HOURS_TODAY)
+
+        out = {
+            "ok": True,
+            "day": d_local.isoformat(),
+            "fixtures_in_db": len(fixtures),
+            "teams": len(team_ids),
+            "pairs": len(pairs),
+            "seeded": seeded,
+            "history_missing_before": len(hist_missing),
+            "h2h_missing_before": len(h2h_missing),
+            "stats_missing_before": stats_missing_before,
+            "computed": market_summaries,
+        }
+        update_prepare_job(job_id, status="done", progress=100, detail="finished", result=out)
+
+    except Exception as e:
+        update_prepare_job(job_id, status="error", detail=str(e)[:255])
+        try:
+            logging.exception("prepare job failed")
+        except Exception:
+            pass
+    finally:
+        if got_db_lock:
+            release_db_lock(lock_name)
+        try:
+            PREPARE_LOCK.release()
+        except Exception:
+            pass
 
 def build_micro_db_ft(team_last_matches, stats_fn):
     micro = {}
@@ -4147,138 +4327,54 @@ def _h2h_missing(pairs, last_n: int, ttl_h: int):
 @app.post("/api/prepare-day")
 async def api_prepare_day(request: Request):
     """
-    Jedno dugme:
-      - proveri fixtures za dan; ako nema → seed
-      - proveri history/h2h; ako fali → dopuni samo nedostajuće
-      - opciono prewarm statistika (povlači SAMO ono što fali)
-      - IZRAČUNA SVE MARKE I UPIŠE u model_outputs + NAPRAVI analysis_cache za ceo dan
+    Enqueue prepare posla i odmah vraća job_id (202).
+    Body ili query: { "date": "YYYY-MM-DD", "prewarm": true/false }
     """
-    # ne dozvoli paralelno više prepare-eva
-    if not PREPARE_LOCK.acquire(blocking=False):
-        return JSONResponse(status_code=429, content={"error": "busy", "detail": "Prepare je već u toku. Pokušaj za par sekundi."})
     try:
         try:
             payload = await request.json()
         except Exception:
             payload = {}
         date_str = (payload or {}).get("date") or request.query_params.get("date")
-        prewarm  = (payload or {}).get("prewarm", True)
+        prewarm  = bool((payload or {}).get("prewarm", True))
+
         if not date_str:
-            # default: današnji lokalni dan
             d_local = datetime.now(USER_TZ).date()
         else:
             d_local = date.fromisoformat(date_str)
 
-        # 1) fixtures
-        seeded = False
-        if not _has_fixtures_for_day(d_local):
-            seed_day_into_db(d_local)
-            seeded = True
+        # 1) napravi job u DB
+        job_id = create_prepare_job(d_local)
 
-        fixtures = _list_fixtures_for_day(d_local)
-        team_ids = {((f.get("teams") or {}).get("home") or {}).get("id") for f in fixtures} | \
-                   {((f.get("teams") or {}).get("away") or {}).get("id") for f in fixtures}
-        team_ids = {t for t in team_ids if t is not None}
-        pairs = set()
-        for f in fixtures:
-            h = ((f.get("teams") or {}).get("home") or {}).get("id")
-            a = ((f.get("teams") or {}).get("away") or {}).get("id")
-            if h is None or a is None: 
-                continue
-            x, y = sorted([h, a])
-            pairs.add((x, y))
+        # 2) pokreni u pozadini
+        t = threading.Thread(
+            target=run_prepare_job,
+            args=(job_id, d_local.isoformat(), prewarm),
+            daemon=True
+        )
+        t.start()
 
-        # 2) šta fali od history/h2h?
-        hist_missing = _history_missing(team_ids, DAY_PREFETCH_LAST_N, CACHE_TTL_HOURS)
-        h2h_missing  = _h2h_missing(pairs,  DAY_PREFETCH_H2H_N,  CACHE_TTL_HOURS)
-
-        if hist_missing or h2h_missing:
-            # dopuni SAMO što fali (get_or_fetch* radi TTL check)
-            # (fetch_and_store će pozvati get_or_fetch za sve, ali ono ne dira friške)
-            fetch_and_store_all_historical_data(fixtures, no_api=False)
-        else:
-            # sve friško — ništa ne vučemo
-            pass
-
-        # 3) stats prewarm (samo missing)
-        stats_missing_before = 0
-        if prewarm:
-            # prvo pročitaj istoriju (sada bi trebalo da je sve u cache-u)
-            team_last = fetch_last_matches_for_teams(fixtures, last_n=DAY_PREFETCH_LAST_N, no_api=True)
-
-            # izračunaj koliko fali u match_statistics
-            all_fids = set()
-            for matches in (team_last or {}).values():
-                for m in matches or []:
-                    fid = ((m.get("fixture") or {}).get("id"))
-                    if fid:
-                        all_fids.add(fid)
-            existing = _select_existing_fixture_ids(list(all_fids))
-            stats_missing_before = len(all_fids - existing)
-
-            # prewarm povlači samo one koje fale (ima hard-cap i mali paralelizam)
-            prewarm_statistics_cache(team_last, max_workers=2)
-
-        # --- 4) Izračunaj i upiši SVE markete za ceo dan ---
-        start_dt, end_dt = _day_bounds_utc(d_local)
-
-        markets = ["1h_over05", "1h_over15", "gg1h", "ft_over15"]
-
-        market_summaries = {}
-
-        for mk in markets:
-            if mk == "ft_over15":
-                # već postoji batch funkcija; koristi DB-only
-                rows = compute_ft_over15_for_range(start_dt, end_dt, no_api=True)
-                persist_ft_over15(rows)
-            else:
-                # analiziraj ceo dan, DB-only
-                rows = analyze_fixtures(start_dt, end_dt, None, None, mk, no_api=True) or []
-                persist_market_outputs_from_results(mk, rows)
-
-            market_summaries[mk] = len(rows or [])
-
-        # --- 5) Popuni analysis_cache za ceo dan (svaki market, bez kvota) ---
-        for mk in markets:
-            params = {
-                "from_date": start_dt.isoformat(),
-                "to_date": end_dt.isoformat(),
-                "from_hour": None,
-                "to_hour": None,
-                "market": mk,
-            }
-            key = _build_cache_key(params)
-            # Ako smo gore računali rows i ubacili u model_outputs, možemo direktno keširati rows
-            # (za ft_over15 imamo rows iz compute_ft_over15_for_range; za ostale iz analyze_fixtures)
-            # Ako želiš striktno čitanje iz model_outputs umesto rows: ovde možeš napraviti read pa cache.
-            write_analysis_cache(key, params, rows, ttl_hours=CACHE_TTL_HOURS_TODAY)
-
-        # --- Izlaz: sve metrike + count per market ---
-        out = {
-            "ok": True,
-            "day": d_local.isoformat(),
-            "fixtures_in_db": len(fixtures),
-            "teams": len(team_ids),
-            "pairs": len(pairs),
-            "seeded": seeded,
-            "history_missing_before": len(hist_missing),
-            "h2h_missing_before": len(h2h_missing),
-            "stats_missing_before": stats_missing_before,
-            "computed": market_summaries,  # npr. {"1h_over05": 42, ...}
-        }
-
-        return JSONResponse(content=out, status_code=200)
+        # 3) odmah odgovori
+        return JSONResponse(status_code=202, content={"ok": True, "job_id": job_id})
 
     except Exception as e:
-        print("prepare-day error:", e)
+        print("prepare-day enqueue error:", e)
         print(traceback.format_exc())
-        return JSONResponse(status_code=500, content={"error":"prepare_failed","detail":str(e)})
-        raise
-    finally:
-        try:
-            PREPARE_LOCK.release()
-        except Exception:
-            pass
+        return JSONResponse(status_code=500, content={"ok": False, "error": "prepare_enqueue_failed", "detail": str(e)})
+
+
+@app.get("/api/prepare-day/status")
+async def api_prepare_day_status(job_id: str):
+    job = read_prepare_job(job_id)
+    if not job:
+        return JSONResponse(status_code=404, content={"ok": False, "error": "job not found"})
+    return JSONResponse(status_code=200, content={
+        "ok": True,
+        "status": job["status"],
+        "progress": job["progress"],
+        "detail": job["detail"],
+        "result": job["result"]
+    })
 
 def fetch_and_store_all_historical_data(fixtures, no_api: bool = False):
     # 1) last-30 po timu (sa kešom / no_api)

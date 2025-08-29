@@ -23,7 +23,7 @@ from services.scheduler import start_scheduler
 from typing import Iterable, Set
 from pydantic import BaseModel
 import os
-
+import hashlib
 
 def _select_existing_fixture_ids(fixture_ids: Iterable[int]) -> Set[int]:
     """
@@ -170,6 +170,7 @@ def admin_load_league_whitelist_from_file(path: str = Body(..., embed=True)):
 def _init_on_startup():
     create_all_tables()
     ensure_model_outputs_table()
+    ensure_analysis_cache_table() 
 
     # 1) Učitaj STROGI whitelist sa diska (samo ovo važi!)
     _load_strict_whitelist_from_file(WHITELIST_FILE)
@@ -216,6 +217,68 @@ def ensure_model_outputs_table():
         conn.commit()
         conn.close()
 
+# ADD: tabela za cache kompletnih analiza
+def ensure_analysis_cache_table():
+    with DB_WRITE_LOCK:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS analysis_cache (
+                cache_key VARCHAR(128) PRIMARY KEY,
+                params_json JSON NOT NULL,
+                results_json JSON NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        """)
+        conn.commit()
+        conn.close()
+
+def _build_cache_key(params: dict) -> str:
+    # uključimo i verziju analize – ako promeniš formule, dobiješ novi ključ
+    base = json.dumps({"v": ANALYSIS_VERSION, **(params or {})}, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(base.encode("utf-8")).hexdigest()
+
+def read_analysis_cache(cache_key: str):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT results_json, expires_at
+        FROM analysis_cache
+        WHERE cache_key = %s
+          AND (expires_at IS NULL OR expires_at > NOW())
+        LIMIT 1
+    """, (cache_key,))
+    row = cur.fetchone()
+    conn.close()
+    if not row:
+        return None
+    # row[0] je JSON (MySQL JSON -> driver vraća str/dict zavisno od konektora)
+    try:
+        return row[0] if isinstance(row[0], list) else json.loads(row[0])
+    except Exception:
+        return None
+
+def write_analysis_cache(cache_key: str, params: dict, results: list, ttl_hours: int | None = None):
+    ttl = int(ttl_hours or CACHE_TTL_HOURS_TODAY)
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO analysis_cache (cache_key, params_json, results_json, created_at, expires_at)
+        VALUES (%s, %s, %s, NOW(), DATE_ADD(NOW(), INTERVAL %s HOUR))
+        ON DUPLICATE KEY UPDATE
+            params_json=VALUES(params_json),
+            results_json=VALUES(results_json),
+            expires_at=VALUES(expires_at)
+    """, (
+        cache_key,
+        json.dumps(params, ensure_ascii=False),
+        json.dumps(results, ensure_ascii=False),
+        ttl
+    ))
+    conn.commit()
+    conn.close()
+
 def upsert_model_output(fixture_id: int, market: str, prob: float, debug: dict):
     with DB_WRITE_LOCK:
         conn = get_db_connection()
@@ -236,6 +299,14 @@ DAY_PREFETCH_LAST_N = 30
 DAY_PREFETCH_H2H_N  = 10
 
 ALLOW_API_DURING_ANALYZE = False
+
+# ADD: verzija analitičkog koda; promeni kada menjaš formulu/težine -> invalidira cache
+ANALYSIS_VERSION = "v2025-08-29-01"
+
+# koliko traje cache rezultata (u satima)
+CACHE_TTL_HOURS_TODAY = 6
+CACHE_TTL_HOURS_PAST  = 48
+
 
 # --- NEW: conversion priors & weights ---
 FINISH_PRIOR_1H = 0.34   # ~g/SoT u 1. poluvremenu (emp. prior; možeš mijenjati)
@@ -854,6 +925,19 @@ def persist_ft_over15(rows: list[dict]):
             market="ft_over15",
             prob=float(r["ft_over15_prob"]),
             debug=r["ft_over15_dbg"]
+        )
+
+# ADD: generički upis u model_outputs za bilo koji market iz analyze_fixtures rezultata
+def persist_market_outputs_from_results(market: str, results: list[dict]):
+    for r in results or []:
+        fid = r.get("fixture_id")
+        if not fid:
+            continue
+        upsert_model_output(
+            fixture_id=int(fid),
+            market=market,
+            prob=float(r.get("final_percent", 0)) / 100.0,  # final_percent je u %
+            debug=r.get("debug") or {}
         )
 
 # ---------- league baselines (FT totals) ----------
@@ -1525,6 +1609,7 @@ BASE_URL = 'https://v3.football.api-sports.io'
 HEADERS = {'x-apisports-key': API_KEY}
 
 ANALYZE_LOCK = threading.Lock()
+PREPARE_LOCK = threading.Lock()
 
 from db_backend import (
     get_connection as get_db_connection,
@@ -4066,7 +4151,11 @@ async def api_prepare_day(request: Request):
       - proveri fixtures za dan; ako nema → seed
       - proveri history/h2h; ako fali → dopuni samo nedostajuće
       - opciono prewarm statistika (povlači SAMO ono što fali)
+      - IZRAČUNA SVE MARKE I UPIŠE u model_outputs + NAPRAVI analysis_cache za ceo dan
     """
+    # ne dozvoli paralelno više prepare-eva
+    if not PREPARE_LOCK.acquire(blocking=False):
+        return JSONResponse(status_code=429, content={"error": "busy", "detail": "Prepare je već u toku. Pokušaj za par sekundi."})
     try:
         try:
             payload = await request.json()
@@ -4130,7 +4219,42 @@ async def api_prepare_day(request: Request):
             # prewarm povlači samo one koje fale (ima hard-cap i mali paralelizam)
             prewarm_statistics_cache(team_last, max_workers=2)
 
-        return JSONResponse(content={
+        # --- 4) Izračunaj i upiši SVE markete za ceo dan ---
+        start_dt, end_dt = _day_bounds_utc(d_local)
+
+        markets = ["1h_over05", "1h_over15", "gg1h", "ft_over15"]
+
+        market_summaries = {}
+
+        for mk in markets:
+            if mk == "ft_over15":
+                # već postoji batch funkcija; koristi DB-only
+                rows = compute_ft_over15_for_range(start_dt, end_dt, no_api=True)
+                persist_ft_over15(rows)
+            else:
+                # analiziraj ceo dan, DB-only
+                rows = analyze_fixtures(start_dt, end_dt, None, None, mk, no_api=True) or []
+                persist_market_outputs_from_results(mk, rows)
+
+            market_summaries[mk] = len(rows or [])
+
+        # --- 5) Popuni analysis_cache za ceo dan (svaki market, bez kvota) ---
+        for mk in markets:
+            params = {
+                "from_date": start_dt.isoformat(),
+                "to_date": end_dt.isoformat(),
+                "from_hour": None,
+                "to_hour": None,
+                "market": mk,
+            }
+            key = _build_cache_key(params)
+            # Ako smo gore računali rows i ubacili u model_outputs, možemo direktno keširati rows
+            # (za ft_over15 imamo rows iz compute_ft_over15_for_range; za ostale iz analyze_fixtures)
+            # Ako želiš striktno čitanje iz model_outputs umesto rows: ovde možeš napraviti read pa cache.
+            write_analysis_cache(key, params, rows, ttl_hours=CACHE_TTL_HOURS_TODAY)
+
+        # --- Izlaz: sve metrike + count per market ---
+        out = {
             "ok": True,
             "day": d_local.isoformat(),
             "fixtures_in_db": len(fixtures),
@@ -4139,13 +4263,22 @@ async def api_prepare_day(request: Request):
             "seeded": seeded,
             "history_missing_before": len(hist_missing),
             "h2h_missing_before": len(h2h_missing),
-            "stats_missing_before": stats_missing_before
-        }, status_code=200)
+            "stats_missing_before": stats_missing_before,
+            "computed": market_summaries,  # npr. {"1h_over05": 42, ...}
+        }
+
+        return JSONResponse(content=out, status_code=200)
 
     except Exception as e:
         print("prepare-day error:", e)
         print(traceback.format_exc())
         return JSONResponse(status_code=500, content={"error":"prepare_failed","detail":str(e)})
+        raise
+    finally:
+        try:
+            PREPARE_LOCK.release()
+        except Exception:
+            pass
 
 def fetch_and_store_all_historical_data(fixtures, no_api: bool = False):
     # 1) last-30 po timu (sa kešom / no_api)
@@ -4909,6 +5042,8 @@ def analyze_fixtures(start_date: datetime, end_date: datetime, from_hour=None, t
 
         # (d) paket za UI
         results.append({
+            "fixture_id": int((fixture.get('fixture') or {}).get('id')),  # <— DODATO
+
             "debug": debug,
             "league": fixture['league']['name'],
             "team1": fixture['teams']['home']['name'],
@@ -5003,13 +5138,37 @@ def analyze(request: Request):
         except:
             odds_btts1h = None
 
+        # 1) Odluči da li keširati: ako su unete kvote, preskačemo cache (personalizovan rezultat)
+        use_cache = not (odds_over05 or odds_over15 or odds_btts1h)
+
+        # 2) Sastavi parametre za ključ
+        params = {
+            "from_date": from_date.isoformat(),
+            "to_date": to_date.isoformat(),
+            "from_hour": fh,
+            "to_hour": th,
+            "market": market,
+        }
+
+        # 3) Ako sme cache → probaj da pročitaš
+        if use_cache:
+            cache_key = _build_cache_key(params)
+            hit = read_analysis_cache(cache_key)
+            if hit is not None:
+                return JSONResponse(content=hit, status_code=200)
+
+        # 4) Inače izračunaj
         results = analyze_fixtures(
             from_date, to_date, fh, th, market, no_api=no_api_flag,
             odds_over05_1h=odds_over05, odds_over15_1h=odds_over15, odds_btts_1h=odds_btts1h
-        )
+        ) or []
 
-        if results is None:
-            results = []
+        # 5) Upis u cache (TTL: danas kraće, prošlost duže)
+        if use_cache:
+            today_local = datetime.now(USER_TZ).date()
+            end_local = to_date.astimezone(USER_TZ).date()
+            ttl = CACHE_TTL_HOURS_TODAY if end_local >= today_local else CACHE_TTL_HOURS_PAST
+            write_analysis_cache(cache_key, params, results, ttl_hours=ttl)
 
         return JSONResponse(content=results, status_code=200)
 

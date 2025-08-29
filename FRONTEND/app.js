@@ -8,6 +8,13 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const fmt = (v, suffix = "") =>
   v === null || v === undefined || Number.isNaN(v) ? "—" : `${v}${suffix}`;
 
+async function parseJsonSafe(resp) {
+  const ct = resp.headers.get("content-type") || "";
+  if (ct.includes("application/json")) return await resp.json();
+  const txt = await resp.text();
+  throw new Error(`HTTP ${resp.status}: ${txt.slice(0, 200)}`);
+}
+
 // ====== THEME ======
 function initTheme() {
   const root = document.documentElement;
@@ -527,15 +534,24 @@ async function fetchAnalysis(type) {
 }
 
 async function prepareDay() {
-  setBusyUI(true);
+  let busyMsgCancel;
   try {
-    const dayStr = document.querySelector("#fromDate").value.split(" ")[0];
+    const fromEl = document.getElementById("fromDate");
+    const toEl = document.getElementById("toDate");
+
+    // uzmi dan sa UI-a (from, ili to, ili današnji lokalno)
+    let base = new Date();
+    if (fromEl && fromEl.value) base = new Date(fromEl.value);
+    else if (toEl && toEl.value) base = new Date(toEl.value);
+    const dayStr = localYMD(base);
+
+    setBusyUI(true, `Pripremam ${dayStr}…`);
 
     // 1) enqueue
-    const resp = await fetch("prepare-day", {
+    const resp = await fetch(`${BACKEND_URL}/api/prepare-day`, {
       method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({ day: dayStr })
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ date: dayStr, prewarm: true })
     });
     const data = await parseJsonSafe(resp);
     if (!data.ok || !data.job_id) throw new Error("Neuspešno pokretanje prepare posla");
@@ -547,15 +563,17 @@ async function prepareDay() {
     let lastProgress = -1;
     while (true) {
       await sleep(3000);
-      const sResp = await fetch(`prepare-day/status?job_id=${encodeURIComponent(jobId)}`);
+      const sResp = await fetch(`${BACKEND_URL}/api/prepare-day/status?job_id=${encodeURIComponent(jobId)}`, {
+        headers: { Accept: "application/json" }
+      });
       const sData = await parseJsonSafe(sResp);
 
-      if (sData.status === "running" || sData.status === "queued") {
+      if (sData.status === "queued" || sData.status === "running") {
         if (sData.progress !== lastProgress) {
           lastProgress = sData.progress;
-          showToast(`Pripremam... ${sData.progress}% (${sData.detail || ""})`, "info");
+          showToast(`Pripremam... ${sData.progress}% ${sData.detail ? "(" + sData.detail + ")" : ""}`, "info");
         }
-        continue;
+        continue; // nastavi polling
       }
 
       if (sData.status === "done") {
@@ -570,12 +588,7 @@ async function prepareDay() {
           r.computed ? `Computed: ${Object.entries(r.computed).map(([k,v]) => `${k}: ${v}`).join(", ")}` : ""
         ].join("\n");
         alert(`Done.\n\n${s}`);
-        showToast("Cache pre-warm završen", "success");
-        break;
-      }
-
-      if (sData.status === "skipped") {
-        alert("Prepare je već u toku za taj dan. Pokušaj za par sekundi.");
+        showToast("Cache pre-warm završen");
         break;
       }
 
@@ -594,7 +607,6 @@ async function prepareDay() {
     setBusyUI(false);
   }
 }
-
 
 // ====== WIRE EVENTS once DOM is ready ======
 document.addEventListener("DOMContentLoaded", () => {
@@ -652,3 +664,12 @@ document.addEventListener("DOMContentLoaded", () => {
   if (btnPDF) btnPDF.addEventListener("click", doSavePdf);
   if (btnPDFFab) btnPDFFab.addEventListener("click", doSavePdf);
 });
+
+// Safety net: ako je DOM već gotov (npr. skripta učitana kasnije), pozovi ručno
+if (document.readyState === "interactive" || document.readyState === "complete") {
+  const evt = new Event("DOMContentLoaded");
+  document.dispatchEvent(evt);
+}
+
+// Log da znamo da je JS podignut
+console.log("app.js loaded");

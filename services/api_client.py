@@ -11,7 +11,9 @@ except Exception:
 
 SESSION = requests.Session()
 # header (API key) dodaš ovdje
-SESSION.headers.update({'x-apisports-key': os.getenv('APISPORTS_KEY', 'YOUR_API_KEY_HERE')})
+SESSION.headers.update({
+    'x-apisports-key': os.getenv('APISPORTS_KEY') or os.getenv('APIFOOTBALL_KEY', 'YOUR_API_KEY_HERE')
+})
 
 if Retry is not None:
     retry = Retry(

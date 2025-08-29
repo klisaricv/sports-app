@@ -176,7 +176,8 @@ class DataRepo:
                     ]:
                         if tid:
                             try:
-                                _ = self.get_team_statistics(int(tid), int(league_id), int(season), no_api=False)
+                                if self.get_team_statistics(int(tid), int(league_id), int(season), no_api=True) is None:
+                                    _= self.get_team_statistics(int(tid), int(league_id), int(season), no_api=False)
                             except Exception:
                                 pass
 
@@ -195,10 +196,15 @@ class DataRepo:
 
         all_team_matches = {}
         for tid in team_ids:
-            all_team_matches[tid] = self.get_team_history(tid, last_n=last_n, no_api=False)
+            data = self.get_team_history(tid, last_n=last_n, no_api=True)  # čitaj samo iz DB
+            if not data:  # ako fali -> povuci JEDNOM sa API-ja
+                data = self.get_team_history(tid, last_n=last_n, no_api=False)
+            all_team_matches[tid] = data
 
         for (a, b) in pairs:
-            _ = self.get_h2h(a, b, last_n=h2h_n, no_api=False)
+            h = self.get_h2h(a, b, last_n=h2h_n, no_api=True)
+            if not h:  # ako fali -> povuci JEDNOM sa API-ja
+                h = self.get_h2h(a, b, last_n=h2h_n, no_api=False)
 
         stats_warmed = 0
         if prewarm_stats:

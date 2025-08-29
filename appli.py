@@ -179,12 +179,13 @@ def _init_on_startup():
     # _refresh_league_whitelist(force=True)
 
     # inicijalni ensure dana + warm stats (ako može)
+    PREWARM_ON_START = os.getenv("PREWARM_ON_START", "0") == "1"
     try:
         repo.ensure_day(
             datetime.now(USER_TZ).date(),
             last_n=DAY_PREFETCH_LAST_N,
             h2h_n=DAY_PREFETCH_H2H_N,
-            prewarm_stats=True
+            prewarm_stats=PREWARM_ON_START  # default off
         )
     except Exception as e:
         print(f"initial ensure_day failed: {e}")

@@ -25,6 +25,7 @@ from typing import Iterable, Set
 from pydantic import BaseModel
 import os
 import hashlib
+from fastapi import BackgroundTasks
 
 def _select_existing_fixture_ids(fixture_ids: Iterable[int]) -> Set[int]:
     """
@@ -4325,7 +4326,7 @@ def _h2h_missing(pairs, last_n: int, ttl_h: int):
     return missing
 
 @app.post("/api/prepare-day")
-async def api_prepare_day(request: Request):
+async def api_prepare_day(request: Request, background_tasks: BackgroundTasks):
     """
     Enqueue prepare posla i odmah vraća job_id (202).
     Body ili query: { "date": "YYYY-MM-DD", "prewarm": true/false }
@@ -4346,13 +4347,8 @@ async def api_prepare_day(request: Request):
         # 1) napravi job u DB
         job_id = create_prepare_job(d_local)
 
-        # 2) pokreni u pozadini
-        t = threading.Thread(
-            target=run_prepare_job,
-            args=(job_id, d_local.isoformat(), prewarm),
-            daemon=True
-        )
-        t.start()
+        # 2) pokreni u pozadini preko FastAPI background task-a (pouzdanije od ručnog threada)
+        background_tasks.add_task(run_prepare_job, job_id, d_local.isoformat(), prewarm)
 
         # 3) odmah odgovori
         return JSONResponse(status_code=202, content={"ok": True, "job_id": job_id})
@@ -4361,7 +4357,6 @@ async def api_prepare_day(request: Request):
         print("prepare-day enqueue error:", e)
         print(traceback.format_exc())
         return JSONResponse(status_code=500, content={"ok": False, "error": "prepare_enqueue_failed", "detail": str(e)})
-
 
 @app.get("/api/prepare-day/status")
 async def api_prepare_day_status(job_id: str):

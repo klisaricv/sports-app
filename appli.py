@@ -965,7 +965,7 @@ def _aggregate_team_micro_ft(team_id, matches, get_stats_fn, context="all"):
         "used_pos": cnt_pos,
     }
 
-def run_prepare_job(job_id: str, day_iso: str):
+def run_prepare_job(job_id: str, day_iso: str, prewarm: bool = True, *_args, **_kwargs):
     lock_name = f"prepare:{day_iso}"
     got_db_lock = False
     try:

@@ -437,3 +437,29 @@ input:focus-visible {
 
 /* ---------- Utility ---------- */
 .hidden { display: none !important; }
+
+/* === Loader overlay === */
+#loaderOverlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.35);
+  display: none;                 /* showLoader() => display:flex */
+  align-items: center; justify-content: center;
+  z-index: 9999;
+}
+#loaderBox {
+  width: 420px; max-width: 90vw;
+  background: #fff;
+  border-radius: 14px;
+  padding: 18px 20px;
+  box-shadow: 0 12px 40px rgba(0,0,0,.2);
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+}
+#loaderTitle { font-weight: 600; margin-bottom: 8px; }
+#loaderPct   { font-size: 12px; color: #666; margin-bottom: 8px; }
+#loaderBar   { height: 10px; background: #eee; border-radius: 6px; overflow: hidden; }
+#loaderBar > div {
+  height: 100%; width: 0%;
+  background: linear-gradient(90deg, #5ac3ff, #ff7aa8);
+  transition: width .3s ease;
+}
+#loaderDetail{ font-size: 12px; color: #888; margin-top: 8px; min-height: 1em; }

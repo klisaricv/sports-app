@@ -15,6 +15,52 @@ async function parseJsonSafe(resp) {
   throw new Error(`HTTP ${resp.status}: ${txt.slice(0, 200)}`);
 }
 
+// === Loader helpers ===
+window.sleep = window.sleep || (ms => new Promise(r => setTimeout(r, ms)));
+
+function ensureLoaderUI() {
+  if (document.getElementById("loaderOverlay")) return;
+  const overlay = document.createElement("div");
+  overlay.id = "loaderOverlay";
+  overlay.innerHTML = `
+    <div id="loaderBox" role="dialog" aria-live="polite" aria-label="Preparing">
+      <div id="loaderTitle">Preparing…</div>
+      <div id="loaderPct">0%</div>
+      <div id="loaderBar"><div></div></div>
+      <div id="loaderDetail"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+function showLoader(title = "Preparing…") {
+  ensureLoaderUI();
+  document.getElementById("loaderTitle").textContent = title;
+  document.getElementById("loaderPct").textContent = "0%";
+  document.querySelector("#loaderBar > div").style.width = "0%";
+  document.getElementById("loaderDetail").textContent = "";
+  document.getElementById("loaderOverlay").style.display = "flex";
+}
+function updateLoader(pct, detail) {
+  ensureLoaderUI();
+  const p = Math.max(0, Math.min(100, Number(pct) || 0));
+  document.getElementById("loaderPct").textContent = p + "%";
+  document.querySelector("#loaderBar > div").style.width = p + "%";
+  if (detail !== undefined && detail !== null) {
+    document.getElementById("loaderDetail").textContent = String(detail);
+  }
+}
+function hideLoader() {
+  const el = document.getElementById("loaderOverlay");
+  if (el) el.style.display = "none";
+}
+
+// (ako nemaš već) bezbedno JSON parsiranje
+async function parseJsonSafe(resp) {
+  const ct = resp.headers.get("content-type") || "";
+  if (ct.includes("application/json")) return await resp.json();
+  const txt = await resp.text();
+  throw new Error(`HTTP ${resp.status}: ${txt.slice(0, 200)}`);
+}
+
 // ====== THEME ======
 function initTheme() {
   const root = document.documentElement;
@@ -533,49 +579,49 @@ async function fetchAnalysis(type) {
 }
 
 async function prepareDay() {
-  let busyMsgCancel;
   try {
+    // izaberi datum (From -> ili To -> ili danas)
     const fromEl = document.getElementById("fromDate");
-    const toEl = document.getElementById("toDate");
-
-    // uzmi dan sa UI-a (from, ili to, ili današnji lokalno)
+    const toEl   = document.getElementById("toDate");
     let base = new Date();
     if (fromEl && fromEl.value) base = new Date(fromEl.value);
     else if (toEl && toEl.value) base = new Date(toEl.value);
-    const dayStr = localYMD(base);
+    const dayStr = localYMD(base); // tvoja postojeća util funkcija
 
     setBusyUI(true, `Pripremam ${dayStr}…`);
+    showLoader(`Pripremam ${dayStr}…`);
 
     // 1) enqueue
     const resp = await fetch(`/api/prepare-day`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
       body: JSON.stringify({ date: dayStr, prewarm: true })
     });
     const data = await parseJsonSafe(resp);
     if (!data.ok || !data.job_id) throw new Error("Neuspešno pokretanje prepare posla");
 
     const jobId = data.job_id;
-    showToast(`Pripremam ${dayStr}...`, "info");
+    updateLoader(1, "queued");
 
     // 2) poll status
     let lastProgress = -1;
     while (true) {
       await sleep(3000);
       const sResp = await fetch(`/api/prepare-day/status?job_id=${encodeURIComponent(jobId)}`, {
-        headers: { Accept: "application/json" }
+        headers: { "Accept": "application/json" }
       });
       const sData = await parseJsonSafe(sResp);
 
       if (sData.status === "queued" || sData.status === "running") {
         if (sData.progress !== lastProgress) {
           lastProgress = sData.progress;
-          showToast(`Pripremam... ${sData.progress}% ${sData.detail ? "(" + sData.detail + ")" : ""}`, "info");
+          updateLoader(sData.progress, sData.detail || "");
         }
-        continue; // nastavi polling
+        continue;
       }
 
       if (sData.status === "done") {
+        updateLoader(100, "finished");
         const r = sData.result || {};
         const s = [
           `Dan: ${r.day}`,
@@ -585,9 +631,8 @@ async function prepareDay() {
           `Nedostajalo prije: history=${r.history_missing_before}, h2h=${r.h2h_missing_before}`,
           `Stats missing prije: ${r.stats_missing_before}`,
           r.computed ? `Computed: ${Object.entries(r.computed).map(([k,v]) => `${k}: ${v}`).join(", ")}` : ""
-        ].join("\n");
+        ].filter(Boolean).join("\n");
         alert(`Done.\n\n${s}`);
-        showToast("Cache pre-warm završen");
         break;
       }
 
@@ -595,14 +640,14 @@ async function prepareDay() {
         throw new Error(`Prepare-day greška: ${sData.detail || "nepoznato"}`);
       }
 
-      // fallback
-      await sleep(2000);
+      await sleep(1500);
     }
   } catch (err) {
     console.error(err);
     alert(`Prepare-day greška: ${err}`);
     showToast("Prepare-day greška", "error");
   } finally {
+    hideLoader();
     setBusyUI(false);
   }
 }

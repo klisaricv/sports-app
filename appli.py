@@ -966,50 +966,100 @@ def _aggregate_team_micro_ft(team_id, matches, get_stats_fn, context="all"):
     }
 
 def run_prepare_job(job_id: str, day_iso: str, prewarm: bool = True, *_args, **_kwargs):
+    """
+    Pozadinski prepare:
+      - seed fixtures (ako fale)
+      - dopuni history/h2h/statistike (samo što fali)
+      - izračunaj sve markete (DB-only) i upiši u model_outputs
+      - popuni analysis_cache za ceo dan (po marketu)
+      - upisuj progres u prepare_jobs
+    """
     lock_name = f"prepare:{day_iso}"
     got_db_lock = False
     try:
         update_prepare_job(job_id, status="running", progress=1, detail="starting")
-        # DB lock da jedan dan ne radi paralelno preko više procesa
+
+        # cross-process lock (MySQL)
         got_db_lock = acquire_db_lock(lock_name, timeout_sec=1)
         if not got_db_lock:
             update_prepare_job(job_id, status="skipped", detail="already running")
             return
 
-        # Procesni lok (isti worker)
+        # in-process lock (isti worker)
         if not PREPARE_LOCK.acquire(blocking=False):
             update_prepare_job(job_id, status="skipped", detail="already running (process)")
             return
 
-        # 1) Parsiraj dan i granice
+        # 1) Dan i opseg
         d_local = datetime.fromisoformat(day_iso).date()
         start_dt, end_dt = _day_bounds_utc(d_local)
-        update_prepare_job(job_id, progress=5, detail="seeding fixtures")
 
-        # 2) Tvoj postojeći seed + prewarm kod (skraćeno: koristi iste funkcije kao ranije)
-        #    Očekuje se da već imaš: seed_fixtures_for_day, ensure_history_for, ensure_h2h_for, ensure_stats_for_missing, itd.
-        seeded, fixtures, team_ids, pairs = seed_fixtures_for_day(d_local)  # <— tvoje postojeće
-        hist_missing, h2h_missing, stats_missing_before = prewarm_missing_for_day(d_local)  # <— ako imaš ovakvu pomoćnu; ako nemaš, ubaci logiku iz stare /prepare-day
-        update_prepare_job(job_id, progress=25, detail="history/h2h/stats prewarmed")
+        # 2) Fixtures (seed ako fale) + skupovi timova/parova
+        update_prepare_job(job_id, progress=5, detail="fixtures")
+        seeded = False
+        if not _has_fixtures_for_day(d_local):
+            seed_day_into_db(d_local)
+            seeded = True
 
-        # 3) Izračunaj sve markete za ceo dan (DB-only)
+        fixtures = _list_fixtures_for_day(d_local)
+
+        team_ids = {((f.get("teams") or {}).get("home") or {}).get("id") for f in fixtures} | \
+                   {((f.get("teams") or {}).get("away") or {}).get("id") for f in fixtures}
+        team_ids = {t for t in team_ids if t is not None}
+
+        pairs = set()
+        for f in fixtures:
+            h = ((f.get("teams") or {}).get("home") or {}).get("id")
+            a = ((f.get("teams") or {}).get("away") or {}).get("id")
+            if h is None or a is None:
+                continue
+            x, y = sorted([h, a])
+            pairs.add((x, y))
+
+        # 3) History/H2H – dopuni samo nedostajuće
+        update_prepare_job(job_id, progress=15, detail="history/h2h")
+        hist_missing = _history_missing(team_ids, DAY_PREFETCH_LAST_N, CACHE_TTL_HOURS)
+        h2h_missing  = _h2h_missing(pairs,  DAY_PREFETCH_H2H_N,  CACHE_TTL_HOURS)
+        if hist_missing or h2h_missing:
+            fetch_and_store_all_historical_data(fixtures, no_api=False)
+
+        # 4) Stats prewarm (opciono)
+        stats_missing_before = 0
+        if prewarm:
+            update_prepare_job(job_id, progress=25, detail="stats prewarm")
+            team_last = fetch_last_matches_for_teams(fixtures, last_n=DAY_PREFETCH_LAST_N, no_api=True)
+
+            all_fids = set()
+            for matches in (team_last or {}).values():
+                for m in matches or []:
+                    fid = ((m.get("fixture") or {}).get("id"))
+                    if fid:
+                        all_fids.add(fid)
+            existing = _select_existing_fixture_ids(list(all_fids))
+            stats_missing_before = len(all_fids - existing)
+
+            prewarm_statistics_cache(team_last, max_workers=2)
+
+        # 5) Izračunaj sve markete (DB-only) i upiši u model_outputs
         markets = ["1h_over05", "1h_over15", "gg1h", "ft_over15"]
         market_summaries = {}
+        rows_by_market = {}
 
-        # ft_over15 – koristi batch varijantu
+        update_prepare_job(job_id, progress=45, detail="ft_over15 compute")
         rows_ft = compute_ft_over15_for_range(start_dt, end_dt, no_api=True)
         persist_ft_over15(rows_ft)
         market_summaries["ft_over15"] = len(rows_ft or [])
-        update_prepare_job(job_id, progress=55, detail="ft_over15 computed")
+        rows_by_market["ft_over15"] = rows_ft or []
 
-        # 1h marketi – reuse analyze_fixtures (DB-only)
-        for mk, pg in [("1h_over05", 70), ("1h_over15", 85), ("gg1h", 95)]:
+        for mk, prog in [("1h_over05", 65), ("1h_over15", 80), ("gg1h", 90)]:
+            update_prepare_job(job_id, progress=prog, detail=f"{mk} compute")
             rows = analyze_fixtures(start_dt, end_dt, None, None, mk, no_api=True) or []
             persist_market_outputs_from_results(mk, rows)
             market_summaries[mk] = len(rows)
-            update_prepare_job(job_id, progress=pg, detail=f"{mk} computed")
+            rows_by_market[mk] = rows
 
-        # 4) Napravi analysis_cache za ceo dan (bez kvota)
+        # 6) analysis_cache za ceo dan (po marketu)
+        update_prepare_job(job_id, progress=95, detail="cache build")
         for mk in markets:
             params = {
                 "from_date": start_dt.isoformat(),
@@ -1019,15 +1069,9 @@ def run_prepare_job(job_id: str, day_iso: str, prewarm: bool = True, *_args, **_
                 "market": mk,
             }
             key = _build_cache_key(params)
-            # Ako želiš striktno čitanje iz model_outputs, ovde bi povukao iz DB; rows su već gore izračunati
-            if mk == "ft_over15":
-                rows = rows_ft
-            else:
-                # optional: rekalkulacija nije potrebna; već imamo rows iz petlje iznad,
-                # ali da zadržimo jednostavnost, možemo opet pozvati analyze_fixtures (DB-only, brzo)
-                rows = analyze_fixtures(start_dt, end_dt, None, None, mk, no_api=True) or []
-            write_analysis_cache(key, params, rows, ttl_hours=CACHE_TTL_HOURS_TODAY)
+            write_analysis_cache(key, params, rows_by_market.get(mk, []), ttl_hours=CACHE_TTL_HOURS_TODAY)
 
+        # 7) Rezultat
         out = {
             "ok": True,
             "day": d_local.isoformat(),

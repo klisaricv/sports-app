@@ -18,26 +18,44 @@ async function parseJsonSafe(resp) {
 // === Loader helpers ===
 window.sleep = window.sleep || (ms => new Promise(r => setTimeout(r, ms)));
 
+function disableAllButtons(disable) {
+  const buttons = document.querySelectorAll('button, .btn, #savePdf, .primary-ghost');
+  buttons.forEach(btn => {
+    if (disable) {
+      btn.disabled = true;
+      btn.style.pointerEvents = 'none';
+      btn.style.opacity = '0.5';
+    } else {
+      btn.disabled = false;
+      btn.style.pointerEvents = 'auto';
+      btn.style.opacity = '1';
+    }
+  });
+}
+
 function ensureLoaderUI() {
   if (document.getElementById("loaderOverlay")) return;
   const overlay = document.createElement("div");
   overlay.id = "loaderOverlay";
   overlay.innerHTML = `
     <div id="loaderBox" role="dialog" aria-live="polite" aria-label="Preparing">
-      <div id="loaderTitle">Preparing…</div>
+      <div id="loaderTitle">🚀 Preparing Analysis...</div>
       <div id="loaderPct">0%</div>
       <div id="loaderBar"><div></div></div>
-      <div id="loaderDetail"></div>
+      <div id="loaderDetail">Initializing system...</div>
     </div>`;
   document.body.appendChild(overlay);
 }
-function showLoader(title = "Preparing…") {
+function showLoader(title = "🚀 Preparing Analysis...") {
   ensureLoaderUI();
   document.getElementById("loaderTitle").textContent = title;
   document.getElementById("loaderPct").textContent = "0%";
   document.querySelector("#loaderBar > div").style.width = "0%";
-  document.getElementById("loaderDetail").textContent = "";
+  document.getElementById("loaderDetail").textContent = "Initializing system...";
   document.getElementById("loaderOverlay").style.display = "flex";
+  
+  // Disable all buttons during loading
+  disableAllButtons(true);
 }
 function updateLoader(pct, detail) {
   ensureLoaderUI();
@@ -51,6 +69,9 @@ function updateLoader(pct, detail) {
 function hideLoader() {
   const el = document.getElementById("loaderOverlay");
   if (el) el.style.display = "none";
+  
+  // Re-enable all buttons after loading
+  disableAllButtons(false);
 }
 
 // (ako nemaš već) bezbedno JSON parsiranje
@@ -272,24 +293,7 @@ async function parseJsonSafe(resp) {
 
 
 function setBusyUI(busy, note = "") {
-  ANALYZE_BUTTON_IDS.forEach((id) => {
-    const el = document.getElementById(id);
-    if (el) {
-      el.disabled = busy;
-      if (busy) {
-        el.dataset._origText = el.dataset._origText || el.textContent;
-        if (el.id !== "savePdf" && el.id !== "savePdfFab") {
-          el.textContent = note || "Analiziram…";
-        }
-        el.style.opacity = "0.6";
-        el.style.cursor = "not-allowed";
-      } else {
-        if (el.dataset._origText) el.textContent = el.dataset._origText;
-        el.style.opacity = "";
-        el.style.cursor = "";
-      }
-    }
-  });
+  // Don't change button text anymore - the loader handles the UI feedback
   document.body.style.cursor = busy ? "progress" : "";
 }
 
@@ -486,7 +490,13 @@ function localYMD(d) {
 
 // ====== MAIN ACTION ======
 async function fetchAnalysis(type) {
-  showLoader();
+  const analysisTitles = {
+    '1p': '🎯 Analyzing 1+ Goals...',
+    'GG': '⚽ Analyzing Both Teams Score...',
+    'O15': '🔥 Analyzing Over 1.5 Goals...',
+    'FT_O15': '🚀 Analyzing FT Over 1.5 Goals...'
+  };
+  showLoader(analysisTitles[type] || '🔍 Analyzing...');
 
   const fromEl = document.getElementById("fromDate");
   const toEl = document.getElementById("toDate");
@@ -599,7 +609,7 @@ async function prepareDay() {
     const dayStr = localYMD(base); // tvoja postojeća util funkcija
 
     setBusyUI(true, `Pripremam ${dayStr}…`);
-    showLoader(`Pripremam ${dayStr}…`);
+    showLoader(`🚀 Preparing ${dayStr}...`);
 
     // 1) enqueue
     const resp = await fetch(`/api/prepare-day`, {

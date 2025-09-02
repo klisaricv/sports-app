@@ -1359,46 +1359,6 @@ def compute_ft_over15_for_range(start_dt: datetime, end_dt: datetime, no_api: bo
             )
             print(f"🔍 [DEBUG] calculate_final_probability_ft_over15 COMPLETED for fixture {fid}")
             
-            # Dodaj team statistics, H2H statistics, i form statistics
-            home_id = ((fx.get('teams') or {}).get('home') or {}).get('id')
-            away_id = ((fx.get('teams') or {}).get('away') or {}).get('id')
-            a, b = sorted([home_id, away_id])
-            h2h_key = f"{a}-{b}"
-            
-            # Team statistics (FT Over 1.5)
-            team1_percent, team1_hits, team1_total = _weighted_match_over15_ft_rate(team_last.get(home_id, []), lam=6.0, max_n=15)
-            team2_percent, team2_hits, team2_total = _weighted_match_over15_ft_rate(team_last.get(away_id, []), lam=6.0, max_n=15)
-            
-            # H2H statistics (FT Over 1.5)
-            h2h_percent, h2h_hits, h2h_total = h2h_ft_over15_stats(h2h_all.get(h2h_key, []))
-            
-            # Form statistics (mikro signali)
-            home_form = (micro_db_ft.get(home_id) or {}).get("home") or {}
-            away_form = (micro_db_ft.get(away_id) or {}).get("away") or {}
-            
-            def _pct_or_none(x, cap):
-                try:
-                    if x is None or cap in (None, 0):
-                        return None
-                    return round(min(100.0, max(0.0, (float(x) / float(cap)) * 100.0)), 2)
-                except Exception:
-                    return None
-            
-            SOT1H_CAP_LOC = float(globals().get("SOT1H_CAP", 6.0))
-            DA1H_CAP_LOC = float(globals().get("DA1H_CAP", 65.0))
-            
-            home_shots_pct = _pct_or_none(home_form.get("sot1h_for"), SOT1H_CAP_LOC)
-            away_shots_pct = _pct_or_none(away_form.get("sot1h_for"), SOT1H_CAP_LOC)
-            home_attacks_pct = _pct_or_none(home_form.get("da1h_for"), DA1H_CAP_LOC)
-            away_attacks_pct = _pct_or_none(away_form.get("da1h_for"), DA1H_CAP_LOC)
-            
-            form_vals = []
-            if home_shots_pct is not None and home_attacks_pct is not None:
-                form_vals.append((home_shots_pct + home_attacks_pct) / 2.0)
-            if away_shots_pct is not None and away_attacks_pct is not None:
-                form_vals.append((away_shots_pct + away_attacks_pct) / 2.0)
-            form_percent = round(sum(form_vals)/len(form_vals), 2) if form_vals else 0.0
-            
             rows.append({
                 "fixture_id": ((fx.get("fixture") or {}).get("id")),
                 "ft_over15_prob": float(round(p2p, 4)),
@@ -1407,31 +1367,6 @@ def compute_ft_over15_for_range(start_dt: datetime, end_dt: datetime, no_api: bo
                 "league": (fx.get("league") or {}).get("name"),
                 "team1": (fx.get("teams") or {}).get("home", {}).get("name"),
                 "team2": (fx.get("teams") or {}).get("away", {}).get("name"),
-                
-                # Team statistics
-                "team1_percent": round(team1_percent * 100, 2) if team1_percent is not None else None,
-                "team2_percent": round(team2_percent * 100, 2) if team2_percent is not None else None,
-                "team1_hits": team1_hits,
-                "team1_total": team1_total,
-                "team2_hits": team2_hits,
-                "team2_total": team2_total,
-                
-                # H2H statistics
-                "h2h_percent": round(h2h_percent * 100, 2) if h2h_percent is not None else None,
-                "h2h_hits": h2h_hits,
-                "h2h_total": h2h_total,
-                
-                # Form statistics
-                "home_shots_percent": home_shots_pct,
-                "home_attacks_percent": home_attacks_pct,
-                "home_shots_used": home_form.get('used_sot', 0),
-                "home_attacks_used": home_form.get('used_da', 0),
-                "away_shots_percent": away_shots_pct,
-                "away_attacks_percent": away_attacks_pct,
-                "away_shots_used": away_form.get('used_sot', 0),
-                "away_attacks_used": away_form.get('used_da', 0),
-                "form_percent": form_percent,
-                
                 "final_percent": round(p2p * 100, 2),
             })
             print(f"🔍 [DEBUG] Fixture {i+1} processed successfully")
@@ -1459,26 +1394,6 @@ def persist_ft_over15(rows: list[dict]):
             dbg.setdefault("team2", r.get("team2"))
         if r.get("kickoff"):
             dbg["kickoff"] = r["kickoff"]  # ISO string
-        
-        # Dodaj sve podatke koji se koriste u read_precomputed_results
-        dbg.setdefault("team1_percent", r.get("team1_percent"))
-        dbg.setdefault("team2_percent", r.get("team2_percent"))
-        dbg.setdefault("team1_hits", r.get("team1_hits"))
-        dbg.setdefault("team1_total", r.get("team1_total"))
-        dbg.setdefault("team2_hits", r.get("team2_hits"))
-        dbg.setdefault("team2_total", r.get("team2_total"))
-        dbg.setdefault("h2h_percent", r.get("h2h_percent"))
-        dbg.setdefault("h2h_hits", r.get("h2h_hits"))
-        dbg.setdefault("h2h_total", r.get("h2h_total"))
-        dbg.setdefault("home_shots_percent", r.get("home_shots_percent"))
-        dbg.setdefault("home_attacks_percent", r.get("home_attacks_percent"))
-        dbg.setdefault("home_shots_used", r.get("home_shots_used"))
-        dbg.setdefault("home_attacks_used", r.get("home_attacks_used"))
-        dbg.setdefault("away_shots_percent", r.get("away_shots_percent"))
-        dbg.setdefault("away_attacks_percent", r.get("away_attacks_percent"))
-        dbg.setdefault("away_shots_used", r.get("away_shots_used"))
-        dbg.setdefault("away_attacks_used", r.get("away_attacks_used"))
-        dbg.setdefault("form_percent", r.get("form_percent"))
         
         upsert_model_output(
             fixture_id=int(fid),
@@ -2142,6 +2057,38 @@ def calculate_final_probability_ft_over15(
 
     p_out = _calibrate(p_blend, temp=CALIBRATION_FT["TEMP"], floor=CALIBRATION_FT["FLOOR"], ceil=CALIBRATION_FT["CEIL"])
 
+    # Dodaj team statistics, H2H statistics, i form statistics
+    team1_percent = round(p_home_raw * 100, 2) if p_home_raw is not None else None
+    team2_percent = round(p_away_raw * 100, 2) if p_away_raw is not None else None
+    h2h_percent = round(p_h2h_raw * 100, 2) if p_h2h_raw is not None else None
+    
+    # Form statistics (mikro signali)
+    home_form = (micro_db_ft.get(home_id) or {}).get("home") or {}
+    away_form = (micro_db_ft.get(away_id) or {}).get("away") or {}
+    
+    def _pct_or_none(x, cap):
+        try:
+            if x is None or cap in (None, 0):
+                return None
+            return round(min(100.0, max(0.0, (float(x) / float(cap)) * 100.0)), 2)
+        except Exception:
+            return None
+    
+    SOT1H_CAP_LOC = float(globals().get("SOT1H_CAP", 6.0))
+    DA1H_CAP_LOC = float(globals().get("DA1H_CAP", 65.0))
+    
+    home_shots_pct = _pct_or_none(home_form.get("sot1h_for"), SOT1H_CAP_LOC)
+    away_shots_pct = _pct_or_none(away_form.get("sot1h_for"), SOT1H_CAP_LOC)
+    home_attacks_pct = _pct_or_none(home_form.get("da1h_for"), DA1H_CAP_LOC)
+    away_attacks_pct = _pct_or_none(away_form.get("da1h_for"), DA1H_CAP_LOC)
+    
+    form_vals = []
+    if home_shots_pct is not None and home_attacks_pct is not None:
+        form_vals.append((home_shots_pct + home_attacks_pct) / 2.0)
+    if away_shots_pct is not None and away_attacks_pct is not None:
+        form_vals.append((away_shots_pct + away_attacks_pct) / 2.0)
+    form_percent = round(sum(form_vals)/len(form_vals), 2) if form_vals else 0.0
+
     debug = {
         "p_prior": round(p_prior,3), "p_micro": round(p_micro,3), "w_micro": round(w_micro,2),
         "lam_home": dbg_h, "lam_away": dbg_a,
@@ -2153,7 +2100,31 @@ def calculate_final_probability_ft_over15(
         "kickoff": (fixture.get("fixture") or {}).get("date"),
         "league": (fixture.get("league") or {}).get("name"),
         "team1": (fixture.get("teams") or {}).get("home", {}).get("name"),
-        "team2": (fixture.get("teams") or {}).get("away", {}).get("name")
+        "team2": (fixture.get("teams") or {}).get("away", {}).get("name"),
+        
+        # Team statistics
+        "team1_percent": team1_percent,
+        "team2_percent": team2_percent,
+        "team1_hits": h_home,
+        "team1_total": w_home,
+        "team2_hits": h_away,
+        "team2_total": w_away,
+        
+        # H2H statistics
+        "h2h_percent": h2h_percent,
+        "h2h_hits": h_h2h,
+        "h2h_total": w_h2h,
+        
+        # Form statistics
+        "home_shots_percent": home_shots_pct,
+        "home_attacks_percent": home_attacks_pct,
+        "home_shots_used": home_form.get('used_sot', 0),
+        "home_attacks_used": home_form.get('used_da', 0),
+        "away_shots_percent": away_shots_pct,
+        "away_attacks_percent": away_attacks_pct,
+        "away_shots_used": away_form.get('used_sot', 0),
+        "away_attacks_used": away_form.get('used_da', 0),
+        "form_percent": form_percent,
     }
     return p_out, debug
 

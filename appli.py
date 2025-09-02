@@ -1815,7 +1815,21 @@ def _weighted_match_over15_ft_rate(matches, lam=6.0, max_n=15):
     return ((h/w) if w>0 else None, h, w)
 
 def _weighted_h2h_over15_ft_rate(h2h_matches, lam=5.0, max_n=10):
-    arr = sorted(h2h_matches or [], key=lambda m: (m.get('fixture') or {}).get('date',''), reverse=True)
+    # ISPRAVKA: Bezbedno rukovanje sa podacima koji mogu biti tuple-ovi ili dict-ovi
+    safe_matches = []
+    for m in (h2h_matches or []):
+        if isinstance(m, dict):
+            safe_matches.append(m)
+        elif isinstance(m, (list, tuple)):
+            # Pokušaj da konvertuješ tuple u dict
+            try:
+                converted = _coerce_fixture_row_to_api_dict(m)
+                if converted and isinstance(converted, dict):
+                    safe_matches.append(converted)
+            except Exception:
+                continue
+    
+    arr = sorted(safe_matches, key=lambda m: (m.get('fixture') or {}).get('date',''), reverse=True)
     h, w, _ = _weighted_counts(arr, _ft_total_ge2, lam, max_n)
     return ((h/w) if w>0 else None, h, w)
 
@@ -3922,7 +3936,21 @@ def _exp_w(i, lam=5.0):
 
 def _weighted_counts(matches, is_hit_fn, lam=5.0, max_n=15):
     """Vrati (weighted_hits, weight_sum, used_n) po recency eksponencijalnim težinama."""
-    arr = sorted(matches or [], key=lambda m: (m.get('fixture') or {}).get('date',''), reverse=True)[:max_n]
+    # ISPRAVKA: Bezbedno rukovanje sa podacima koji mogu biti tuple-ovi ili dict-ovi
+    safe_matches = []
+    for m in (matches or []):
+        if isinstance(m, dict):
+            safe_matches.append(m)
+        elif isinstance(m, (list, tuple)):
+            # Pokušaj da konvertuješ tuple u dict
+            try:
+                converted = _coerce_fixture_row_to_api_dict(m)
+                if converted and isinstance(converted, dict):
+                    safe_matches.append(converted)
+            except Exception:
+                continue
+    
+    arr = sorted(safe_matches, key=lambda m: (m.get('fixture') or {}).get('date',''), reverse=True)[:max_n]
     wsum = 0.0; hsum = 0.0; n = 0
     for i, m in enumerate(arr):
         w = _exp_w(i, lam)

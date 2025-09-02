@@ -1413,6 +1413,7 @@ def compute_league_baselines_ft(team_last_matches, stats_fn):
                 base[k] = global_base.get(k)
     return {"global": global_base, "leagues": leagues}
 
+
 def _league_base_ft_for_fixture(fixture, league_baselines_ft):
     lid = ((fixture.get('league') or {}).get('id'))
     base = None

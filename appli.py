@@ -1126,6 +1126,61 @@ def read_precomputed_results(from_dt: datetime, to_dt: datetime, fh, th, market:
             "form_percent": d.get("form_percent"),
 
             "final_percent": round(float(prob or 0) * 100.0, 2),
+            
+            # Micro signals - all parameters
+            "exp_sot_total": d.get("exp_sot_total"),
+            "exp_da_total": d.get("exp_da_total"),
+            "pos_edge": d.get("pos_edge"),
+            "effN_prior": d.get("effN_prior"),
+            "effN_micro": d.get("effN_micro"),
+            "liga_baseline": d.get("liga_baseline"),
+            
+            # Referee, weather, venue, lineups, injuries
+            "ref_adj": d.get("ref_adj"),
+            "weather_adj": d.get("weather_adj"),
+            "venue_adj": d.get("venue_adj"),
+            "lineup_adj": d.get("lineup_adj"),
+            "injuries_adj": d.get("injuries_adj"),
+            
+            # All micro features
+            "z_sot_home": d.get("z_sot_home"),
+            "z_sot_away": d.get("z_sot_away"),
+            "z_da_home": d.get("z_da_home"),
+            "z_da_away": d.get("z_da_away"),
+            "z_shots_home": d.get("z_shots_home"),
+            "z_shots_away": d.get("z_shots_away"),
+            "z_xg_home": d.get("z_xg_home"),
+            "z_xg_away": d.get("z_xg_away"),
+            "z_bigch_home": d.get("z_bigch_home"),
+            "z_bigch_away": d.get("z_bigch_away"),
+            "z_corn_home": d.get("z_corn_home"),
+            "z_corn_away": d.get("z_corn_away"),
+            "z_fk_home": d.get("z_fk_home"),
+            "z_fk_away": d.get("z_fk_away"),
+            "z_offs_home": d.get("z_offs_home"),
+            "z_offs_away": d.get("z_offs_away"),
+            "z_cross_home": d.get("z_cross_home"),
+            "z_cross_away": d.get("z_cross_away"),
+            "z_counter_home": d.get("z_counter_home"),
+            "z_counter_away": d.get("z_counter_away"),
+            "z_saves_home": d.get("z_saves_home"),
+            "z_saves_away": d.get("z_saves_away"),
+            "z_sib_home": d.get("z_sib_home"),
+            "z_sib_away": d.get("z_sib_away"),
+            "z_sob_home": d.get("z_sob_home"),
+            "z_sob_away": d.get("z_sob_away"),
+            "z_wood_home": d.get("z_wood_home"),
+            "z_wood_away": d.get("z_wood_away"),
+            
+            # Adjustments
+            "fin_adj": d.get("fin_adj"),
+            "leak_adj": d.get("leak_adj"),
+            "gk_adj": d.get("gk_adj"),
+            "rest_adj": d.get("rest_adj"),
+            "congest_adj": d.get("congest_adj"),
+            "att_adj": d.get("att_adj"),
+            "def_adj": d.get("def_adj"),
+            "tier_gap": d.get("tier_gap"),
         })
     return out
 
@@ -2130,6 +2185,61 @@ def calculate_final_probability_ft_over15(
         "away_shots_used": away_form.get('used_sot', 0),
         "away_attacks_used": away_form.get('used_da', 0),
         "form_percent": form_percent,
+        
+        # Micro signals - all parameters
+        "exp_sot_total": feats.get("exp_sotFT_home", 0) + feats.get("exp_sotFT_away", 0),
+        "exp_da_total": feats.get("exp_daFT_home", 0) + feats.get("exp_daFT_away", 0),
+        "pos_edge": feats.get("pos_edge", 0),
+        "effN_prior": (w_home or 0.0) + (w_away or 0.0) + effn_h2h,
+        "effN_micro": feats.get("effN_micro", 0),
+        "liga_baseline": m2p,
+        
+        # Referee, weather, venue, lineups, injuries
+        "ref_adj": extras.get("ref_adj", 0) if extras else 0,
+        "weather_adj": extras.get("weather_adj", 0) if extras else 0,
+        "venue_adj": extras.get("venue_adj", 0) if extras else 0,
+        "lineup_adj": extras.get("lineup_adj", 0) if extras else 0,
+        "injuries_adj": extras.get("injuries_adj", 0) if extras else 0,
+        
+        # All micro features
+        "z_sot_home": feats.get("z_sot_home", 0),
+        "z_sot_away": feats.get("z_sot_away", 0),
+        "z_da_home": feats.get("z_da_home", 0),
+        "z_da_away": feats.get("z_da_away", 0),
+        "z_shots_home": feats.get("z_shots_home", 0),
+        "z_shots_away": feats.get("z_shots_away", 0),
+        "z_xg_home": feats.get("z_xg_home", 0),
+        "z_xg_away": feats.get("z_xg_away", 0),
+        "z_bigch_home": feats.get("z_bigch_home", 0),
+        "z_bigch_away": feats.get("z_bigch_away", 0),
+        "z_corn_home": feats.get("z_corn_home", 0),
+        "z_corn_away": feats.get("z_corn_away", 0),
+        "z_fk_home": feats.get("z_fk_home", 0),
+        "z_fk_away": feats.get("z_fk_away", 0),
+        "z_offs_home": feats.get("z_offs_home", 0),
+        "z_offs_away": feats.get("z_offs_away", 0),
+        "z_cross_home": feats.get("z_cross_home", 0),
+        "z_cross_away": feats.get("z_cross_away", 0),
+        "z_counter_home": feats.get("z_counter_home", 0),
+        "z_counter_away": feats.get("z_counter_away", 0),
+        "z_saves_home": feats.get("z_saves_home", 0),
+        "z_saves_away": feats.get("z_saves_away", 0),
+        "z_sib_home": feats.get("z_sib_home", 0),
+        "z_sib_away": feats.get("z_sib_away", 0),
+        "z_sob_home": feats.get("z_sob_home", 0),
+        "z_sob_away": feats.get("z_sob_away", 0),
+        "z_wood_home": feats.get("z_wood_home", 0),
+        "z_wood_away": feats.get("z_wood_away", 0),
+        
+        # Adjustments
+        "fin_adj": feats.get("fin_adj", 0),
+        "leak_adj": feats.get("leak_adj", 0),
+        "gk_adj": feats.get("gk_adj", 0),
+        "rest_adj": feats.get("rest_adj", 0),
+        "congest_adj": feats.get("congest_adj", 0),
+        "att_adj": feats.get("att_adj", 0),
+        "def_adj": feats.get("def_adj", 0),
+        "tier_gap": feats.get("tier_gap", 0),
     }
     return p_out, debug
 
@@ -5924,32 +6034,12 @@ def analyze_fixtures(start_date: datetime, end_date: datetime, from_hour=None, t
             team2_percent, team2_hits, team2_total = team_1h_goal_stats(team_last_matches.get(away_id, []))
             h2h_percent,  h2h_hits,  h2h_total     = h2h_1h_goal_stats(h2h_results.get(h2h_key, []))
 
-        # (b) mikro forma za UI
-        home_form = (micro_db.get(home_id) or {}).get("home") or {}
-        away_form = (micro_db.get(away_id) or {}).get("away") or {}
-
-        def _pct_or_none(x, cap):
-            try:
-                if x is None or cap in (None, 0):
-                    return None
-                return round(min(100.0, max(0.0, (float(x) / float(cap)) * 100.0)), 2)
-            except Exception:
-                return None
-
-        SOT1H_CAP_LOC = float(globals().get("SOT1H_CAP", 6.0))   # per-team cap
-        DA1H_CAP_LOC  = float(globals().get("DA1H_CAP", 65.0))   # per-team cap
-
-        home_shots_pct   = _pct_or_none(home_form.get("sot1h_for"),  SOT1H_CAP_LOC)
-        away_shots_pct   = _pct_or_none(away_form.get("sot1h_for"),  SOT1H_CAP_LOC)
-        home_attacks_pct = _pct_or_none(home_form.get("da1h_for"),   DA1H_CAP_LOC)
-        away_attacks_pct = _pct_or_none(away_form.get("da1h_for"),   DA1H_CAP_LOC)
-
-        form_vals = []
-        if home_shots_pct is not None and home_attacks_pct is not None:
-            form_vals.append((home_shots_pct + home_attacks_pct) / 2.0)
-        if away_shots_pct is not None and away_attacks_pct is not None:
-            form_vals.append((away_shots_pct + away_attacks_pct) / 2.0)
-        form_percent = round(sum(form_vals)/len(form_vals), 2) if form_vals else 0.0
+        # (b) mikro forma za UI - koristi podatke iz debug objekta
+        home_shots_pct = r.get("home_shots_percent")
+        away_shots_pct = r.get("away_shots_percent")
+        home_attacks_pct = r.get("home_attacks_percent")
+        away_attacks_pct = r.get("away_attacks_percent")
+        form_percent = r.get("form_percent", 0.0)
 
         # (c) konačna vjerovatnoća (prosledi kvote po marketu)
         if market == "gg1h":

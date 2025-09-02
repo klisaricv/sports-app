@@ -3237,7 +3237,17 @@ def get_or_fetch_team_history(team_id: int, last_n: int = 30, force_refresh: boo
                 except: updated_at = now - timedelta(hours=CACHE_TTL_HOURS+1)
             if (now - updated_at) <= timedelta(hours=CACHE_TTL_HOURS) or no_api:
                 conn.close()
-                return json.loads(row["data"])[:last_n]
+                raw_data = json.loads(row["data"])[:last_n]
+                # ISPRAVKA: Osiguraj da su svi elementi dict-ovi
+                safe_data = []
+                for item in raw_data:
+                    if isinstance(item, dict):
+                        safe_data.append(item)
+                    elif isinstance(item, (list, tuple)):
+                        converted = _coerce_fixture_row_to_api_dict(item)
+                        if converted:
+                            safe_data.append(converted)
+                return safe_data
 
         cur.execute("""
             SELECT data, updated_at, last_n FROM team_history_cache
@@ -3252,7 +3262,17 @@ def get_or_fetch_team_history(team_id: int, last_n: int = 30, force_refresh: boo
             have_n = row2.get("last_n") or 0
             if have_n >= last_n and ((now - updated_at2) <= timedelta(hours=CACHE_TTL_HOURS) or no_api):
                 conn.close()
-                return json.loads(row2["data"])[:last_n]
+                raw_data = json.loads(row2["data"])[:last_n]
+                # ISPRAVKA: Osiguraj da su svi elementi dict-ovi
+                safe_data = []
+                for item in raw_data:
+                    if isinstance(item, dict):
+                        safe_data.append(item)
+                    elif isinstance(item, (list, tuple)):
+                        converted = _coerce_fixture_row_to_api_dict(item)
+                        if converted:
+                            safe_data.append(converted)
+                return safe_data
 
     if no_api:
         conn.close()

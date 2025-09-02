@@ -1035,14 +1035,14 @@ def read_precomputed_results(from_dt: datetime, to_dt: datetime, fh, th, market:
     cur  = conn.cursor()
 
     # Izvuci sve za dati market i kickoff u dt-opsegu
-    # kickoff je u debug_json JSON-u kao ISO string; kastujemo u DATETIME
+    # kickoff je u debug JSON-u kao ISO string; kastujemo u DATETIME
     cur.execute(f"""
-        SELECT fixture_id, prob, debug_json
+        SELECT fixture_id, prob, debug
         FROM model_outputs
         WHERE market=%s
           AND (
-                JSON_EXTRACT(debug_json, '$.kickoff') IS NOT NULL
-            AND CAST(JSON_UNQUOTE(JSON_EXTRACT(debug_json, '$.kickoff')) AS DATETIME) BETWEEN %s AND %s
+                JSON_EXTRACT(debug, '$.kickoff') IS NOT NULL
+            AND CAST(JSON_UNQUOTE(JSON_EXTRACT(debug, '$.kickoff')) AS DATETIME) BETWEEN %s AND %s
           )
     """, (market, f_utc, t_utc))
     rows = cur.fetchall()
@@ -2078,18 +2078,10 @@ DEBUG_FILTER = True
 FIXTURES_FETCH_SOURCE = "api"
 
 def _fetch_fixtures_api_for_day(d: date):
-    # raw fixtures za konkretan datum (UTC), sa league filtering-om
+    # raw fixtures za konkretan datum (UTC), bez filtera
     resp = rate_limited_request(f"{BASE_URL}/fixtures",
                                 params={"date": d.isoformat(), "timezone": "UTC"})
-    raw_fixtures = (resp or {}).get("response") or []
-    
-    # NOVO: Filtriraj po liga whitelist-u odmah nakon API poziva
-    valid_fixtures = [f for f in raw_fixtures if is_valid_competition(f)]
-    
-    if len(valid_fixtures) < len(raw_fixtures):
-        print(f"ℹ️ API League filtering za {d}: zadržano {len(valid_fixtures)}/{len(raw_fixtures)} fixtures")
-    
-    return valid_fixtures
+    return (resp or {}).get("response") or []
 
 def seed_day_into_db(d: date):
     """
@@ -4409,11 +4401,10 @@ def _coerce_fixture_row_to_api_dict(row) -> dict | None:
     return fx if isinstance(fx, dict) else None
 
 
-def get_fixtures_in_time_range(start_dt, end_dt, from_hour=None, to_hour=None, no_api: bool = True):
+def get_fixtures_in_time_range(start_dt, end_dt, no_api: bool = True):
     """
     Vraća listu API-like dict-ova (ne tuple/list redova), tako da ostatak koda
     (compute_* i analyze_*) bezbedno radi .get i ['fixture']['id'] itd.
-    DODANO: Filtrira po satima i liga whitelist-u.
     """
     conn = get_db_connection()
     try:
@@ -4427,16 +4418,6 @@ def get_fixtures_in_time_range(start_dt, end_dt, from_hour=None, to_hour=None, n
         for row in cur:
             fx = _coerce_fixture_row_to_api_dict(row)
             if fx and isinstance(fx, dict) and fx.get("fixture"):
-                # Primeni league filtering pre dodavanja u rezultat
-                if not is_valid_competition(fx):
-                    continue
-                
-                # Primeni time filtering ako je zadat
-                if from_hour is not None or to_hour is not None:
-                    fixture_date = (fx.get('fixture') or {}).get('date')
-                    if fixture_date and not is_fixture_in_range(fixture_date, start_dt, end_dt, from_hour, to_hour):
-                        continue
-                
                 fixtures.append(fx)
         return fixtures
     finally:
@@ -4625,22 +4606,10 @@ def store_fixture_data_in_db(fixtures):
       da bi `ON DUPLICATE KEY UPDATE` radio.
     - (Opcionalno) kolona `updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP
       ON UPDATE CURRENT_TIMESTAMP` – ako želiš automatsko osvežavanje.
-    DODANO: Filtrira fixtures po liga whitelist-u pre upisivanja.
     """
     fixtures = [f for f in (fixtures or []) if isinstance(f, dict)]
     if not fixtures:
         return 0
-    
-    # NOVO: Filtriraj po liga whitelist-u PRE upisivanja u bazu
-    valid_fixtures = [f for f in fixtures if is_valid_competition(f)]
-    if not valid_fixtures:
-        print(f"⚠️ Svi fixtures ({len(fixtures)}) su odbačeni zbog league filtering-a")
-        return 0
-    
-    if len(valid_fixtures) < len(fixtures):
-        print(f"ℹ️ League filtering: zadržano {len(valid_fixtures)}/{len(fixtures)} fixtures")
-    
-    fixtures = valid_fixtures
 
     affected = 0
     with DB_WRITE_LOCK:  # jedan “bulk” upis

@@ -72,6 +72,16 @@ function showLoader(title = "🚀 Preparing Analysis...") {
   overlay.style.visibility = "visible";
   overlay.style.opacity = "1";
   
+  console.log("🔍 [DEBUG] Loader styles applied:", {
+    zIndex: overlay.style.zIndex,
+    display: overlay.style.display,
+    visibility: overlay.style.visibility,
+    opacity: overlay.style.opacity
+  });
+  
+  // Force a reflow to ensure styles are applied
+  overlay.offsetHeight;
+  
   console.log("🔍 [DEBUG] loaderOverlay styles set:", {
     display: overlay.style.display,
     zIndex: overlay.style.zIndex,

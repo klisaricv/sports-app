@@ -2095,7 +2095,11 @@ def calculate_final_probability_ft_over15(
 
     # H2H prior
     a, b = sorted([home_id, away_id]); key = f"{a}-{b}"
-    h2h_percent, h_h2h, w_h2h = h2h_ft_over15_stats(h2h_results.get(key, []))
+    print(f"🔍 [DEBUG] calculate_final_probability_ft_over15 H2H key: {key}")
+    print(f"🔍 [DEBUG] calculate_final_probability_ft_over15 h2h_results keys: {list(h2h_results.keys())}")
+    h2h_matches = h2h_results.get(key, [])
+    print(f"🔍 [DEBUG] calculate_final_probability_ft_over15 h2h_matches for key {key}: {len(h2h_matches)} matches")
+    h2h_percent, h_h2h, w_h2h = h2h_ft_over15_stats(h2h_matches)
     p_h2h_raw = h2h_percent / 100.0 if h2h_percent is not None else None
     p_h2h = beta_shrunk_rate(h_h2h, w_h2h, m=m2p, tau=12.0) if p_h2h_raw is not None else m2p
     effn_h2h = (w_h2h or 0.0) * 0.4
@@ -3922,19 +3926,34 @@ def h2h_1h_over15_stats(h2h_matches):
 
 def h2h_ft_over15_stats(h2h_matches):
     """H2H FT Over 1.5 statistike"""
+    print(f"🔍 [DEBUG] h2h_ft_over15_stats called with {len(h2h_matches or [])} matches")
+    if h2h_matches:
+        print(f"🔍 [DEBUG] h2h_ft_over15_stats first match type: {type(h2h_matches[0])}")
+        print(f"🔍 [DEBUG] h2h_ft_over15_stats first match: {h2h_matches[0]}")
+    
     total = 0; hits = 0
-    for m in h2h_matches or []:
-        if _ft_total_ge2(m): hits += 1
+    for i, m in enumerate(h2h_matches or []):
+        print(f"🔍 [DEBUG] h2h_ft_over15_stats processing match {i+1}: {m}")
+        if _ft_total_ge2(m): 
+            hits += 1
+            print(f"🔍 [DEBUG] h2h_ft_over15_stats match {i+1} has >=2 goals")
+        else:
+            print(f"🔍 [DEBUG] h2h_ft_over15_stats match {i+1} has <2 goals")
         total += 1
     pct = round((hits/total)*100, 2) if total else 0.0
+    print(f"🔍 [DEBUG] h2h_ft_over15_stats result: {pct}% ({hits}/{total})")
     return pct, hits, total
 
 def _ft_total_ge2(m):
     """Proverava da li je FT total >= 2"""
+    print(f"🔍 [DEBUG] _ft_total_ge2 called with match: {m}")
     ft = ((m.get('score') or {}).get('fulltime') or {})
     h = ft.get('home') or 0
     a = ft.get('away') or 0
-    return (h + a) >= 2
+    total = h + a
+    result = total >= 2
+    print(f"🔍 [DEBUG] _ft_total_ge2 result: {h}+{a}={total} >= 2? {result}")
+    return result
 
 def _aggregate_team_micro(team_id, matches, get_stats_fn, context="all"):
     """

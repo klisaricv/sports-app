@@ -1301,39 +1301,77 @@ def compute_ft_over15_for_range(start_dt: datetime, end_dt: datetime, no_api: bo
                                 preloaded_team_last: dict[int, list] | None = None,
                                 preloaded_h2h: dict[str, list] | None = None,
                                 preloaded_extras: dict[int, dict] | None = None):
+    print(f"🔍 [DEBUG] compute_ft_over15_for_range START")
     fixtures = get_fixtures_in_time_range(start_dt, end_dt, no_api=no_api)
+    print(f"🔍 [DEBUG] get_fixtures_in_time_range returned {len(fixtures or [])} fixtures")
     if not fixtures:
         return []
 
+    print(f"🔍 [DEBUG] fetch_last_matches_for_teams START")
     team_last = dict(preloaded_team_last or {}) or fetch_last_matches_for_teams(fixtures, last_n=DAY_PREFETCH_LAST_N, no_api=no_api)
+    print(f"🔍 [DEBUG] fetch_last_matches_for_teams returned {len(team_last or {})} teams")
 
-    league_bases_ft   = compute_league_baselines_ft(team_last, stats_fn=get_fixture_statistics_cached_only)
-    team_profiles_ft  = compute_team_profiles_ft(team_last, stats_fn=get_fixture_statistics_cached_only)
+    print(f"🔍 [DEBUG] compute_league_baselines_ft START")
+    league_bases_ft = compute_league_baselines_ft(team_last, stats_fn=get_fixture_statistics_cached_only)
+    print(f"🔍 [DEBUG] compute_league_baselines_ft COMPLETED")
+    
+    print(f"🔍 [DEBUG] compute_team_profiles_ft START")
+    team_profiles_ft = compute_team_profiles_ft(team_last, stats_fn=get_fixture_statistics_cached_only)
+    print(f"🔍 [DEBUG] compute_team_profiles_ft COMPLETED")
+    
+    print(f"🔍 [DEBUG] compute_team_strengths_ft START")
     team_strengths_ft = compute_team_strengths_ft(team_last, m_global=(league_bases_ft["global"]["m2p"]*0.9 + 0.25))
-    micro_db_ft       = build_micro_db_ft(team_last, stats_fn=get_fixture_statistics_cached_only)
+    print(f"🔍 [DEBUG] compute_team_strengths_ft COMPLETED")
+    
+    print(f"🔍 [DEBUG] build_micro_db_ft START")
+    micro_db_ft = build_micro_db_ft(team_last, stats_fn=get_fixture_statistics_cached_only)
+    print(f"🔍 [DEBUG] build_micro_db_ft COMPLETED")
 
+    print(f"🔍 [DEBUG] fetch_h2h_matches START")
     h2h_all = dict(preloaded_h2h or {}) or fetch_h2h_matches(fixtures, last_n=DAY_PREFETCH_H2H_N, no_api=no_api)
+    print(f"🔍 [DEBUG] fetch_h2h_matches returned {len(h2h_all or {})} h2h pairs")
 
+    print(f"🔍 [DEBUG] Processing {len(fixtures or [])} fixtures START")
     rows = []
-    for fx in fixtures or []:
-        if not isinstance(fx, dict):
-            # pokušaj da ga “coerce-uješ” (ako je zalutao tuple/list)
-            fx = _coerce_fixture_row_to_api_dict(fx) or {}
-        fid = int(((fx.get('fixture') or {}).get('id') or 0))
-        if not fid:
-            # preskoči oštećene unose
-            continue
-        extras = build_extras_for_fixture(fx, no_api=True)
-        p2p, dbg = calculate_final_probability_ft_over15(
-            fx, team_last, h2h_all,
-            micro_db_ft, league_bases_ft, team_strengths_ft, team_profiles_ft,
-            extras=extras, no_api=no_api, market_odds_over15_ft=None
-        )
-        rows.append({
-            "fixture_id": ((fx.get("fixture") or {}).get("id")),
-            "ft_over15_prob": float(round(p2p, 4)),
-            "ft_over15_dbg": dbg,
-        })
+    for i, fx in enumerate(fixtures or []):
+        try:
+            print(f"🔍 [DEBUG] Processing fixture {i+1}/{len(fixtures or [])}")
+            if not isinstance(fx, dict):
+                print(f"🔍 [DEBUG] Fixture {i+1} is not dict, type: {type(fx)}")
+                # pokušaj da ga "coerce-uješ" (ako je zalutao tuple/list)
+                fx = _coerce_fixture_row_to_api_dict(fx) or {}
+                print(f"🔍 [DEBUG] After coercion, type: {type(fx)}")
+            fid = int(((fx.get('fixture') or {}).get('id') or 0))
+            if not fid:
+                print(f"🔍 [DEBUG] Fixture {i+1} has no valid ID, skipping")
+                continue
+            print(f"🔍 [DEBUG] Fixture {i+1} ID: {fid}")
+            
+            print(f"🔍 [DEBUG] build_extras_for_fixture START for fixture {fid}")
+            extras = build_extras_for_fixture(fx, no_api=True)
+            print(f"🔍 [DEBUG] build_extras_for_fixture COMPLETED for fixture {fid}")
+            
+            print(f"🔍 [DEBUG] calculate_final_probability_ft_over15 START for fixture {fid}")
+            p2p, dbg = calculate_final_probability_ft_over15(
+                fx, team_last, h2h_all,
+                micro_db_ft, league_bases_ft, team_strengths_ft, team_profiles_ft,
+                extras=extras, no_api=no_api, market_odds_over15_ft=None
+            )
+            print(f"🔍 [DEBUG] calculate_final_probability_ft_over15 COMPLETED for fixture {fid}")
+            
+            rows.append({
+                "fixture_id": ((fx.get("fixture") or {}).get("id")),
+                "ft_over15_prob": float(round(p2p, 4)),
+                "ft_over15_dbg": dbg,
+            })
+            print(f"🔍 [DEBUG] Fixture {i+1} processed successfully")
+        except Exception as e:
+            print(f"❌ [ERROR] Exception in fixture {i+1}: {str(e)}")
+            print(f"❌ [ERROR] Exception type: {type(e)}")
+            import traceback
+            print(f"❌ [ERROR] Traceback: {traceback.format_exc()}")
+            raise e
+    print(f"🔍 [DEBUG] compute_ft_over15_for_range COMPLETED, returning {len(rows)} rows")
     return rows
 
 def persist_ft_over15(rows: list[dict]):

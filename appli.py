@@ -1008,7 +1008,7 @@ def purge_old_analyses():
     """Brisanje analiza starijih od ANALYSIS_TTL_HOURS iz model_outputs i analysis_cache."""
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("DELETE FROM model_outputs WHERE created_at < DATE_SUB(NOW(), INTERVAL %s HOUR)", (ANALYSIS_TTL_HOURS,))
+    cur.execute("DELETE FROM model_outputs WHERE updated_at < DATE_SUB(NOW(), INTERVAL %s HOUR)", (ANALYSIS_TTL_HOURS,))
     # analysis_cache: brišemo po created_at i/ili expires_at
     cur.execute("""
         DELETE FROM analysis_cache
@@ -6034,12 +6034,32 @@ def analyze_fixtures(start_date: datetime, end_date: datetime, from_hour=None, t
             team2_percent, team2_hits, team2_total = team_1h_goal_stats(team_last_matches.get(away_id, []))
             h2h_percent,  h2h_hits,  h2h_total     = h2h_1h_goal_stats(h2h_results.get(h2h_key, []))
 
-        # (b) mikro forma za UI - koristi podatke iz debug objekta
-        home_shots_pct = r.get("home_shots_percent")
-        away_shots_pct = r.get("away_shots_percent")
-        home_attacks_pct = r.get("home_attacks_percent")
-        away_attacks_pct = r.get("away_attacks_percent")
-        form_percent = r.get("form_percent", 0.0)
+        # (b) mikro forma za UI
+        home_form = (micro_db.get(home_id) or {}).get("home") or {}
+        away_form = (micro_db.get(away_id) or {}).get("away") or {}
+
+        def _pct_or_none(x, cap):
+            try:
+                if x is None or cap in (None, 0):
+                    return None
+                return round(min(100.0, max(0.0, (float(x) / float(cap)) * 100.0)), 2)
+            except Exception:
+                return None
+
+        SOT1H_CAP_LOC = float(globals().get("SOT1H_CAP", 6.0))   # per-team cap
+        DA1H_CAP_LOC  = float(globals().get("DA1H_CAP", 65.0))   # per-team cap
+
+        home_shots_pct   = _pct_or_none(home_form.get("sot1h_for"),  SOT1H_CAP_LOC)
+        away_shots_pct   = _pct_or_none(away_form.get("sot1h_for"),  SOT1H_CAP_LOC)
+        home_attacks_pct = _pct_or_none(home_form.get("da1h_for"),   DA1H_CAP_LOC)
+        away_attacks_pct = _pct_or_none(away_form.get("da1h_for"),   DA1H_CAP_LOC)
+
+        form_vals = []
+        if home_shots_pct is not None and home_attacks_pct is not None:
+            form_vals.append((home_shots_pct + home_attacks_pct) / 2.0)
+        if away_shots_pct is not None and away_attacks_pct is not None:
+            form_vals.append((away_shots_pct + away_attacks_pct) / 2.0)
+        form_percent = round(sum(form_vals)/len(form_vals), 2) if form_vals else 0.0
 
         # (c) konačna vjerovatnoća (prosledi kvote po marketu)
         if market == "gg1h":

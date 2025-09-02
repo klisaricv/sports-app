@@ -1301,9 +1301,15 @@ def compute_ft_over15_for_range(start_dt: datetime, end_dt: datetime, no_api: bo
     h2h_all = dict(preloaded_h2h or {}) or fetch_h2h_matches(fixtures, last_n=DAY_PREFETCH_H2H_N, no_api=no_api)
 
     rows = []
-    for fx in fixtures:
-        fid = int((fx.get('fixture') or {}).get('id'))
-        extras = (preloaded_extras or {}).get(fid) or build_extras_for_fixture(fx, no_api=True)
+    for fx in fixtures or []:
+        if not isinstance(fx, dict):
+            # pokušaj da ga “coerce-uješ” (ako je zalutao tuple/list)
+            fx = _coerce_fixture_row_to_api_dict(fx) or {}
+        fid = int(((fx.get('fixture') or {}).get('id') or 0))
+        if not fid:
+            # preskoči oštećene unose
+            continue
+        extras = build_extras_for_fixture(fx, no_api=True)
         p2p, dbg = calculate_final_probability_ft_over15(
             fx, team_last, h2h_all,
             micro_db_ft, league_bases_ft, team_strengths_ft, team_profiles_ft,
@@ -4357,36 +4363,68 @@ def combine_prior_with_micro(prior_p, p_micro, coverage):
     return _inv_logit(final_logit), w
 
 # --------------------------- DATA FETCHING ---------------------------
-def get_fixtures_in_time_range(start_dt: datetime, end_dt: datetime, from_hour=None, to_hour=None, no_api: bool = True):
+def _coerce_fixture_row_to_api_dict(row) -> dict | None:
     """
-    DB-ONLY: čita iz fixtures tabele (koju je seed popunio). Nema poziva ka API-ju.
+    Prihvata red iz MySQL-a (dict ili tuple) i vraća API-like dict:
+      { 'fixture': {...}, 'league': {...}, 'teams': {'home': {...}, 'away': {...}}, ... }
+    Ako je u bazi čuvano kompletno JSON polje 'fixture_json', radi json.loads na njemu.
     """
-    global REJECTED_COMP_COUNTER, FIXTURES_FETCH_SOURCE
-    REJECTED_COMP_COUNTER = {}
+    # 1) ako je već dict sa ključevima 'fixture'/'league' – vrati direktno
+    if isinstance(row, dict) and ("fixture" in row or "league" in row or "teams" in row):
+        return row
 
-    raw_db = _read_fixtures_from_db(start_dt, end_dt)
-    fixtures = []
-    cut_time = 0
-    cut_comp = 0
-    for match in raw_db:
-        ds = (match.get("fixture") or {}).get("date")
-        if not ds:
-            continue
-        if not is_fixture_in_range(ds, start_dt, end_dt, from_hour, to_hour):
-            cut_time += 1
-            continue
-        ok, reason = is_valid_competition_with_reason(match)
-        if not ok:
-            cut_comp += 1
-            _bump_reject_counter(match, reason)
-            continue
-        fixtures.append(match)
+    # 2) ako je dict red iz MySQL-a sa poljem fixture_json
+    payload = None
+    if isinstance(row, dict):
+        payload = row.get("fixture_json")
+    elif isinstance(row, (list, tuple)):
+        # pretpostavljamo da je fixture_json na indeksu 6 po SELECT-u iz tvoje tabele
+        # (id, date, league_id, team_home_id, team_away_id, stats_json, fixture_json)
+        try:
+            payload = row[6]
+        except Exception:
+            payload = None
 
-    print(f"🗃️ DB fixtures: {len(fixtures)} (time_reject={cut_time}, comp_reject={cut_comp})")
-    FIXTURES_FETCH_SOURCE = "db"
-    return fixtures
+    if payload is None:
+        return None
+
+    if isinstance(payload, (bytes, bytearray)):
+        payload = payload.decode("utf-8", errors="ignore")
+
+    try:
+        fx = json.loads(payload) if isinstance(payload, str) else payload
+    except Exception:
+        return None
+
+    # konačna provera
+    return fx if isinstance(fx, dict) else None
 
 
+def get_fixtures_in_time_range(start_dt, end_dt, no_api: bool = True):
+    """
+    Vraća listu API-like dict-ova (ne tuple/list redova), tako da ostatak koda
+    (compute_* i analyze_*) bezbedno radi .get i ['fixture']['id'] itd.
+    """
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor(dictionary=True)  # dict cursor
+        cur.execute(
+            "SELECT id, date, league_id, team_home_id, team_away_id, stats_json, fixture_json "
+            "FROM fixtures WHERE date BETWEEN %s AND %s",
+            (start_dt, end_dt)
+        )
+        fixtures: list[dict] = []
+        for row in cur:
+            fx = _coerce_fixture_row_to_api_dict(row)
+            if fx and isinstance(fx, dict) and fx.get("fixture"):
+                fixtures.append(fx)
+        return fixtures
+    finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
+        conn.close()
 
 # ---------------------------- ANALYTICS -----------------------------
 def fetch_last_matches_for_teams(fixtures, last_n=30, no_api: bool = False):
@@ -4513,7 +4551,7 @@ def prewarm_extras_for_fixtures(fixtures, *, include_odds=True, include_team_sta
 
 def prepare_inputs_for_range(start_dt: datetime, end_dt: datetime) -> dict:
     """Vrati dict sa preloaded mapama: team_last, h2h, extras (DB-only nakon prewarm-a)."""
-    fixtures = get_fixtures_in_time_range(start_dt, end_dt, no_api=True) or []
+    fixtures = [fx for fx in (get_fixtures_in_time_range(start_dt, end_dt, no_api=True) or []) if isinstance(fx, dict) and fx.get('fixture')]
     team_last = fetch_last_matches_for_teams(fixtures, last_n=DAY_PREFETCH_LAST_N, no_api=True)
     h2h_all   = fetch_h2h_matches(fixtures, last_n=DAY_PREFETCH_H2H_N, no_api=True)
     extras    = build_extras_map_for_fixtures(fixtures)
@@ -5479,7 +5517,11 @@ def analyze_fixtures(start_date: datetime, end_date: datetime, from_hour=None, t
         a, b = sorted([home_id, away_id])
         h2h_key = f"{a}-{b}"
         # EXTRAS (ref/venue/weather/lineups/injuries)
-        fid = int((fixture.get('fixture') or {}).get('id'))
+        if not isinstance(fixture, dict):
+            fixture = _coerce_fixture_row_to_api_dict(fixture) or {}
+        fid = int(((fixture.get('fixture') or {}).get('id') or 0))
+        if not fid:
+            continue
         extras = (preloaded_extras or {}).get(fid) or build_extras_for_fixture(fixture, no_api=no_api)
 
         # (a) istorijske % po marketu

@@ -1152,8 +1152,14 @@ def run_prepare_job(job_id: str, day_iso: str, prewarm: bool = True, *_args, **_
             seed_day_into_db(d_local)
             seeded = True
 
-        fixtures = _list_fixtures_for_day(d_local)
-        fixtures = [f for f in (fixtures or []) if isinstance(f, dict)]
+        fixtures = _list_fixtures_for_day(d_local) or []
+
+        # ⚠️ Defanzivno: uzmi samo dict-ove, odbaci liste i None
+        fixtures = [f for f in fixtures if isinstance(f, dict)]
+
+        if not fixtures:
+            print(f"[Prepare] Nema validnih fixture-a za {d_local}")
+            return
 
         team_ids = {((f.get("teams") or {}).get("home") or {}).get("id") for f in fixtures} | \
                    {((f.get("teams") or {}).get("away") or {}).get("id") for f in fixtures}

@@ -4317,8 +4317,13 @@ def _lineups_adj(lineups: list | None) -> tuple[float, dict]:
         starters = 0
         fw = 0
         for team in lineups:
-            sx = (team.get("startXI") or []) if isinstance(team, dict) else []
+            # ISPRAVKA: Bezbedno rukovanje sa podacima koji mogu biti tuple-ovi ili dict-ovi
+            if not isinstance(team, dict):
+                continue
+            sx = (team.get("startXI") or [])
             for p in sx:
+                if not isinstance(p, dict):
+                    continue
                 pos = ((p.get("player") or {}).get("pos") or (p.get("player") or {}).get("position") or "" ).upper()
                 grid = (p.get("player") or {}).get("grid") or ""
                 starters += 1

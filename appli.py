@@ -931,6 +931,19 @@ def _aggregate_team_micro_ft(team_id, matches, get_stats_fn, context="all"):
     def _inc(d, key): d[key] = d.get(key, 0) + 1
 
     for m in matches or []:
+        # ISPRAVKA: Bezbedno rukovanje sa podacima koji mogu biti tuple-ovi ili dict-ovi
+        if not isinstance(m, dict):
+            if isinstance(m, (list, tuple)):
+                try:
+                    converted = _coerce_fixture_row_to_api_dict(m)
+                    if converted and isinstance(converted, dict):
+                        m = converted
+                    else:
+                        continue
+                except Exception:
+                    continue
+            else:
+                continue
         fix = (m.get('fixture') or {})
         if context in ("home","away"):
             is_home = ((m.get('teams') or {}).get('home') or {}).get('id') == team_id
@@ -1378,7 +1391,19 @@ def compute_league_baselines_ft(team_last_matches, stats_fn):
         return (sot, da)
 
     for team_id, matches in (team_last_matches or {}).items():
-        for m in matches or []:
+        # ISPRAVKA: Bezbedno rukovanje sa podacima koji mogu biti tuple-ovi ili dict-ovi
+        safe_matches = []
+        for m in (matches or []):
+            if isinstance(m, dict):
+                safe_matches.append(m)
+            elif isinstance(m, (list, tuple)):
+                try:
+                    converted = _coerce_fixture_row_to_api_dict(m)
+                    if converted and isinstance(converted, dict):
+                        safe_matches.append(converted)
+                except Exception:
+                    continue
+        for m in safe_matches:
             fid = ((m.get('fixture') or {}).get('id'))
             if not fid or fid in seen: continue
             seen.add(fid)
@@ -1437,7 +1462,19 @@ def _league_base_ft_for_fixture(fixture, league_baselines_ft):
 def compute_team_profiles_ft(team_last_matches, stats_fn, lam=6.0, max_n=15):
     profiles = {}
     for team_id, matches in (team_last_matches or {}).items():
-        arr = sorted(matches or [], key=lambda m: (m.get('fixture') or {}).get('date',''), reverse=True)[:max_n]
+        # ISPRAVKA: Bezbedno rukovanje sa podacima koji mogu biti tuple-ovi ili dict-ovi
+        safe_matches = []
+        for m in (matches or []):
+            if isinstance(m, dict):
+                safe_matches.append(m)
+            elif isinstance(m, (list, tuple)):
+                try:
+                    converted = _coerce_fixture_row_to_api_dict(m)
+                    if converted and isinstance(converted, dict):
+                        safe_matches.append(converted)
+                except Exception:
+                    continue
+        arr = sorted(safe_matches, key=lambda m: (m.get('fixture') or {}).get('date',''), reverse=True)[:max_n]
         w_sot_for = w_sot_alw = w_pos = 0.0
         sum_sot_for = sum_sot_alw = sum_pos = 0.0
         g_for_w = g_alw_w = 0.0
@@ -1665,8 +1702,20 @@ def matchup_features_enhanced_ft(fixture, team_profiles_ft, league_baselines_ft,
 def compute_team_strengths_ft(team_last_matches, lam=6.0, max_n=15, m_global=0.70):
     strengths = {}
     for team_id, matches in (team_last_matches or {}).items():
-        h_sc, w_sc, _ = _weighted_counts(matches, lambda m: _team_scored_ft(m, team_id), lam, max_n)
-        h_con, w_con, _ = _weighted_counts(matches, lambda m: _team_conceded_ft(m, team_id), lam, max_n)
+        # ISPRAVKA: Bezbedno rukovanje sa podacima koji mogu biti tuple-ovi ili dict-ovi
+        safe_matches = []
+        for m in (matches or []):
+            if isinstance(m, dict):
+                safe_matches.append(m)
+            elif isinstance(m, (list, tuple)):
+                try:
+                    converted = _coerce_fixture_row_to_api_dict(m)
+                    if converted and isinstance(converted, dict):
+                        safe_matches.append(converted)
+                except Exception:
+                    continue
+        h_sc, w_sc, _ = _weighted_counts(safe_matches, lambda m: _team_scored_ft(m, team_id), lam, max_n)
+        h_con, w_con, _ = _weighted_counts(safe_matches, lambda m: _team_conceded_ft(m, team_id), lam, max_n)
         att = beta_shrunk_rate(h_sc, w_sc, m=m_global, tau=10.0)
         def_allow = beta_shrunk_rate(h_con, w_con, m=m_global, tau=10.0)
         strengths[team_id] = {"att": att, "def_allow": def_allow, "eff_n": (w_sc or 0)+(w_con or 0)}
@@ -4067,6 +4116,20 @@ def compute_league_baselines(team_last_matches, stats_fn, max_scan_per_league=15
 
     for team_id, matches in (team_last_matches or {}).items():
         for m in matches or []:
+            # ISPRAVKA: Bezbedno rukovanje sa podacima koji mogu biti tuple-ovi ili dict-ovi
+            if not isinstance(m, dict):
+                if isinstance(m, (list, tuple)):
+                    try:
+                        converted = _coerce_fixture_row_to_api_dict(m)
+                        if converted and isinstance(converted, dict):
+                            m = converted
+                        else:
+                            continue
+                    except Exception:
+                        continue
+                else:
+                    continue
+                    
             fid = ((m.get('fixture') or {}).get('id'))
             if not fid or fid in seen:
                 continue
@@ -4128,8 +4191,20 @@ def compute_team_strengths(team_last_matches, lam=5.0, max_n=15, m_global=0.55):
     """Napad (1H score >=1) i def_allow (1H conceded >=1) po timu, EB shrink na m_global."""
     strengths = {}
     for team_id, matches in (team_last_matches or {}).items():
-        h_sc, w_sc, n_sc = _weighted_counts(matches, lambda m: _team_scored_1h(m, team_id), lam, max_n)
-        h_con, w_con, n_con = _weighted_counts(matches, lambda m: _team_conceded_1h(m, team_id), lam, max_n)
+        # ISPRAVKA: Bezbedno rukovanje sa podacima koji mogu biti tuple-ovi ili dict-ovi
+        safe_matches = []
+        for m in (matches or []):
+            if isinstance(m, dict):
+                safe_matches.append(m)
+            elif isinstance(m, (list, tuple)):
+                try:
+                    converted = _coerce_fixture_row_to_api_dict(m)
+                    if converted and isinstance(converted, dict):
+                        safe_matches.append(converted)
+                except Exception:
+                    continue
+        h_sc, w_sc, n_sc = _weighted_counts(safe_matches, lambda m: _team_scored_1h(m, team_id), lam, max_n)
+        h_con, w_con, n_con = _weighted_counts(safe_matches, lambda m: _team_conceded_1h(m, team_id), lam, max_n)
         att = beta_shrunk_rate(h_sc, w_sc, m=m_global, tau=8.0)
         def_allow = beta_shrunk_rate(h_con, w_con, m=m_global, tau=8.0)
         strengths[team_id] = {"att": att, "def_allow": def_allow, "eff_n": (w_sc or 0)+(w_con or 0)}

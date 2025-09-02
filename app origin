@@ -456,25 +456,15 @@ function setDefaultDatesIfEmpty() {
   const fromEl = document.getElementById("fromDate");
   const toEl = document.getElementById("toDate");
   if (!fromEl || !toEl) return;
-  
-  const today = new Date();
+  const now = new Date();
+  const plus4h = new Date(now.getTime() + 4 * 3600 * 1000);
   const pad = (n) => String(n).padStart(2, "0");
-  
-  // Set to 8AM today
-  const fromDate = new Date(today);
-  fromDate.setHours(8, 0, 0, 0);
-  
-  // Set to 22PM (10PM) today
-  const toDate = new Date(today);
-  toDate.setHours(22, 0, 0, 0);
-  
   const toLocal = (d) =>
     `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
       d.getHours()
     )}:${pad(d.getMinutes())}`;
-    
-  if (!fromEl.value) fromEl.value = toLocal(fromDate);
-  if (!toEl.value) toEl.value = toLocal(toDate);
+  if (!fromEl.value) fromEl.value = toLocal(now);
+  if (!toEl.value) toEl.value = toLocal(plus4h);
 }
 
 function localYMD(d) {

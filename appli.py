@@ -1167,6 +1167,14 @@ def run_prepare_job(job_id: str, day_iso: str, prewarm: bool = True, *_args, **_
             x, y = sorted([h, a])
             pairs.add((x, y))
 
+        # (novo) kompletno pre-warm extras (referee, weather, venue, lineups, injuries, odds, team_stats)
+        if prewarm:
+            update_prepare_job(job_id, progress=12, detail="extras prewarm")
+            try:
+                prewarm_extras_for_fixtures(fixtures, include_odds=True, include_team_stats=True)
+            except Exception as e:
+                print("prewarm_extras failed:", e)
+
         # 3) History/H2H – dopuni samo nedostajuće
         update_prepare_job(job_id, progress=15, detail="history/h2h")
         hist_missing = _history_missing(team_ids, DAY_PREFETCH_LAST_N, CACHE_TTL_HOURS)
@@ -1196,15 +1204,28 @@ def run_prepare_job(job_id: str, day_iso: str, prewarm: bool = True, *_args, **_
         market_summaries = {}
         rows_by_market = {}
 
+        # precompute sve ulaze (DB-only, jer smo uradili prewarm/fetch u keš)
+        preload = prepare_inputs_for_range(start_dt, end_dt)
+        pre_tl  = preload["team_last"]
+        pre_h2h = preload["h2h"]
+        pre_ex  = preload["extras"]
+
         update_prepare_job(job_id, progress=45, detail="ft_over15 compute")
-        rows_ft = compute_ft_over15_for_range(start_dt, end_dt, no_api=False)
+        rows_ft = compute_ft_over15_for_range(
+            start_dt, end_dt, no_api=True,
+            preloaded_team_last=pre_tl, preloaded_h2h=pre_h2h, preloaded_extras=pre_ex
+        )
         persist_ft_over15(rows_ft)
         market_summaries["ft_over15"] = len(rows_ft or [])
         rows_by_market["ft_over15"] = rows_ft or []
 
         for mk, prog in [("1h_over05", 65), ("1h_over15", 80), ("gg1h", 90)]:
             update_prepare_job(job_id, progress=prog, detail=f"{mk} compute")
-            rows = analyze_fixtures(start_dt, end_dt, None, None, mk, no_api=False) or []
+            rows = analyze_fixtures(
+                start_dt, end_dt, None, None, mk,
+                no_api=True,  # DB-only
+                preloaded_team_last=pre_tl, preloaded_h2h=pre_h2h, preloaded_extras=pre_ex
+            ) or []
             persist_market_outputs_from_results(mk, rows)
             market_summaries[mk] = len(rows)
             rows_by_market[mk] = rows
@@ -1262,23 +1283,27 @@ def build_micro_db_ft(team_last_matches, stats_fn):
 
 # ---------- FT Over 1.5: batch compute + persist ----------
 
-def compute_ft_over15_for_range(start_dt: datetime, end_dt: datetime, no_api: bool = True):
+def compute_ft_over15_for_range(start_dt: datetime, end_dt: datetime, no_api: bool = True,
+                                preloaded_team_last: dict[int, list] | None = None,
+                                preloaded_h2h: dict[str, list] | None = None,
+                                preloaded_extras: dict[int, dict] | None = None):
     fixtures = get_fixtures_in_time_range(start_dt, end_dt, no_api=no_api)
     if not fixtures:
         return []
 
-    team_last = fetch_last_matches_for_teams(fixtures, last_n=DAY_PREFETCH_LAST_N, no_api=no_api)
+    team_last = dict(preloaded_team_last or {}) or fetch_last_matches_for_teams(fixtures, last_n=DAY_PREFETCH_LAST_N, no_api=no_api)
 
     league_bases_ft   = compute_league_baselines_ft(team_last, stats_fn=get_fixture_statistics_cached_only)
     team_profiles_ft  = compute_team_profiles_ft(team_last, stats_fn=get_fixture_statistics_cached_only)
     team_strengths_ft = compute_team_strengths_ft(team_last, m_global=(league_bases_ft["global"]["m2p"]*0.9 + 0.25))
     micro_db_ft       = build_micro_db_ft(team_last, stats_fn=get_fixture_statistics_cached_only)
 
-    h2h_all = fetch_h2h_matches(fixtures, last_n=DAY_PREFETCH_H2H_N, no_api=no_api)
+    h2h_all = dict(preloaded_h2h or {}) or fetch_h2h_matches(fixtures, last_n=DAY_PREFETCH_H2H_N, no_api=no_api)
 
     rows = []
     for fx in fixtures:
-        extras = build_extras_for_fixture(fx, no_api=True)  # ref/weather/venue/lineups/inj adj (neutralno)
+        fid = int((fx.get('fixture') or {}).get('id'))
+        extras = (preloaded_extras or {}).get(fid) or build_extras_for_fixture(fx, no_api=True)
         p2p, dbg = calculate_final_probability_ft_over15(
             fx, team_last, h2h_all,
             micro_db_ft, league_bases_ft, team_strengths_ft, team_profiles_ft,
@@ -4393,6 +4418,121 @@ def fetch_h2h_matches(fixtures, last_n=10, no_api: bool = False):
         time.sleep(0.1)
     return h2h_results
 
+def prewarm_extras_for_fixtures(fixtures, *, include_odds=True, include_team_stats=True) -> dict:
+    """
+    Za svaku utakmicu:
+      - fixtures full (referee + weather u fixture_json)
+      - venue
+      - lineups
+      - injuries
+      - team league stats (ako traženo)
+      - odds 1H i FT (ako traženo)
+    Sve se upisuje u postojeće *cache* tabele (MySQL). Vraća mali summary broja “hitova”.
+    """
+    warmed = {
+        "fixture_full": 0, "venue": 0, "lineups": 0, "injuries": 0,
+        "referee": 0, "team_stats": 0, "odds": 0
+    }
+    seen_ref = set()
+    for fx in fixtures or []:
+        fid    = ((fx.get("fixture") or {}).get("id"))
+        season = ((fx.get("league")  or {}).get("season"))
+        lid    = ((fx.get("league")  or {}).get("id"))
+        hid    = ((fx.get("teams")   or {}).get("home") or {}).get("id")
+        aid    = ((fx.get("teams")   or {}).get("away") or {}).get("id")
+        if not fid: 
+            continue
+
+        # fixtures full (referee + weather)
+        try:
+            fx_full = repo.get_fixture_full(fid, no_api=False)
+            warmed["fixture_full"] += 1
+        except Exception:
+            fx_full = None
+
+        # referee fixtures -> referee_cache
+        try:
+            ref_name = (((fx_full or {}).get("fixture") or {}).get("referee") 
+                        or ((fx.get("fixture") or {}).get("referee")))
+            if ref_name and (ref_name, season) not in seen_ref:
+                repo.get_referee_fixtures(ref_name, season=season, last_n=200, no_api=False)
+                warmed["referee"] += 1
+                seen_ref.add((ref_name, season))
+        except Exception:
+            pass
+
+        # venue
+        try:
+            ven_id = (((fx_full or {}).get("fixture") or {}).get("venue") or {}).get("id") or \
+                     (((fx.get("fixture")  or {}).get("venue")  or {}).get("id"))
+            if ven_id:
+                repo.get_venue(ven_id, no_api=False)
+                warmed["venue"] += 1
+        except Exception:
+            pass
+
+        # lineups + injuries
+        try:
+            repo.get_lineups(fid, no_api=False)
+            warmed["lineups"] += 1
+        except Exception:
+            pass
+        try:
+            repo.get_injuries(fid, no_api=False)
+            warmed["injuries"] += 1
+        except Exception:
+            pass
+
+        # team league stats (ako se koriste u FT profilima)
+        if include_team_stats and lid and season:
+            try:
+                if hid: 
+                    repo.get_team_statistics(hid, lid, season, no_api=False)
+                    warmed["team_stats"] += 1
+                if aid:
+                    repo.get_team_statistics(aid, lid, season, no_api=False)
+                    warmed["team_stats"] += 1
+            except Exception:
+                pass
+
+        # odds (1H i FT)
+        if include_odds:
+            try:
+                repo.get_odds_1h(fid, no_api=False)
+                warmed["odds"] += 1
+            except Exception:
+                pass
+            try:
+                repo.get_odds_ft(fid, no_api=False)
+                warmed["odds"] += 1
+            except Exception:
+                pass
+
+    return warmed
+
+def prepare_inputs_for_range(start_dt: datetime, end_dt: datetime) -> dict:
+    """Vrati dict sa preloaded mapama: team_last, h2h, extras (DB-only nakon prewarm-a)."""
+    fixtures = get_fixtures_in_time_range(start_dt, end_dt, no_api=True) or []
+    team_last = fetch_last_matches_for_teams(fixtures, last_n=DAY_PREFETCH_LAST_N, no_api=True)
+    h2h_all   = fetch_h2h_matches(fixtures, last_n=DAY_PREFETCH_H2H_N, no_api=True)
+    extras    = build_extras_map_for_fixtures(fixtures)
+    return {"fixtures": fixtures, "team_last": team_last, "h2h": h2h_all, "extras": extras}
+
+def build_extras_map_for_fixtures(fixtures) -> dict[int, dict]:
+    """
+    Izračunaj 'extras' (ref_adj, weather_adj, venue_adj, lineups_adj, injuries_adj) za svaku utakmicu
+    i vrati mapu { fixture_id: extras }. Radi DB-only ako je keš već popunjen.
+    """
+    out = {}
+    for fx in fixtures or []:
+        fid = ((fx.get("fixture") or {}).get("id"))
+        if not fid:
+            continue
+        # pošto je prewarm već odradio fetch u keš, ovde radimo no_api=True (DB-only)
+        ex = build_extras_for_fixture(fx, no_api=True)
+        out[int(fid)] = ex or {}
+    return out
+
 def fetch_fixture_statistics_bulk(team_matches):
     statistics_results = {}
 
@@ -4544,6 +4684,15 @@ async def api_prepare_day(request: Request, background_tasks: BackgroundTasks):
             d_local = datetime.now(USER_TZ).date()
         else:
             d_local = date.fromisoformat(date_str)
+
+        # 0) sigurnosno: obezbedi šemu/tabele (idempotentno)
+        try:
+            create_all_tables()
+            ensure_model_outputs_table()
+            ensure_analysis_cache_table()
+            ensure_prepare_jobs_table()
+        except Exception as _schema_err:
+            print("schema ensure failed:", _schema_err)
 
         # 1) napravi job u DB
         job_id = create_prepare_job(d_local)
@@ -5173,7 +5322,10 @@ def analyze_fixtures(start_date: datetime, end_date: datetime, from_hour=None, t
                      market: str = "1h_over05", no_api: bool = True,
                      odds_over05_1h: float | None = None,
                      odds_over15_1h: float | None = None,
-                     odds_btts_1h: float | None = None):
+                     odds_btts_1h: float | None = None,
+                     preloaded_team_last: dict[int, list] | None = None,
+                     preloaded_h2h: dict[str, list] | None = None,
+                     preloaded_extras: dict[int, dict] | None = None):
     """
     Analiza mečeva u datom vremenskom opsegu.
     - Ako je no_api=False: repo će po DANIMA osigurati da fixtures postoje u bazi (fetch + upis),
@@ -5229,13 +5381,15 @@ def analyze_fixtures(start_date: datetime, end_date: datetime, from_hour=None, t
     # 3) History i H2H (repo read-through; poštuje no_api flag)
     team_ids = {f['teams']['home']['id'] for f in fixtures} | {f['teams']['away']['id'] for f in fixtures}
 
-    team_last_matches = {}
-    for tid in team_ids:
+    # preloaded (ako je prosleđeno)
+    team_last_matches = dict(preloaded_team_last or {})
+    missing_tids = [t for t in team_ids if t not in team_last_matches]
+    for tid in missing_tids:
         team_last_matches[tid] = repo.get_team_history(
             tid, last_n=DAY_PREFETCH_LAST_N, no_api=no_api
         )
 
-    h2h_results = {}
+    h2h_results = dict(preloaded_h2h or {})
     for f in fixtures:
         a, b = sorted([f['teams']['home']['id'], f['teams']['away']['id']])
         key = f"{a}-{b}"
@@ -5265,8 +5419,8 @@ def analyze_fixtures(start_date: datetime, end_date: datetime, from_hour=None, t
         a, b = sorted([home_id, away_id])
         h2h_key = f"{a}-{b}"
         # EXTRAS (ref/venue/weather/lineups/injuries)
-        extras = build_extras_for_fixture(fixture, no_api=no_api)
-
+        fid = int((fixture.get('fixture') or {}).get('id'))
+        extras = (preloaded_extras or {}).get(fid) or build_extras_for_fixture(fixture, no_api=no_api)
 
         # (a) istorijske % po marketu
         if market == "gg1h":

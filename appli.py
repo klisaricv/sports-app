@@ -2009,8 +2009,14 @@ def calculate_final_probability_ft_over15(
     # TEAM prior (FT≥2 na mečevima timova – kao "match total", pa uzmi sredinu)
     home_id = ((fixture.get('teams') or {}).get('home') or {}).get('id')
     away_id = ((fixture.get('teams') or {}).get('away') or {}).get('id')
-    p_home_raw, h_home, w_home = _weighted_match_over15_ft_rate(team_last_matches.get(home_id, []), lam=6.0, max_n=15)
-    p_away_raw, h_away, w_away = _weighted_match_over15_ft_rate(team_last_matches.get(away_id, []), lam=6.0, max_n=15)
+    
+    # Koristi team_ft_over15_stats za stvarne brojeve mečeva
+    team1_percent, h_home, w_home = team_ft_over15_stats(team_last_matches.get(home_id, []))
+    team2_percent, h_away, w_away = team_ft_over15_stats(team_last_matches.get(away_id, []))
+    
+    # Konvertuj procente u verovatnoće za kalkulacije
+    p_home_raw = team1_percent / 100.0 if team1_percent is not None else None
+    p_away_raw = team2_percent / 100.0 if team2_percent is not None else None
 
     p_home = beta_shrunk_rate(h_home, w_home, m=m2p, tau=10.0) if p_home_raw is not None else m2p
     p_away = beta_shrunk_rate(h_away, w_away, m=m2p, tau=10.0) if p_away_raw is not None else m2p
@@ -2018,7 +2024,8 @@ def calculate_final_probability_ft_over15(
 
     # H2H prior
     a, b = sorted([home_id, away_id]); key = f"{a}-{b}"
-    p_h2h_raw, h_h2h, w_h2h = _weighted_h2h_over15_ft_rate(h2h_results.get(key, []), lam=5.0, max_n=10)
+    h2h_percent, h_h2h, w_h2h = h2h_ft_over15_stats(h2h_results.get(key, []))
+    p_h2h_raw = h2h_percent / 100.0 if h2h_percent is not None else None
     p_h2h = beta_shrunk_rate(h_h2h, w_h2h, m=m2p, tau=12.0) if p_h2h_raw is not None else m2p
     effn_h2h = (w_h2h or 0.0) * 0.4
     if (w_h2h or 0.0) < 2.5:
@@ -2058,9 +2065,7 @@ def calculate_final_probability_ft_over15(
     p_out = _calibrate(p_blend, temp=CALIBRATION_FT["TEMP"], floor=CALIBRATION_FT["FLOOR"], ceil=CALIBRATION_FT["CEIL"])
 
     # Dodaj team statistics, H2H statistics, i form statistics
-    team1_percent = round(p_home_raw * 100, 2) if p_home_raw is not None else None
-    team2_percent = round(p_away_raw * 100, 2) if p_away_raw is not None else None
-    h2h_percent = round(p_h2h_raw * 100, 2) if p_h2h_raw is not None else None
+    # team1_percent, team2_percent, h2h_percent su već izračunati gore
     
     # Form statistics (mikro signali)
     home_form = (micro_db_ft.get(home_id) or {}).get("home") or {}
@@ -5236,6 +5241,22 @@ def team_1h_goal_stats(team_matches):
     pct = round((hits / total) * 100, 2) if total else 0
     return pct, hits, total
 
+def team_ft_over15_stats(team_matches):
+    """Vrati (percent, hits, total) za FT Over 1.5 iz istorije tima."""
+    total = 0
+    hits = 0
+    for m in team_matches or []:
+        ft = (m.get('score', {}) or {}).get('fulltime', {}) or {}
+        h = ft.get('home') or 0
+        a = ft.get('away') or 0
+        if h is None: h = 0
+        if a is None: a = 0
+        total += 1
+        if (h + a) >= 2:  # FT Over 1.5 = 2+ goals
+            hits += 1
+    pct = round((hits / total) * 100, 2) if total else 0
+    return pct, hits, total
+
 def h2h_1h_goal_stats(h2h_matches):
     """Vrati (percent, hits, total) za 1H gol >=1 iz H2H istorije."""
     total = 0
@@ -5988,6 +6009,50 @@ def analyze_fixtures(start_date: datetime, end_date: datetime, from_hour=None, t
         })
 
     return results
+
+@app.get("/api/loader-status")
+async def api_loader_status():
+    """API endpoint za proveru statusa globalnog loadera"""
+    try:
+        # Proveri da li postoji aktivni prepare job
+        conn = get_mysql_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT status, progress, detail, created_at 
+            FROM prepare_jobs 
+            WHERE status IN ('running', 'pending') 
+            ORDER BY created_at DESC 
+            LIMIT 1
+        """)
+        row = cur.fetchone()
+        conn.close()
+        
+        if row:
+            status, progress, detail, created_at = row
+            return {
+                "active": True,
+                "title": "🚀 Preparing Day...",
+                "progress": progress or 0,
+                "detail": detail or "Processing data...",
+                "status": status
+            }
+        else:
+            return {
+                "active": False,
+                "title": "",
+                "progress": 0,
+                "detail": "",
+                "status": "idle"
+            }
+    except Exception as e:
+        print(f"Error checking loader status: {e}")
+        return {
+            "active": False,
+            "title": "",
+            "progress": 0,
+            "detail": "",
+            "status": "error"
+        }
 
 @app.get("/api/analyze")
 async def api_analyze(request: Request):

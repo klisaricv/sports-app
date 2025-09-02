@@ -3,6 +3,10 @@ const BACKEND_URL = window.location.origin;
 // ako backend nije isti origin/port, otkomentariši sledeće:
 // const BACKEND_URL = "http://127.0.0.1:8000";
 
+// Global loader state
+let globalLoaderActive = false;
+let loaderCheckInterval = null;
+
 // ====== SMALL UTILS ======
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const fmt = (v, suffix = "") =>
@@ -56,6 +60,13 @@ function showLoader(title = "🚀 Preparing Analysis...") {
   
   // Disable all buttons during loading
   disableAllButtons(true);
+  
+  // Make loader visible with high z-index
+  const overlay = document.getElementById("loaderOverlay");
+  if (overlay) {
+    overlay.style.zIndex = "99999";
+    overlay.style.display = "flex";
+  }
 }
 function updateLoader(pct, detail) {
   ensureLoaderUI();
@@ -72,6 +83,55 @@ function hideLoader() {
   
   // Re-enable all buttons after loading
   disableAllButtons(false);
+  
+  // Stop global loader checking
+  if (loaderCheckInterval) {
+    clearInterval(loaderCheckInterval);
+    loaderCheckInterval = null;
+  }
+  globalLoaderActive = false;
+}
+
+// Global loader functions
+async function checkGlobalLoaderStatus() {
+  try {
+    const response = await fetch('/api/loader-status');
+    const data = await response.json();
+    
+    if (data.active && !globalLoaderActive) {
+      // Show global loader
+      showGlobalLoader(data.title || "🚀 System is preparing data...", data.progress || 0, data.detail || "Please wait...");
+    } else if (!data.active && globalLoaderActive) {
+      // Hide global loader
+      hideGlobalLoader();
+    } else if (data.active && globalLoaderActive) {
+      // Update global loader
+      updateGlobalLoader(data.progress || 0, data.detail || "Processing...");
+    }
+  } catch (error) {
+    console.log("Could not check loader status:", error);
+  }
+}
+
+function showGlobalLoader(title, progress = 0, detail = "Please wait...") {
+  globalLoaderActive = true;
+  showLoader(title);
+  updateLoader(progress, detail);
+  
+  // Start checking for updates
+  if (loaderCheckInterval) {
+    clearInterval(loaderCheckInterval);
+  }
+  loaderCheckInterval = setInterval(checkGlobalLoaderStatus, 2000); // Check every 2 seconds
+}
+
+function updateGlobalLoader(progress, detail) {
+  updateLoader(progress, detail);
+}
+
+function hideGlobalLoader() {
+  globalLoaderActive = false;
+  hideLoader();
 }
 
 // (ako nemaš već) bezbedno JSON parsiranje
@@ -682,6 +742,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // 3) Podrazumijevani datumi (ako su prazni)
   setDefaultDatesIfEmpty();
+  
+  // 4) Start checking for global loader status
+  checkGlobalLoaderStatus();
+  setInterval(checkGlobalLoaderStatus, 3000); // Check every 3 seconds
 
   // 4) Dugmad
   const btn1p = document.getElementById("analyze1p");

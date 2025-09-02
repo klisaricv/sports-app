@@ -4558,37 +4558,96 @@ def get_fixture_statistics(fixture_id):
 
 # ---------------------------- DB STORAGE - FUTURE MATCHES -----------------------------
 def store_fixture_data_in_db(fixtures):
+    """
+    Bulk upis fixtures u MySQL.
+
+    Zahtevi:
+    - Tabela `fixtures` mora imati PRIMARY KEY na koloni `id`
+      (npr. `id BIGINT PRIMARY KEY` ili UNIQUE KEY na `id`),
+      da bi `ON DUPLICATE KEY UPDATE` radio.
+    - (Opcionalno) kolona `updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP
+      ON UPDATE CURRENT_TIMESTAMP` – ako želiš automatsko osvežavanje.
+    """
     if not fixtures:
-        return
+        return 0
+
+    affected = 0
     with DB_WRITE_LOCK:  # jedan “bulk” upis
         conn = get_db_connection()
-        cur = conn.cursor()
-        cur.execute("BEGIN IMMEDIATE;")
+        cur = None
+        try:
+            # START TRANSACTION umesto SQLite BEGIN IMMEDIATE
+            conn.start_transaction()  # MySQL-safe
 
-        for fixture in fixtures:
-            fixture_id = fixture['fixture']['id']
-            fixture_date = fixture['fixture']['date']
-            league_id = fixture['league']['id']
-            team_home_id = fixture['teams']['home']['id']
-            team_away_id = fixture['teams']['away']['id']
+            cur = conn.cursor()
 
-            # ⚠️ NEMA nikakvog poziva koji PIŠE u match_statistics ovde!
-            # Ako želiš da popuniš stats_json kolonu — koristi samo READ helper:
-            stats = try_read_fixture_statistics(fixture_id)  # ovo je NON-WRITE
-            stats_json = json.dumps(stats, ensure_ascii=False, default=str) if stats else None
-            fixture_json = json.dumps(fixture, ensure_ascii=False, default=str)
+            sql = """
+                INSERT INTO fixtures
+                    (id, date, league_id, team_home_id, team_away_id, stats_json, fixture_json, updated_at)
+                VALUES
+                    (%s, %s, %s, %s, %s, %s, %s, NOW())
+                ON DUPLICATE KEY UPDATE
+                    date        = VALUES(date),
+                    league_id   = VALUES(league_id),
+                    team_home_id= VALUES(team_home_id),
+                    team_away_id= VALUES(team_away_id),
+                    stats_json  = VALUES(stats_json),
+                    fixture_json= VALUES(fixture_json),
+                    updated_at  = NOW()
+            """
 
-            cur.execute("""
-                INSERT OR REPLACE INTO fixtures
-                (id, date, league_id, team_home_id, team_away_id, stats_json, fixture_json)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """, (
-                fixture_id, fixture_date, league_id, team_home_id, team_away_id, stats_json, fixture_json
-            ))
+            rows = []
+            for fixture in fixtures:
+                # Bezbedna ekstrakcija
+                fx  = fixture.get('fixture') or {}
+                lg  = fixture.get('league')  or {}
+                tms = fixture.get('teams')   or {}
+                th  = (tms.get('home') or {})
+                ta  = (tms.get('away') or {})
 
-        conn.commit()
-        conn.close()
-    print(f"✅ Stored {len(fixtures)} fixtures in DB.")
+                fixture_id   = fx.get('id')
+                fixture_date = fx.get('date')  # očekuje se ISO string; MySQL ga prihvata kao DATETIME/VARCHAR po šemi
+                league_id    = lg.get('id')
+                team_home_id = th.get('id')
+                team_away_id = ta.get('id')
+
+                # NON-WRITE: čitanje statistika ako postoje u DB/kešu
+                stats = try_read_fixture_statistics(fixture_id)
+                stats_json   = json.dumps(stats, ensure_ascii=False, default=str) if stats else None
+                fixture_json = json.dumps(fixture, ensure_ascii=False, default=str)
+
+                rows.append((
+                    fixture_id, fixture_date, league_id, team_home_id, team_away_id,
+                    stats_json, fixture_json
+                ))
+
+            if rows:
+                cur.executemany(sql, rows)
+                affected = cur.rowcount or 0
+
+            conn.commit()
+        except Exception as e:
+            # Rolbek da ne ostavimo polu-upisane redove
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            # Propusti dalje – gornji sloj neka zaloguje
+            raise
+        finally:
+            try:
+                if cur is not None:
+                    cur.close()
+            except Exception:
+                pass
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+    # Opcionalno: log
+    print(f"✅ Stored/updated {len(rows) if 'rows' in locals() else 0} fixtures in DB.")
+    return affected
 
 # ---------------------------- STORE TO DB ALL HISTORY DATA -----------------------------
 def _has_fixtures_for_day(d: date) -> bool:

@@ -51,22 +51,35 @@ function ensureLoaderUI() {
   document.body.appendChild(overlay);
 }
 function showLoader(title = "🚀 Preparing Analysis...") {
+  console.log("🔍 [DEBUG] showLoader called with title:", title);
   ensureLoaderUI();
+  
+  const overlay = document.getElementById("loaderOverlay");
+  if (!overlay) {
+    console.error("❌ [ERROR] loaderOverlay not found!");
+    return;
+  }
+  
+  console.log("🔍 [DEBUG] loaderOverlay found, setting content...");
   document.getElementById("loaderTitle").textContent = title;
   document.getElementById("loaderPct").textContent = "0%";
   document.querySelector("#loaderBar > div").style.width = "0%";
   document.getElementById("loaderDetail").textContent = "Initializing system...";
-  document.getElementById("loaderOverlay").style.display = "flex";
+  
+  // Make loader visible with high z-index
+  overlay.style.zIndex = "99999";
+  overlay.style.display = "flex";
+  overlay.style.visibility = "visible";
+  overlay.style.opacity = "1";
+  
+  console.log("🔍 [DEBUG] loaderOverlay styles set:", {
+    display: overlay.style.display,
+    zIndex: overlay.style.zIndex,
+    visibility: overlay.style.visibility
+  });
   
   // Disable all buttons during loading
   disableAllButtons(true);
-  
-  // Make loader visible with high z-index
-  const overlay = document.getElementById("loaderOverlay");
-  if (overlay) {
-    overlay.style.zIndex = "99999";
-    overlay.style.display = "flex";
-  }
 }
 function updateLoader(pct, detail) {
   ensureLoaderUI();

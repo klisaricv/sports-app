@@ -1068,13 +1068,20 @@ def read_precomputed_results(from_dt: datetime, to_dt: datetime, fh, th, market:
     fh = int(fh) if use_fh else None
     th = int(th) if use_th else None
 
-    for (fixture_id, prob, dbg) in rows or []:
+    for i, (fixture_id, prob, dbg) in enumerate(rows or []):
         try:
             d = dbg if isinstance(dbg, dict) else json.loads(dbg or "{}")
         except Exception:
             d = {}
+        
+        print(f"🔍 [DEBUG] read_precomputed_results row {i} (fixture {fixture_id}): debug keys: {list(d.keys())}", flush=True)
+        print(f"🔍 [DEBUG] read_precomputed_results row {i}: exp_sot_total: {d.get('exp_sot_total')}", flush=True)
+        print(f"🔍 [DEBUG] read_precomputed_results row {i}: exp_da_total: {d.get('exp_da_total')}", flush=True)
+        print(f"🔍 [DEBUG] read_precomputed_results row {i}: ref_adj: {d.get('ref_adj')}", flush=True)
+        
         kickoff_iso = d.get("kickoff")
         if not kickoff_iso:
+            print(f"🔍 [DEBUG] read_precomputed_results row {i}: no kickoff, skipping", flush=True)
             continue
         try:
             k_dt = datetime.fromisoformat(kickoff_iso.replace("Z", "+00:00"))
@@ -1435,11 +1442,19 @@ def compute_ft_over15_for_range(start_dt: datetime, end_dt: datetime, no_api: bo
     return rows
 
 def persist_ft_over15(rows: list[dict]):
-    for r in rows or []:
+    print(f"🔍 [DEBUG] persist_ft_over15 called with {len(rows or [])} rows", flush=True)
+    for i, r in enumerate(rows or []):
         fid = r.get("fixture_id")
         if not fid:
+            print(f"🔍 [DEBUG] persist_ft_over15 row {i}: no fixture_id, skipping", flush=True)
             continue
+        
         dbg = dict(r.get("ft_over15_dbg") or {})
+        print(f"🔍 [DEBUG] persist_ft_over15 row {i} (fixture {fid}): debug keys: {list(dbg.keys())}", flush=True)
+        print(f"🔍 [DEBUG] persist_ft_over15 row {i}: exp_sot_total: {dbg.get('exp_sot_total')}", flush=True)
+        print(f"🔍 [DEBUG] persist_ft_over15 row {i}: exp_da_total: {dbg.get('exp_da_total')}", flush=True)
+        print(f"🔍 [DEBUG] persist_ft_over15 row {i}: ref_adj: {dbg.get('ref_adj')}", flush=True)
+        
         # obogati debug da bismo sve čitali ISKLJUČIVO iz model_outputs
         if r.get("league"):
             dbg.setdefault("league", r.get("league"))
@@ -1450,6 +1465,7 @@ def persist_ft_over15(rows: list[dict]):
         if r.get("kickoff"):
             dbg["kickoff"] = r["kickoff"]  # ISO string
         
+        print(f"🔍 [DEBUG] persist_ft_over15 row {i}: calling upsert_model_output with prob: {r.get('ft_over15_prob')}", flush=True)
         upsert_model_output(
             fixture_id=int(fid),
             market="ft_over15",
@@ -2148,6 +2164,14 @@ def calculate_final_probability_ft_over15(
     if away_shots_pct is not None and away_attacks_pct is not None:
         form_vals.append((away_shots_pct + away_attacks_pct) / 2.0)
     form_percent = round(sum(form_vals)/len(form_vals), 2) if form_vals else 0.0
+
+    # DEBUG: Loguj mikro signale
+    print(f"🔍 [DEBUG] calculate_final_probability_ft_over15 - feats keys: {list(feats.keys()) if feats else 'None'}", flush=True)
+    print(f"🔍 [DEBUG] calculate_final_probability_ft_over15 - exp_sotFT_home: {feats.get('exp_sotFT_home')}", flush=True)
+    print(f"🔍 [DEBUG] calculate_final_probability_ft_over15 - exp_sotFT_away: {feats.get('exp_sotFT_away')}", flush=True)
+    print(f"🔍 [DEBUG] calculate_final_probability_ft_over15 - exp_daFT_home: {feats.get('exp_daFT_home')}", flush=True)
+    print(f"🔍 [DEBUG] calculate_final_probability_ft_over15 - exp_daFT_away: {feats.get('exp_daFT_away')}", flush=True)
+    print(f"🔍 [DEBUG] calculate_final_probability_ft_over15 - extras: {extras}", flush=True)
 
     debug = {
         "p_prior": round(p_prior,3), "p_micro": round(p_micro,3), "w_micro": round(w_micro,2),

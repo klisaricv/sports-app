@@ -1301,37 +1301,37 @@ def compute_ft_over15_for_range(start_dt: datetime, end_dt: datetime, no_api: bo
                                 preloaded_team_last: dict[int, list] | None = None,
                                 preloaded_h2h: dict[str, list] | None = None,
                                 preloaded_extras: dict[int, dict] | None = None):
-    print(f"🔍 [DEBUG] compute_ft_over15_for_range START")
+    print(f"🔍 [DEBUG] compute_ft_over15_for_range START", flush=True)
     fixtures = get_fixtures_in_time_range(start_dt, end_dt, no_api=no_api)
-    print(f"🔍 [DEBUG] get_fixtures_in_time_range returned {len(fixtures or [])} fixtures")
+    print(f"🔍 [DEBUG] get_fixtures_in_time_range returned {len(fixtures or [])} fixtures", flush=True)
     if not fixtures:
         return []
 
-    print(f"🔍 [DEBUG] fetch_last_matches_for_teams START")
+    print(f"🔍 [DEBUG] fetch_last_matches_for_teams START", flush=True)
     team_last = dict(preloaded_team_last or {}) or fetch_last_matches_for_teams(fixtures, last_n=DAY_PREFETCH_LAST_N, no_api=no_api)
-    print(f"🔍 [DEBUG] fetch_last_matches_for_teams returned {len(team_last or {})} teams")
+    print(f"🔍 [DEBUG] fetch_last_matches_for_teams returned {len(team_last or {})} teams", flush=True)
 
-    print(f"🔍 [DEBUG] compute_league_baselines_ft START")
+    print(f"🔍 [DEBUG] compute_league_baselines_ft START", flush=True)
     league_bases_ft = compute_league_baselines_ft(team_last, stats_fn=get_fixture_statistics_cached_only)
-    print(f"🔍 [DEBUG] compute_league_baselines_ft COMPLETED")
+    print(f"🔍 [DEBUG] compute_league_baselines_ft COMPLETED", flush=True)
     
-    print(f"🔍 [DEBUG] compute_team_profiles_ft START")
+    print(f"🔍 [DEBUG] compute_team_profiles_ft START", flush=True)
     team_profiles_ft = compute_team_profiles_ft(team_last, stats_fn=get_fixture_statistics_cached_only)
-    print(f"🔍 [DEBUG] compute_team_profiles_ft COMPLETED")
+    print(f"🔍 [DEBUG] compute_team_profiles_ft COMPLETED", flush=True)
     
-    print(f"🔍 [DEBUG] compute_team_strengths_ft START")
+    print(f"🔍 [DEBUG] compute_team_strengths_ft START", flush=True)
     team_strengths_ft = compute_team_strengths_ft(team_last, m_global=(league_bases_ft["global"]["m2p"]*0.9 + 0.25))
-    print(f"🔍 [DEBUG] compute_team_strengths_ft COMPLETED")
+    print(f"🔍 [DEBUG] compute_team_strengths_ft COMPLETED", flush=True)
     
-    print(f"🔍 [DEBUG] build_micro_db_ft START")
+    print(f"🔍 [DEBUG] build_micro_db_ft START", flush=True)
     micro_db_ft = build_micro_db_ft(team_last, stats_fn=get_fixture_statistics_cached_only)
-    print(f"🔍 [DEBUG] build_micro_db_ft COMPLETED")
+    print(f"🔍 [DEBUG] build_micro_db_ft COMPLETED", flush=True)
 
-    print(f"🔍 [DEBUG] fetch_h2h_matches START")
+    print(f"🔍 [DEBUG] fetch_h2h_matches START", flush=True)
     h2h_all = dict(preloaded_h2h or {}) or fetch_h2h_matches(fixtures, last_n=DAY_PREFETCH_H2H_N, no_api=no_api)
-    print(f"🔍 [DEBUG] fetch_h2h_matches returned {len(h2h_all or {})} h2h pairs")
+    print(f"🔍 [DEBUG] fetch_h2h_matches returned {len(h2h_all or {})} h2h pairs", flush=True)
 
-    print(f"🔍 [DEBUG] Processing {len(fixtures or [])} fixtures START")
+    print(f"🔍 [DEBUG] Processing {len(fixtures or [])} fixtures START", flush=True)
     rows = []
     for i, fx in enumerate(fixtures or []):
         try:
@@ -4263,15 +4263,25 @@ def compute_referee_profile(ref_name: str, season: int | None) -> dict:
     Ako nema podataka → neutralno (0 adja).
     """
     try:
+        print(f"🔍 [DEBUG] compute_referee_profile START for ref_name: {ref_name}, season: {season}")
         if not ref_name:
+            print(f"🔍 [DEBUG] compute_referee_profile no ref_name, returning neutral")
             return {"p1h_ge1": None, "p1h_ge2": None, "p1h_gg": None, "ref_adj": 0.0, "used": 0.0}
         year = season or datetime.utcnow().year
+        print(f"🔍 [DEBUG] compute_referee_profile calling repo.get_referee_fixtures for year: {year}")
         arr = repo.get_referee_fixtures(ref_name, season=year, last_n=200, no_api=False) or []
+        print(f"🔍 [DEBUG] compute_referee_profile got {len(arr)} fixtures, type: {type(arr)}")
+        if arr:
+            print(f"🔍 [DEBUG] compute_referee_profile first fixture type: {type(arr[0])}")
+            print(f"🔍 [DEBUG] compute_referee_profile first fixture: {arr[0]}")
         # recency ponder (lakši)
+        print(f"🔍 [DEBUG] compute_referee_profile calling _weighted_counts for h1")
         h1, w1, _ = _weighted_counts(sorted(arr, key=lambda m: (m.get('fixture') or {}).get('date',''), reverse=True),
                                      _ht_total_ge1, lam=8.0, max_n=200)
+        print(f"🔍 [DEBUG] compute_referee_profile calling _weighted_counts for h2")
         h2, w2, _ = _weighted_counts(sorted(arr, key=lambda m: (m.get('fixture') or {}).get('date',''), reverse=True),
                                      _ht_total_ge2, lam=8.0, max_n=200)
+        print(f"🔍 [DEBUG] compute_referee_profile calling _weighted_counts for hg")
         hg, wg, _ = _weighted_counts(sorted(arr, key=lambda m: (m.get('fixture') or {}).get('date',''), reverse=True),
                                      _is_gg1h, lam=8.0, max_n=200)
         # global m1h
@@ -4394,9 +4404,14 @@ def build_extras_for_fixture(fixture: dict, no_api: bool=False) -> dict:
     Skupi: referee profile, weather, venue, lineups, injuries.
     Vraća dict sa adj-ovima (logit skala) i info za debug.
     """
+    print(f"🔍 [DEBUG] build_extras_for_fixture START for fixture {fixture}")
     fid = ((fixture.get("fixture") or {}).get("id")) or ((fixture.get("fixture") or {}).get("id"))
+    print(f"🔍 [DEBUG] build_extras_for_fixture fid: {fid}")
     season = ((fixture.get("league") or {}).get("season"))
+    print(f"🔍 [DEBUG] build_extras_for_fixture season: {season}")
+    print(f"🔍 [DEBUG] build_extras_for_fixture calling repo.get_fixture_full")
     fx_full = repo.get_fixture_full(fid, no_api=no_api)  # osvežava fixture_json ako treba
+    print(f"🔍 [DEBUG] build_extras_for_fixture fx_full type: {type(fx_full)}")
     # referee
     ref_name = (((fx_full or {}).get("fixture") or {}).get("referee") or
                 ((fixture.get("fixture") or {}).get("referee")))

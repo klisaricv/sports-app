@@ -1363,6 +1363,10 @@ def compute_ft_over15_for_range(start_dt: datetime, end_dt: datetime, no_api: bo
                 "fixture_id": ((fx.get("fixture") or {}).get("id")),
                 "ft_over15_prob": float(round(p2p, 4)),
                 "ft_over15_dbg": dbg,
+                "kickoff": (fx.get("fixture") or {}).get("date"),
+                "league": (fx.get("league") or {}).get("name"),
+                "team1": (fx.get("teams") or {}).get("home", {}).get("name"),
+                "team2": (fx.get("teams") or {}).get("away", {}).get("name"),
             })
             print(f"🔍 [DEBUG] Fixture {i+1} processed successfully")
         except Exception as e:
@@ -1379,11 +1383,22 @@ def persist_ft_over15(rows: list[dict]):
         fid = r.get("fixture_id")
         if not fid:
             continue
+        dbg = dict(r.get("ft_over15_dbg") or {})
+        # obogati debug da bismo sve čitali ISKLJUČIVO iz model_outputs
+        if r.get("league"):
+            dbg.setdefault("league", r.get("league"))
+        if r.get("team1"):
+            dbg.setdefault("team1", r.get("team1"))
+        if r.get("team2"):
+            dbg.setdefault("team2", r.get("team2"))
+        if r.get("kickoff"):
+            dbg["kickoff"] = r["kickoff"]  # ISO string
+        
         upsert_model_output(
             fixture_id=int(fid),
             market="ft_over15",
             prob=float(r["ft_over15_prob"]),
-            debug=r["ft_over15_dbg"]
+            debug=dbg
         )
 
 # ADD: generički upis u model_outputs za bilo koji market iz analyze_fixtures rezultata
@@ -2028,7 +2043,11 @@ def calculate_final_probability_ft_over15(
         "exp_da_home": feats.get("exp_daFT_home"),   "exp_da_away": feats.get("exp_daFT_away"),
         "setp_xg_total": round(float(feats.get("setp_xg_total") or 0.0),3),
         "coverage": round(float(coverage),2),
-        "market_blend": bool(market_odds_over15_ft)
+        "market_blend": bool(market_odds_over15_ft),
+        "kickoff": (fixture.get("fixture") or {}).get("date"),
+        "league": (fixture.get("league") or {}).get("name"),
+        "team1": (fixture.get("teams") or {}).get("home", {}).get("name"),
+        "team2": (fixture.get("teams") or {}).get("away", {}).get("name")
     }
     return p_out, debug
 

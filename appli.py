@@ -2867,8 +2867,25 @@ def compute_lineup_projection_1h(fixture_id, api_or_repo_get_lineups=None):
     if not api_or_repo_get_lineups:
         return {"home": {"multiplier": 1.00}, "away": {"multiplier": 1.00}}
 
-    data = api_or_repo_get_lineups(fixture_id) or {}
+    data = api_or_repo_get_lineups(fixture_id) or []
     out = {}
+    
+    # ISPRAVKA: data je lista, ne dict - treba da je konvertujemo u dict format
+    if isinstance(data, list):
+        # Konvertuj listu u dict format
+        data_dict = {}
+        for item in data:
+            if isinstance(item, dict):
+                team_id = item.get("team", {}).get("id")
+                if team_id:
+                    # Proveri da li je home ili away tim
+                    fixture_data = item.get("fixture", {})
+                    if fixture_data.get("home", {}).get("id") == team_id:
+                        data_dict["home"] = item
+                    elif fixture_data.get("away", {}).get("id") == team_id:
+                        data_dict["away"] = item
+        data = data_dict
+    
     for side in ("home", "away"):
         s = data.get(side) or {}
         kf = int(s.get("key_forwards_out") or 0)

@@ -4453,7 +4453,20 @@ def fetch_last_matches_for_teams(fixtures, last_n=30, no_api: bool = False):
     Ako no_api=True i nema pun cache za traženi last_n, vrati šta ima u kešu (može biti 0),
     ali NE smanjuj last_n.
     """
-    team_ids = {f['teams']['home']['id'] for f in fixtures} | {f['teams']['away']['id'] for f in fixtures}
+    # ISPRAVKA: Proverava da li je fixture dict i ima potrebne ključeve
+    team_ids = set()
+    for f in fixtures:
+        if not isinstance(f, dict):
+            continue
+        teams = f.get('teams', {})
+        if isinstance(teams, dict):
+            home_id = (teams.get('home') or {}).get('id')
+            away_id = (teams.get('away') or {}).get('id')
+            if home_id:
+                team_ids.add(home_id)
+            if away_id:
+                team_ids.add(away_id)
+    
     team_count = len(team_ids)
 
     last_n_eff = last_n  # ⬅️ nema više BUDGET//team_count
@@ -4469,7 +4482,16 @@ def fetch_last_matches_for_teams(fixtures, last_n=30, no_api: bool = False):
 def fetch_h2h_matches(fixtures, last_n=10, no_api: bool = False):
     h2h_results = {}
     for fixture in fixtures:
-        a, b = sorted([fixture['teams']['home']['id'], fixture['teams']['away']['id']])
+        if not isinstance(fixture, dict):
+            continue
+        teams = fixture.get('teams', {})
+        if not isinstance(teams, dict):
+            continue
+        home_id = (teams.get('home') or {}).get('id')
+        away_id = (teams.get('away') or {}).get('id')
+        if not (home_id and away_id):
+            continue
+        a, b = sorted([home_id, away_id])
         key = f"{a}-{b}"
         if key in h2h_results:
             continue

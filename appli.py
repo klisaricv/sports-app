@@ -2187,8 +2187,8 @@ def calculate_final_probability_ft_over15(
         "form_percent": form_percent,
         
         # Micro signals - all parameters
-        "exp_sot_total": feats.get("exp_sotFT_home", 0) + feats.get("exp_sotFT_away", 0),
-        "exp_da_total": feats.get("exp_daFT_home", 0) + feats.get("exp_daFT_away", 0),
+        "exp_sot_total": (feats.get("exp_sotFT_home") or 0) + (feats.get("exp_sotFT_away") or 0),
+        "exp_da_total": (feats.get("exp_daFT_home") or 0) + (feats.get("exp_daFT_away") or 0),
         "pos_edge": feats.get("pos_edge", 0),
         "effN_prior": (w_home or 0.0) + (w_away or 0.0) + effn_h2h,
         "effN_micro": feats.get("effN_micro", 0),
@@ -6105,7 +6105,7 @@ async def api_loader_status():
     """API endpoint za proveru statusa globalnog loadera"""
     try:
         # Proveri da li postoji aktivni prepare job
-        conn = get_mysql_connection()
+        conn = get_db_connection()
         cur = conn.cursor()
         cur.execute("""
             SELECT status, progress, detail, created_at 

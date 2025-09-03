@@ -5,37 +5,37 @@
 
 /* ---------- CSS Variables & Theming ---------- */
 :root {
-  /* Modern Color Palette */
-  --bg-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  --bg-secondary: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-  --bg-tertiary: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  /* Ultra Modern Color Palette - Dark Mode */
+  --bg-primary: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
+  --bg-secondary: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+  --bg-tertiary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   
-  --surface-glass: rgba(255, 255, 255, 0.1);
-  --surface-glass-strong: rgba(255, 255, 255, 0.2);
+  --surface-glass: rgba(255, 255, 255, 0.05);
+  --surface-glass-strong: rgba(255, 255, 255, 0.1);
   --surface-elevated: rgba(255, 255, 255, 0.95);
   --surface-dark: rgba(0, 0, 0, 0.8);
   
   --text-primary: #ffffff;
-  --text-secondary: rgba(255, 255, 255, 0.8);
-  --text-muted: rgba(255, 255, 255, 0.6);
-  --text-accent: #ffd700;
+  --text-secondary: rgba(255, 255, 255, 0.85);
+  --text-muted: rgba(255, 255, 255, 0.65);
+  --text-accent: #64ffda;
   
-  --border-glass: rgba(255, 255, 255, 0.2);
-  --border-strong: rgba(255, 255, 255, 0.3);
+  --border-glass: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.2);
   
-  /* Neon Accent Colors */
-  --neon-blue: #00f5ff;
-  --neon-purple: #bf00ff;
-  --neon-green: #00ff41;
-  --neon-pink: #ff0080;
-  --neon-orange: #ff6600;
+  /* Ultra Modern Accent Colors */
+  --neon-blue: #64ffda;
+  --neon-purple: #bb86fc;
+  --neon-green: #69f0ae;
+  --neon-pink: #ff4081;
+  --neon-orange: #ffab40;
   
-  /* Gradients */
+  /* Ultra Modern Gradients */
   --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   --gradient-secondary: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-  --gradient-accent: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-  --gradient-success: linear-gradient(135deg, #00ff41 0%, #00d4aa 100%);
-  --gradient-warning: linear-gradient(135deg, #ff6600 0%, #ff0080 100%);
+  --gradient-accent: linear-gradient(135deg, #64ffda 0%, #bb86fc 100%);
+  --gradient-success: linear-gradient(135deg, #69f0ae 0%, #00d4aa 100%);
+  --gradient-warning: linear-gradient(135deg, #ffab40 0%, #ff4081 100%);
   
   /* Spacing & Layout */
   --radius-sm: 12px;
@@ -78,6 +78,41 @@
   --font-weight-semibold: 600;
   --font-weight-bold: 700;
   --font-weight-black: 900;
+}
+
+/* Light Mode Variables */
+[data-theme="light"] {
+  /* Ultra Modern Light Mode */
+  --bg-primary: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #cbd5e1 100%);
+  --bg-secondary: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  --bg-tertiary: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  
+  --surface-glass: rgba(255, 255, 255, 0.8);
+  --surface-glass-strong: rgba(255, 255, 255, 0.9);
+  --surface-elevated: rgba(255, 255, 255, 0.98);
+  --surface-dark: rgba(0, 0, 0, 0.05);
+  
+  --text-primary: #1e293b;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --text-accent: #0ea5e9;
+  
+  --border-glass: rgba(0, 0, 0, 0.1);
+  --border-strong: rgba(0, 0, 0, 0.2);
+  
+  /* Light Mode Accent Colors */
+  --neon-blue: #0ea5e9;
+  --neon-purple: #8b5cf6;
+  --neon-green: #10b981;
+  --neon-pink: #ec4899;
+  --neon-orange: #f59e0b;
+  
+  /* Light Mode Gradients */
+  --gradient-primary: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  --gradient-secondary: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  --gradient-accent: linear-gradient(135deg, #0ea5e9 0%, #8b5cf6 100%);
+  --gradient-success: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  --gradient-warning: linear-gradient(135deg, #f59e0b 0%, #ec4899 100%);
 }
 
 /* Dark Theme Override */
@@ -332,8 +367,8 @@ html[data-theme="dark"] .icon-moon { display: inline; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-md) var(--spacing-lg);
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm) var(--spacing-md);
   border-radius: var(--radius-md);
   font-weight: var(--font-weight-semibold);
   font-size: var(--font-size-sm);
@@ -342,11 +377,18 @@ html[data-theme="dark"] .icon-moon { display: inline; }
   background: var(--surface-glass);
   color: var(--text-primary);
   backdrop-filter: blur(10px);
-  min-height: 52px;
+  min-height: 40px;
+  min-width: 120px;
   position: relative;
   overflow: hidden;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+}
+
+.btn svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
 }
 
 .btn::before {
@@ -923,6 +965,33 @@ button[disabled],
   font-size: var(--font-size-sm);
   line-height: 1.4;
   font-style: italic;
+}
+
+/* No Data Styling */
+.stat-value:contains("No Data"),
+.micro-values:contains("No Data"),
+.breakdown-value:contains("No Data"),
+.final-value:contains("No Data") {
+  color: var(--text-muted);
+  font-style: italic;
+  opacity: 0.7;
+}
+
+/* Ultra Modern No Data Indicator */
+.stat-value,
+.micro-values,
+.breakdown-value,
+.final-value {
+  position: relative;
+}
+
+.stat-value:contains("No Data")::after,
+.micro-values:contains("No Data")::after,
+.breakdown-value:contains("No Data")::after,
+.final-value:contains("No Data")::after {
+  content: "📊";
+  margin-left: 4px;
+  opacity: 0.5;
 }
 
 @keyframes matchSlideIn {

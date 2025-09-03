@@ -12,7 +12,7 @@ const MAX_GLOBAL_LOADER_CHECKS = 100; // Maksimalno 100 provera (10 sekundi sa 1
 // ====== SMALL UTILS ======
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const fmt = (v, suffix = "") =>
-  v === null || v === undefined || Number.isNaN(v) ? "—" : `${v}${suffix}`;
+  v === null || v === undefined || Number.isNaN(v) ? "No Data" : `${v}${suffix}`;
 
 async function parseJsonSafe(resp) {
   const ct = resp.headers.get("content-type") || "";
@@ -249,6 +249,9 @@ async function isPrepareDayRunning() {
   try {
     const response = await fetch('/api/global-loader-status');
     const data = await response.json();
+    console.log("🔍 [PREPARE CHECK] API Response:", data);
+    console.log("🔍 [PREPARE CHECK] Is active:", data.active);
+    console.log("🔍 [PREPARE CHECK] Status:", data.status);
     return data.active === true;
   } catch (error) {
     console.error("❌ [PREPARE CHECK] Error checking prepare status:", error);

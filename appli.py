@@ -6284,11 +6284,12 @@ async def api_global_loader_status():
         conn = get_db_connection()
         cur = conn.cursor(dictionary=True)
         
-        # Proveri da li postoji aktivan prepare job
+        # Proveri da li postoji aktivan prepare job (ne stariji od 1 sata)
         cur.execute("""
             SELECT status, progress, detail, created_at
             FROM prepare_jobs 
             WHERE status IN ('running', 'queued')
+            AND created_at > DATE_SUB(NOW(), INTERVAL 1 HOUR)
             ORDER BY created_at DESC 
             LIMIT 1
         """)
@@ -6296,15 +6297,20 @@ async def api_global_loader_status():
         job = cur.fetchone()
         conn.close()
         
+        print(f"🔍 [GLOBAL LOADER STATUS] Found job: {job}")
+        
         if job:
-            return {
+            result = {
                 "active": True,
                 "status": job["status"],
                 "progress": job["progress"] or 0,
                 "detail": job["detail"] or "Preparing analysis...",
                 "started_at": job["created_at"].isoformat() if job["created_at"] else None
             }
+            print(f"🔍 [GLOBAL LOADER STATUS] Returning active: {result}")
+            return result
         else:
+            print(f"🔍 [GLOBAL LOADER STATUS] No active job found, returning inactive")
             return {"active": False}
             
     except Exception as e:

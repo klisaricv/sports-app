@@ -3,16 +3,10 @@ const BACKEND_URL = window.location.origin;
 // ako backend nije isti origin/port, otkomentariši sledeće:
 // const BACKEND_URL = "http://127.0.0.1:8000";
 
-// Global loader state
-let globalLoaderActive = false;
-let loaderCheckInterval = null;
-let globalLoaderCheckCount = 0;
-const MAX_GLOBAL_LOADER_CHECKS = 100; // Maksimalno 100 provera (10 sekundi sa 100ms intervalom)
-
 // ====== SMALL UTILS ======
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const fmt = (v, suffix = "") =>
-  v === null || v === undefined || Number.isNaN(v) ? "No Data" : `${v}${suffix}`;
+  v === null || v === undefined || Number.isNaN(v) ? "—" : `${v}${suffix}`;
 
 async function parseJsonSafe(resp) {
   const ct = resp.headers.get("content-type") || "";
@@ -24,357 +18,39 @@ async function parseJsonSafe(resp) {
 // === Loader helpers ===
 window.sleep = window.sleep || (ms => new Promise(r => setTimeout(r, ms)));
 
-function disableAllButtons(disable) {
-  const buttons = document.querySelectorAll('button, .btn, #savePdf, .primary-ghost');
-  buttons.forEach(btn => {
-    if (disable) {
-      btn.disabled = true;
-      btn.style.pointerEvents = 'none';
-      btn.style.opacity = '0.5';
-    } else {
-      btn.disabled = false;
-      btn.style.pointerEvents = 'auto';
-      btn.style.opacity = '1';
-    }
-  });
-}
-
 function ensureLoaderUI() {
   if (document.getElementById("loaderOverlay")) return;
-  
   const overlay = document.createElement("div");
   overlay.id = "loaderOverlay";
   overlay.innerHTML = `
     <div id="loaderBox" role="dialog" aria-live="polite" aria-label="Preparing">
-      <div id="loaderTitle">🚀 Preparing Analysis...</div>
-      <div id="loaderSpinner"></div>
-      <div id="loaderDetail">Initializing system...</div>
-    </div>`;
-  
-  document.body.appendChild(overlay);
-}
-function showLoader(title = "🚀 Preparing Analysis...") {
-  ensureLoaderUI();
-  
-  const overlay = document.getElementById("loaderOverlay");
-  if (!overlay) {
-    console.error("❌ [ERROR] loaderOverlay not found!");
-    return;
-  }
-  
-  // Set content
-  const titleEl = document.getElementById("loaderTitle");
-  const detailEl = document.getElementById("loaderDetail");
-  
-  if (titleEl) {
-    titleEl.textContent = title;
-  }
-  
-  if (detailEl) {
-    detailEl.textContent = "Initializing system...";
-  }
-  
-  // Make loader visible with high z-index
-  overlay.style.zIndex = "99999";
-  overlay.style.display = "flex";
-  overlay.style.visibility = "visible";
-  overlay.style.opacity = "1";
-  overlay.style.position = "fixed";
-  overlay.style.top = "0";
-  overlay.style.left = "0";
-  overlay.style.width = "100vw";
-  overlay.style.height = "100vh";
-  
-  // Force a reflow to ensure styles are applied
-  overlay.offsetHeight;
-  
-  // Disable all buttons during loading
-  disableAllButtons(true);
-}
-
-// Custom Modal System
-function ensureCustomModalUI() {
-  if (document.getElementById("customModalOverlay")) return;
-  const overlay = document.createElement("div");
-  overlay.id = "customModalOverlay";
-  overlay.innerHTML = `
-    <div id="customModal">
-      <div id="customModalTitle">Title</div>
-      <div id="customModalMessage">Message</div>
-      <div id="customModalButtons"></div>
+      <div id="loaderTitle">Preparing…</div>
+      <div id="loaderPct">0%</div>
+      <div id="loaderBar"><div></div></div>
+      <div id="loaderDetail"></div>
     </div>`;
   document.body.appendChild(overlay);
 }
-
-function showCustomModal(title, message, buttons = []) {
-  ensureCustomModalUI();
-  
-  const overlay = document.getElementById("customModalOverlay");
-  const modalTitle = document.getElementById("customModalTitle");
-  const modalMessage = document.getElementById("customModalMessage");
-  const modalButtons = document.getElementById("customModalButtons");
-  
-  modalTitle.textContent = title;
-  modalMessage.textContent = message;
-  
-  // Clear existing buttons
-  modalButtons.innerHTML = '';
-  
-  // Add buttons
-  buttons.forEach(button => {
-    const btn = document.createElement("button");
-    btn.className = `customModalBtn ${button.type || 'primary'}`;
-    btn.textContent = button.text;
-    btn.onclick = () => {
-      if (button.onClick) button.onClick();
-      hideCustomModal();
-    };
-    modalButtons.appendChild(btn);
-  });
-  
-  // Show modal
-  overlay.style.display = "flex";
-  overlay.style.zIndex = "100000";
-  
-  // Close on overlay click
-  overlay.onclick = (e) => {
-    if (e.target === overlay) {
-      hideCustomModal();
-    }
-  };
-}
-
-function hideCustomModal() {
-  const overlay = document.getElementById("customModalOverlay");
-  if (overlay) {
-    overlay.style.display = "none";
-  }
-}
-
-// Replace browser alerts with custom modals
-function showNotification(title, message) {
-  showCustomModal(title, message, [
-    { text: "OK", type: "primary", onClick: () => {} }
-  ]);
-}
-
-function showError(title, message) {
-  showCustomModal(title, message, [
-    { text: "OK", type: "danger", onClick: () => {} }
-  ]);
-}
-
-function showConfirm(title, message, onConfirm, onCancel = null) {
-  showCustomModal(title, message, [
-    { text: "Cancel", type: "secondary", onClick: onCancel },
-    { text: "Confirm", type: "primary", onClick: onConfirm }
-  ]);
-}
-function updateLoader(detail) {
+function showLoader(title = "Preparing…") {
   ensureLoaderUI();
+  document.getElementById("loaderTitle").textContent = title;
+  document.getElementById("loaderPct").textContent = "0%";
+  document.querySelector("#loaderBar > div").style.width = "0%";
+  document.getElementById("loaderDetail").textContent = "";
+  document.getElementById("loaderOverlay").style.display = "flex";
+}
+function updateLoader(pct, detail) {
+  ensureLoaderUI();
+  const p = Math.max(0, Math.min(100, Number(pct) || 0));
+  document.getElementById("loaderPct").textContent = p + "%";
+  document.querySelector("#loaderBar > div").style.width = p + "%";
   if (detail !== undefined && detail !== null) {
     document.getElementById("loaderDetail").textContent = String(detail);
   }
 }
 function hideLoader() {
   const el = document.getElementById("loaderOverlay");
-  if (el) {
-    el.style.display = "none";
-  }
-  
-  // Re-enable all buttons after loading
-  disableAllButtons(false);
-  
-  // Stop global loader checking
-  if (loaderCheckInterval) {
-    clearInterval(loaderCheckInterval);
-    loaderCheckInterval = null;
-  }
-  globalLoaderActive = false;
-}
-
-// Global loader functions
-async function checkGlobalLoaderStatus() {
-  try {
-    globalLoaderCheckCount++;
-    
-    // Zaustavi provere ako je prekoračio limit
-    if (globalLoaderCheckCount > MAX_GLOBAL_LOADER_CHECKS) {
-      console.log("🛑 [GLOBAL LOADER] Max checks reached, stopping polling");
-      stopGlobalLoaderPolling();
-      return;
-    }
-    
-    const response = await fetch('/api/global-loader-status');
-    const data = await response.json();
-    
-    if (data.active && !globalLoaderActive) {
-      console.log("🌍 [GLOBAL LOADER] Showing global loader:", data);
-      showGlobalLoader(data.detail || "Preparing analysis...", data.progress || 0);
-    } else if (!data.active && globalLoaderActive) {
-      console.log("🌍 [GLOBAL LOADER] Hiding global loader");
-      hideGlobalLoader();
-      stopGlobalLoaderPolling();
-    } else if (data.active && globalLoaderActive) {
-      // Ažuriraj postojeći loader
-      updateGlobalLoader(data.detail || "Preparing analysis...", data.progress || 0);
-    }
-    
-  } catch (error) {
-    console.error("❌ [GLOBAL LOADER] Error checking status:", error);
-  }
-}
-
-// Server-Sent Events for real-time updates
-let globalLoaderSSE = null;
-
-function startGlobalLoaderSSE() {
-  if (globalLoaderSSE) {
-    globalLoaderSSE.close();
-  }
-  
-  globalLoaderSSE = new EventSource('/api/global-loader-events');
-  
-  globalLoaderSSE.onmessage = function(event) {
-    try {
-      const data = JSON.parse(event.data);
-      console.log("🌍 [SSE] Received global loader update:", data);
-      
-      if (data.active && !globalLoaderActive) {
-        showGlobalLoader(data.detail || "Preparing analysis...", data.progress || 0);
-      } else if (!data.active && globalLoaderActive) {
-        hideGlobalLoader();
-        stopGlobalLoaderSSE();
-      } else if (data.active && globalLoaderActive) {
-        updateGlobalLoader(data.detail || "Preparing analysis...", data.progress || 0);
-      }
-    } catch (error) {
-      console.error("Error parsing SSE data:", error);
-    }
-  };
-  
-  globalLoaderSSE.onerror = function(error) {
-    console.error("SSE connection error:", error);
-    // Fallback to polling if SSE fails
-    startGlobalLoaderPolling();
-  };
-  
-  console.log("🌍 [SSE] Started Server-Sent Events connection");
-}
-
-function stopGlobalLoaderSSE() {
-  if (globalLoaderSSE) {
-    globalLoaderSSE.close();
-    globalLoaderSSE = null;
-    console.log("🌍 [SSE] Stopped Server-Sent Events connection");
-  }
-}
-
-// Funkcija za proveru globalnog loader statusa BEZ automatskog prikazivanja
-async function checkGlobalLoaderStatusSilent() {
-  try {
-    const response = await fetch('/api/global-loader-status');
-    const data = await response.json();
-    
-    if (data.active && !globalLoaderActive) {
-      console.log("🌍 [GLOBAL LOADER] Found active job, starting polling:", data);
-      // Pokreni polling samo ako postoji aktivan job
-      startGlobalLoaderPolling();
-    }
-    
-    return data;
-  } catch (error) {
-    console.error("❌ [GLOBAL LOADER] Error checking status silently:", error);
-    return { active: false };
-  }
-}
-
-// Funkcija za proveru da li se radi Prepare Day
-async function isPrepareDayRunning() {
-  try {
-    const response = await fetch('/api/global-loader-status');
-    const data = await response.json();
-    console.log("🔍 [PREPARE CHECK] API Response:", data);
-    console.log("🔍 [PREPARE CHECK] Is active:", data.active);
-    console.log("🔍 [PREPARE CHECK] Status:", data.status);
-    return data.active === true;
-  } catch (error) {
-    console.error("❌ [PREPARE CHECK] Error checking prepare status:", error);
-    return false;
-  }
-}
-
-// Funkcija za čekanje da se Prepare Day završi
-async function waitForPrepareDayToComplete() {
-  console.log("⏳ [PREPARE WAIT] Waiting for Prepare Day to complete...");
-  
-  while (true) {
-    const isRunning = await isPrepareDayRunning();
-    
-    if (!isRunning) {
-      console.log("✅ [PREPARE WAIT] Prepare Day completed, proceeding with analysis");
-      return true;
-    }
-    
-    console.log("⏳ [PREPARE WAIT] Prepare Day still running, waiting...");
-    await sleep(2000); // Čekaj 2 sekunde pre sledeće provere
-  }
-}
-
-function showGlobalLoader(title, progress = 0, detail = "Please wait...") {
-  globalLoaderActive = true;
-  showLoader(title);
-  updateLoader(detail);
-  
-  // Pokreni polling ako nije već pokrenut
-  if (!loaderCheckInterval) {
-    startGlobalLoaderPolling();
-  }
-}
-
-function updateGlobalLoader(detail, progress = 0) {
-  updateLoader(detail);
-}
-
-function hideGlobalLoader() {
-  globalLoaderActive = false;
-  hideLoader();
-  stopGlobalLoaderPolling();
-}
-
-function startGlobalLoaderPolling() {
-  if (loaderCheckInterval) {
-    clearInterval(loaderCheckInterval);
-  }
-  
-  // Zaustavi SSE ako postoji
-  stopGlobalLoaderSSE();
-  
-  // Resetuj brojač
-  globalLoaderCheckCount = 0;
-  
-  // Pokušaj SSE prvo, fallback na polling
-  try {
-    startGlobalLoaderSSE();
-  } catch (error) {
-    console.log("SSE not supported, falling back to polling");
-    // Pokreni polling svakih 2 sekunde (umesto 100ms)
-    loaderCheckInterval = setInterval(checkGlobalLoaderStatus, 2000);
-  }
-  
-  console.log("🌍 [GLOBAL LOADER] Started real-time updates");
-}
-
-function stopGlobalLoaderPolling() {
-  if (loaderCheckInterval) {
-    clearInterval(loaderCheckInterval);
-    loaderCheckInterval = null;
-  }
-  
-  // Zaustavi i SSE
-  stopGlobalLoaderSSE();
-  
-  console.log("🌍 [GLOBAL LOADER] Stopped all updates");
+  if (el) el.style.display = "none";
 }
 
 // (ako nemaš već) bezbedno JSON parsiranje
@@ -596,11 +272,39 @@ async function parseJsonSafe(resp) {
 
 
 function setBusyUI(busy, note = "") {
-  // Don't change button text anymore - the loader handles the UI feedback
+  ANALYZE_BUTTON_IDS.forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.disabled = busy;
+      if (busy) {
+        el.dataset._origText = el.dataset._origText || el.textContent;
+        if (el.id !== "savePdf" && el.id !== "savePdfFab") {
+          el.textContent = note || "Analiziram…";
+        }
+        el.style.opacity = "0.6";
+        el.style.cursor = "not-allowed";
+      } else {
+        if (el.dataset._origText) el.textContent = el.dataset._origText;
+        el.style.opacity = "";
+        el.style.cursor = "";
+      }
+    }
+  });
   document.body.style.cursor = busy ? "progress" : "";
 }
 
-// OLD showLoader function removed - was overriding the new one
+function showLoader() {
+  const top5 = document.getElementById("top5");
+  const other = document.getElementById("other");
+  const loaderHTML =
+    '<div class="loader" style="padding:12px;color:var(--muted)">Loading...</div>';
+  if (top5) top5.innerHTML = loaderHTML;
+  if (other) other.innerHTML = loaderHTML;
+  const ct = document.getElementById("countTop");
+  const co = document.getElementById("countOther");
+  if (ct) ct.textContent = "(0)";
+  if (co) co.textContent = "(0)";
+}
 
 // ====== NARATIV ======
 function buildNarrative(m, marketHint) {
@@ -647,91 +351,23 @@ function buildNarrative(m, marketHint) {
 }
 
 // ====== RENDER ======
-function getAnalysisTitle(market) {
-  const titles = {
-    '1h_over05': '🎯 Over 0.5 Goals - 1st Half',
-    'gg1h': '⚽ Both Teams to Score - 1st Half', 
-    '1h_over15': '🎯 Over 1.5 Goals - 1st Half',
-    'ft_over15': '🎯 Over 1.5 Goals - Full Time'
-  };
-  return titles[market] || '📊 Analysis Results';
-}
-
-// Pagination state
-let currentPage = 1;
-const matchesPerPage = 10;
-let allMatches = [];
-
 function renderResults(data, market) {
   const currentMarket = market || "1h_over05";
   window.currentAnalysisResults = data;
-  allMatches = Array.isArray(data) ? data : [];
 
   const top5Container = document.getElementById("top5");
   const otherContainer = document.getElementById("other");
-  const paginationContainer = document.getElementById("pagination");
 
-  const total = allMatches.length;
+  const total = Array.isArray(data) ? data.length : 0;
 
-  // Dodaj naslov analize iznad rezultata
-  const analysisTitle = getAnalysisTitle(currentMarket);
-  const resultsSection = document.querySelector('.results');
-  if (resultsSection && !document.getElementById('analysis-title')) {
-    const titleElement = document.createElement('div');
-    titleElement.id = 'analysis-title';
-    titleElement.className = 'analysis-title';
-    titleElement.innerHTML = `
-      <h2>${analysisTitle}</h2>
-      <div class="analysis-subtitle">Analysis completed • ${total} matches found</div>
-    `;
-    resultsSection.insertBefore(titleElement, resultsSection.firstChild);
-  } else if (document.getElementById('analysis-title')) {
-    const titleEl = document.getElementById('analysis-title');
-    titleEl.querySelector('h2').textContent = analysisTitle;
-    titleEl.querySelector('.analysis-subtitle').textContent = `Analysis completed • ${total} matches found`;
-  }
-
-  // Reset pagination
-  currentPage = 1;
-
-  // Render TOP 5 (always first 5)
-  const top5Matches = allMatches.slice(0, 5);
+  // naslovi sa count badge
   const countTop = document.getElementById("countTop");
-  if (countTop) countTop.textContent = `(${top5Matches.length})`;
-  
-  if (top5Container) {
-    if (top5Matches.length > 0) {
-      top5Container.innerHTML = top5Matches.map(cardHTML).join('');
-    } else {
-      top5Container.innerHTML = `<div class="placeholder">No top matches found.</div>`;
-    }
-  }
-
-  // Render Other section (remaining matches with pagination)
-  const remainingMatches = allMatches.slice(5);
   const countOther = document.getElementById("countOther");
-  if (countOther) countOther.textContent = `(${remainingMatches.length})`;
+  if (countTop) countTop.textContent = `(${total})`;
+  if (top5Container)
+    top5Container.innerHTML = `<div class="placeholder">Rendering top picks…</div>`;
+  if (otherContainer) otherContainer.innerHTML = "";
 
-  if (remainingMatches.length > 0) {
-    // Show pagination
-    if (paginationContainer) {
-      paginationContainer.style.display = 'flex';
-      renderPagination(remainingMatches.length);
-    }
-    
-    // Render first page of remaining matches
-    renderOtherMatches(remainingMatches, 1);
-  } else {
-    // Hide pagination and show empty state
-    if (paginationContainer) {
-      paginationContainer.style.display = 'none';
-    }
-    if (otherContainer) {
-      otherContainer.innerHTML = `<div class="placeholder">No additional matches found.</div>`;
-    }
-  }
-
-  // Define cardHTML function
   const cardHTML = (m) => {
     const t1Sample = m.team1_total > 0 ? ` (${m.team1_hits}/${m.team1_total})` : "";
     const t2Sample = m.team2_total > 0 ? ` (${m.team2_hits}/${m.team2_total})` : "";
@@ -750,87 +386,43 @@ function renderResults(data, market) {
 
     return `
       <div class="match">
-        <div class="match-header">
-          <div class="match-league">${fmt(m.league)}</div>
-          <div class="match-teams">${fmt(m.team1)} vs ${fmt(m.team2)}</div>
+        <div style="font-weight:700;margin-bottom:6px">${fmt(m.league)}: ${fmt(m.team1)} vs ${fmt(m.team2)}</div>
+
+        <div style="margin:6px 0">
+          <div>${fmt(m.team1)} – Last ${fmt(m.team1_total)}: <strong>${fmt(m.team1_percent, '%')}</strong>${t1Sample}</div>
+          <div>${fmt(m.team2)} – Last ${fmt(m.team2_total)}: <strong>${fmt(m.team2_percent, '%')}</strong>${t2Sample}</div>
+          <div>H2H: <strong>${fmt(m.h2h_percent, '%')}</strong>${h2hSample}</div>
         </div>
 
-        <div class="match-stats">
-          <div class="stat-row">
-            <span class="stat-label">${fmt(m.team1)}</span>
-            <span class="stat-value">${fmt(m.team1_percent, '%')}</span>
-            <span class="stat-sample">(${fmt(m.team1_hits)}/${fmt(m.team1_total)})</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-label">${fmt(m.team2)}</span>
-            <span class="stat-value">${fmt(m.team2_percent, '%')}</span>
-            <span class="stat-sample">(${fmt(m.team2_hits)}/${fmt(m.team2_total)})</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-label">H2H</span>
-            <span class="stat-value">${fmt(m.h2h_percent, '%')}</span>
-            <span class="stat-sample">(${fmt(m.h2h_hits)}/${fmt(m.h2h_total)})</span>
-          </div>
+        <div style="margin:6px 0">
+          <div><em>1H mikro signali (po timu):</em></div>
+          <div>Shots on Target (1H): Home ${shotHome} (used ${fmt(m.home_shots_used)}), Away ${shotAway} (used ${fmt(m.away_shots_used)})</div>
+          <div>Dangerous Attacks (1H): Home ${attHome} (used ${fmt(m.home_attacks_used)}), Away ${attAway} (used ${fmt(m.away_attacks_used)})</div>
+          <div>Form (sredina dostupnih signala): <strong>${fmt(m.form_percent, '%')}</strong></div>
         </div>
 
-        <div class="micro-signals">
-          <div class="micro-title">1H Micro Signals</div>
-          <div class="micro-grid">
-            <div class="micro-item">
-              <span class="micro-label">Shots on Target</span>
-              <span class="micro-values">H: ${shotHome} | A: ${shotAway}</span>
-            </div>
-            <div class="micro-item">
-              <span class="micro-label">Dangerous Attacks</span>
-              <span class="micro-values">H: ${attHome} | A: ${attAway}</span>
-            </div>
-            <div class="micro-item">
-              <span class="micro-label">Form Average</span>
-              <span class="micro-values">${fmt(m.form_percent, '%')}</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="model-breakdown">
-          <div class="breakdown-title">Model Analysis</div>
-          <div class="breakdown-grid">
-            <div class="breakdown-item">
-              <span class="breakdown-label">Prior (Form + H2H)</span>
-              <span class="breakdown-value">${fmt(d.prior_percent, '%')}</span>
-            </div>
-            <div class="breakdown-item">
-              <span class="breakdown-label">Micro (League-normalized)</span>
-              <span class="breakdown-value">${fmt(d.micro_percent, '%')}</span>
-            </div>
-            <div class="breakdown-item">
-              <span class="breakdown-label">Micro Share</span>
-              <span class="breakdown-value">${fmt(d.merge_weight_micro)}</span>
-            </div>
+        <div style="margin:6px 0;padding:8px;background:var(--surface-2);border-radius:10px;border:1px solid var(--border)">
+          <div style="font-weight:600;margin-bottom:4px">Model breakdown</div>
+          <div>Prior (recent form + H2H): <strong>${fmt(d.prior_percent, '%')}</strong></div>
+          <div>Micro (league-normalized): <strong>${fmt(d.micro_percent, '%')}</strong>
+            <span style="color:var(--muted)">[exp SOT total: ${fmt(d.exp_sot1h_total)}, exp DA total: ${fmt(d.exp_da1h_total)}, pos-edge: ${fmt(d.pos_edge_percent, '%')}]</span>
           </div>
           ${isGG ? `
-            <div class="breakdown-item">
-              <span class="breakdown-label">Team 1 scores 1H</span>
-              <span class="breakdown-value">${fmt(d.p_home_scores_1h, '%')}</span>
-            </div>
-            <div class="breakdown-item">
-              <span class="breakdown-label">Team 2 scores 1H</span>
-              <span class="breakdown-value">${fmt(d.p_away_scores_1h, '%')}</span>
-            </div>
-          ` : ``}
+            <div>Team 1 scores 1H: <strong>${fmt(d.p_home_scores_1h, '%')}</strong>,
+                 Team 2: <strong>${fmt(d.p_away_scores_1h, '%')}</strong>
+                 <span style="color:var(--muted)">${d.rho!=null?`(ρ=${fmt(d.rho)})`:''}</span>
+            </div>` : ``}
             ${isO15 ? `
-            <div class="breakdown-item">
-              <span class="breakdown-label">${o15Label}</span>
-              <span class="breakdown-value">${fmt(d.lambda_total)}</span>
-            </div>
-          ` : ``}
+            <div>${o15Label}: total <strong>${fmt(d.lambda_total)}</strong>
+                <span style="color:var(--muted)">(home ${fmt(d.lambda_home)}, away ${fmt(d.lambda_away)})</span>
+            </div>` : ``}
+          <div>Merged (precision-weighted): <span style="color:var(--text)">micro share ≈ ${fmt(d.merge_weight_micro)}</span></div>
+          <div style="color:var(--muted)">effN prior: ${fmt(d.effn_prior)}, effN micro: ${fmt(d.effn_micro)}, ligaški baseline: ${fmt(d.m_league, '%')}</div>
         </div>
 
-        <div class="final-result">
-          <div class="final-probability">
-            <span class="final-label">Final Probability</span>
-            <span class="final-value">${fmt(m.final_percent, '%')}</span>
-          </div>
-          <div class="narrative">
+        <div style="margin-top:8px">
+          <div><strong>Final Probability: ${fmt(m.final_percent, '%')}</strong></div>
+          <div style="margin-top:6px; font-size:0.92em; line-height:1.35; color:var(--text);">
             ${buildNarrative(m, currentMarket)}
           </div>
         </div>
@@ -850,98 +442,6 @@ function renderResults(data, market) {
   }
 }
 
-// ====== PAGINATION FUNCTIONS ======
-function renderPagination(totalMatches) {
-  const totalPages = Math.ceil(totalMatches / matchesPerPage);
-  const paginationInfo = document.getElementById('paginationInfo');
-  const paginationPages = document.getElementById('paginationPages');
-  const prevBtn = document.getElementById('prevPage');
-  const nextBtn = document.getElementById('nextPage');
-
-  // Update pagination info
-  const startIndex = (currentPage - 1) * matchesPerPage + 1;
-  const endIndex = Math.min(currentPage * matchesPerPage, totalMatches);
-  if (paginationInfo) {
-    paginationInfo.textContent = `Showing ${startIndex}-${endIndex} of ${totalMatches} matches`;
-  }
-
-  // Update prev/next buttons
-  if (prevBtn) {
-    prevBtn.disabled = currentPage === 1;
-  }
-  if (nextBtn) {
-    nextBtn.disabled = currentPage === totalPages;
-  }
-
-  // Render page numbers
-  if (paginationPages) {
-    paginationPages.innerHTML = '';
-    
-    // Show max 5 page numbers
-    const maxVisiblePages = 5;
-    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-    
-    // Adjust start if we're near the end
-    if (endPage - startPage + 1 < maxVisiblePages) {
-      startPage = Math.max(1, endPage - maxVisiblePages + 1);
-    }
-
-    for (let i = startPage; i <= endPage; i++) {
-      const pageBtn = document.createElement('button');
-      pageBtn.className = `page-btn ${i === currentPage ? 'active' : ''}`;
-      pageBtn.textContent = i;
-      pageBtn.onclick = () => goToPage(i);
-      paginationPages.appendChild(pageBtn);
-    }
-  }
-}
-
-function renderOtherMatches(matches, page) {
-  const otherContainer = document.getElementById("other");
-  if (!otherContainer) return;
-
-  const startIndex = (page - 1) * matchesPerPage;
-  const endIndex = startIndex + matchesPerPage;
-  const pageMatches = matches.slice(startIndex, endIndex);
-
-  if (pageMatches.length > 0) {
-    otherContainer.innerHTML = pageMatches.map(cardHTML).join('');
-  } else {
-    otherContainer.innerHTML = `<div class="placeholder">No matches found for this page.</div>`;
-  }
-}
-
-function goToPage(page) {
-  if (page === currentPage) return;
-  
-  currentPage = page;
-  const remainingMatches = allMatches.slice(5);
-  
-  renderOtherMatches(remainingMatches, page);
-  renderPagination(remainingMatches.length);
-  
-  // Scroll to other section
-  const otherSection = document.querySelector('.other-section');
-  if (otherSection) {
-    otherSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
-}
-
-function nextPage() {
-  const remainingMatches = allMatches.slice(5);
-  const totalPages = Math.ceil(remainingMatches.length / matchesPerPage);
-  if (currentPage < totalPages) {
-    goToPage(currentPage + 1);
-  }
-}
-
-function prevPage() {
-  if (currentPage > 1) {
-    goToPage(currentPage - 1);
-  }
-}
-
 // ====== HELPERS ======
 function normalizeResults(json) {
   if (Array.isArray(json)) return json;
@@ -956,25 +456,15 @@ function setDefaultDatesIfEmpty() {
   const fromEl = document.getElementById("fromDate");
   const toEl = document.getElementById("toDate");
   if (!fromEl || !toEl) return;
-  
-  const today = new Date();
+  const now = new Date();
+  const plus4h = new Date(now.getTime() + 4 * 3600 * 1000);
   const pad = (n) => String(n).padStart(2, "0");
-  
-  // Set to 8AM today
-  const fromDate = new Date(today);
-  fromDate.setHours(8, 0, 0, 0);
-  
-  // Set to 22PM (10PM) today
-  const toDate = new Date(today);
-  toDate.setHours(22, 0, 0, 0);
-  
   const toLocal = (d) =>
     `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
       d.getHours()
     )}:${pad(d.getMinutes())}`;
-    
-  if (!fromEl.value) fromEl.value = toLocal(fromDate);
-  if (!toEl.value) toEl.value = toLocal(toDate);
+  if (!fromEl.value) fromEl.value = toLocal(now);
+  if (!toEl.value) toEl.value = toLocal(plus4h);
 }
 
 function localYMD(d) {
@@ -986,43 +476,24 @@ function localYMD(d) {
 
 // ====== MAIN ACTION ======
 async function fetchAnalysis(type) {
-  const analysisTitles = {
-    '1p': '🎯 Analyzing 1+ Goals...',
-    'GG': '⚽ Analyzing Both Teams Score...',
-    'O15': '🔥 Analyzing Over 1.5 Goals...',
-    'FT_O15': '🚀 Analyzing FT Over 1.5 Goals...'
-  };
-
-  // 1) Proveri da li se radi Prepare Day
-  const isPrepareRunning = await isPrepareDayRunning();
-  if (isPrepareRunning) {
-    console.log("⏳ [ANALYSIS] Prepare Day is running, waiting for completion...");
-    showLoader("⏳ Waiting for Prepare Day to complete...");
-    setBusyUI(true, "Waiting for Prepare Day...");
-    
-    // Čekaj da se Prepare Day završi
-    await waitForPrepareDayToComplete();
-  }
-
-  // 2) Pokreni analizu
-  showLoader(analysisTitles[type] || '🔍 Analyzing...');
+  showLoader();
 
   const fromEl = document.getElementById("fromDate");
   const toEl = document.getElementById("toDate");
 
   if (!fromEl || !toEl || !fromEl.value || !toEl.value) {
-    showError("Date Selection Required", "Please select both From and To dates.");
+    alert("Please select both From and To dates.");
     return;
   }
 
   const fromDate = new Date(fromEl.value);
   const toDate = new Date(toEl.value);
   if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
-    showError("Invalid Dates", "Invalid date values.");
+    alert("Invalid date values.");
     return;
   }
   if (toDate < fromDate) {
-    showError("Invalid Date Range", "End date/time must be after start date/time.");
+    alert("End date/time must be after start date/time.");
     return;
   }
 
@@ -1064,7 +535,7 @@ async function fetchAnalysis(type) {
         json = JSON.parse(raw);
       } catch {
         console.error("Non-JSON response:", raw);
-        showError("Server Error", `Server returned invalid response (not JSON):\n${raw.slice(0, 300)}...`);
+        alert(`Server vratio nevalidan odgovor (nije JSON):\n${raw.slice(0, 300)}...`);
         break;
       }
 
@@ -1072,7 +543,7 @@ async function fetchAnalysis(type) {
         attempt += 1;
         if (attempt > MAX_RETRIES) {
           const msg = json?.detail || "Server je trenutno zauzet. Pokušaj ponovo.";
-          showError("Server Error", msg);
+          alert(msg);
           break;
         }
         const wait = Math.min(1000 * Math.pow(1.6, attempt), 5000);
@@ -1086,7 +557,7 @@ async function fetchAnalysis(type) {
       if (!res.ok) {
         const msg = json?.detail || json?.error || JSON.stringify(json).slice(0, 300);
         console.error("Server error:", msg);
-        showError("Server Error", `Server error: ${msg}`);
+        alert(`Greška sa servera: ${msg}`);
         break;
       }
 
@@ -1101,9 +572,8 @@ async function fetchAnalysis(type) {
     }
   } catch (err) {
     console.error("Fetch/parse error:", err);
-    showError("Analysis Error", `Error during analysis: ${err}`);
+    alert(`Došlo je do greške pri analizi: ${err}`);
   } finally {
-    hideLoader();
     setBusyUI(false);
   }
 }
@@ -1119,42 +589,21 @@ async function prepareDay() {
     const dayStr = localYMD(base); // tvoja postojeća util funkcija
 
     setBusyUI(true, `Pripremam ${dayStr}…`);
-    showLoader(`🚀 Preparing ${dayStr}...`);
+    showLoader(`Pripremam ${dayStr}…`);
 
     // 1) enqueue
-    const user = localStorage.getItem('user');
-    const userData = user ? JSON.parse(user) : null;
-    const sessionId = userData ? userData.session_id : null;
-    
     const resp = await fetch(`/api/prepare-day`, {
       method: "POST",
-      headers: { 
-        "Content-Type": "application/json", 
-        "Accept": "application/json",
-        "Authorization": `Bearer ${sessionId}`
-      },
-      body: JSON.stringify({ date: dayStr, prewarm: true, session_id: sessionId })
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify({ date: dayStr, prewarm: true })
     });
     const data = await parseJsonSafe(resp);
-    
-    // Check for admin access error
-    if (resp.status === 403) {
-      throw new Error("Access denied. Admin privileges required.");
-    }
-    if (resp.status === 401) {
-      throw new Error("Authentication required. Please log in.");
-    }
-    
     if (!data.ok || !data.job_id) throw new Error("Neuspešno pokretanje prepare posla");
 
     const jobId = data.job_id;
-    updateLoader("queued");
+    updateLoader(1, "queued");
 
-    // 2) Pokreni globalni loader polling
-    console.log("🌍 [GLOBAL LOADER] Starting global loader for prepare day");
-    startGlobalLoaderPolling();
-
-    // 3) poll status
+    // 2) poll status
     let lastProgress = -1;
     while (true) {
       await sleep(3000);
@@ -1166,13 +615,13 @@ async function prepareDay() {
       if (sData.status === "queued" || sData.status === "running") {
         if (sData.progress !== lastProgress) {
           lastProgress = sData.progress;
-          updateLoader(sData.detail || "");
+          updateLoader(sData.progress, sData.detail || "");
         }
         continue;
       }
 
       if (sData.status === "done") {
-        updateLoader("finished");
+        updateLoader(100, "finished");
         const r = sData.result || {};
         const s = [
           `Dan: ${r.day}`,
@@ -1183,7 +632,7 @@ async function prepareDay() {
           `Stats missing prije: ${r.stats_missing_before}`,
           r.computed ? `Computed: ${Object.entries(r.computed).map(([k,v]) => `${k}: ${v}`).join(", ")}` : ""
         ].filter(Boolean).join("\n");
-        showNotification("Prepare Day Complete", s);
+        alert(`Done.\n\n${s}`);
         break;
       }
 
@@ -1195,102 +644,24 @@ async function prepareDay() {
     }
   } catch (err) {
     console.error(err);
-    showError("Prepare Day Error", `Prepare day error: ${err}`);
+    alert(`Prepare-day greška: ${err}`);
     showToast("Prepare-day greška", "error");
   } finally {
     hideLoader();
     setBusyUI(false);
-    // Zaustavi globalni loader polling
-    stopGlobalLoaderPolling();
-  }
-}
-
-// ====== AUTHENTICATION FUNCTIONS ======
-function checkAuthStatus() {
-  const user = localStorage.getItem('user');
-  const authButtons = document.getElementById('authButtons');
-  const userMenu = document.getElementById('userMenu');
-  const userName = document.getElementById('userName');
-  const userEmail = document.getElementById('userEmail');
-  const prepareDayBtn = document.getElementById('prepareDay');
-  
-  if (user) {
-    // User is logged in
-    const userData = JSON.parse(user);
-    if (authButtons) authButtons.style.display = 'none';
-    if (userMenu) userMenu.style.display = 'flex';
-    if (userName) userName.textContent = userData.name || 'User';
-    if (userEmail) userEmail.textContent = userData.email || 'user@example.com';
-    
-    // Show Prepare Day button only for admin user
-    if (prepareDayBtn) {
-      const isAdmin = userData.email === 'klisaricf@gmail.com';
-      if (isAdmin) {
-        prepareDayBtn.classList.add('show');
-      } else {
-        prepareDayBtn.classList.remove('show');
-      }
-    }
-  } else {
-    // User is not logged in
-    if (authButtons) authButtons.style.display = 'flex';
-    if (userMenu) userMenu.style.display = 'none';
-    if (prepareDayBtn) prepareDayBtn.classList.remove('show');
-  }
-}
-
-async function logout() {
-  try {
-    const user = localStorage.getItem('user');
-    if (user) {
-      const userData = JSON.parse(user);
-      if (userData.session_id) {
-        // Call backend logout
-        await fetch(`${BACKEND_URL}/api/auth/logout`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            session_id: userData.session_id
-          })
-        });
-      }
-    }
-  } catch (error) {
-    console.error('Logout error:', error);
-  } finally {
-    // Always clear local storage and update UI
-    localStorage.removeItem('user');
-    checkAuthStatus();
-    showToast('Logged out successfully!', 'success');
   }
 }
 
 // ====== WIRE EVENTS once DOM is ready ======
 document.addEventListener("DOMContentLoaded", () => {
-  // NE proveravaj globalni loader status automatski - samo kada je potrebno
   // 1) Kreiraj moderni shell (radi i sa starim HTML-om)
   ensureModernShell();
 
   // 2) Tema
   initTheme();
 
-  // 3) Authentication
-  checkAuthStatus();
-  
-  // 4) Initialize logout button
-  const logoutBtn = document.getElementById('logoutBtn');
-  if (logoutBtn) {
-    logoutBtn.addEventListener('click', logout);
-  }
-
-  // 5) Podrazumijevani datumi (ako su prazni)
+  // 3) Podrazumijevani datumi (ako su prazni)
   setDefaultDatesIfEmpty();
-  
-  // 4) Start checking for global loader status
-  // checkGlobalLoaderStatus(); // DISABLED - was causing too many requests
-  // setInterval(checkGlobalLoaderStatus, 3000); // DISABLED
 
   // 4) Dugmad
   const btn1p = document.getElementById("analyze1p");
@@ -1306,13 +677,6 @@ document.addEventListener("DOMContentLoaded", () => {
   if (btn1pls) btn1pls.addEventListener("click", () => fetchAnalysis("O15"));
   if (btnFT2pl) btnFT2pl.addEventListener("click", () => fetchAnalysis("FT_O15"));
   if (btnPrep) btnPrep.addEventListener("click", prepareDay);
-
-  // Pagination event listeners
-  const prevPageBtn = document.getElementById('prevPage');
-  const nextPageBtn = document.getElementById('nextPage');
-  
-  if (prevPageBtn) prevPageBtn.addEventListener('click', prevPage);
-  if (nextPageBtn) nextPageBtn.addEventListener('click', nextPage);
 
   function doSavePdf() {
     if (!window.currentAnalysisResults || !window.currentAnalysisResults.length) {

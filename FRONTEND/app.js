@@ -54,6 +54,7 @@ function ensureLoaderUI() {
   document.body.appendChild(overlay);
 }
 function showLoader(title = "🚀 Preparing Analysis...") {
+  console.log("🔍 [DEBUG] showLoader called with title:", title);
   ensureLoaderUI();
   
   const overlay = document.getElementById("loaderOverlay");
@@ -177,6 +178,7 @@ function updateLoader(detail) {
   }
 }
 function hideLoader() {
+  console.log("🔍 [DEBUG] hideLoader called");
   const el = document.getElementById("loaderOverlay");
   if (el) {
     el.style.display = "none";
@@ -939,6 +941,7 @@ async function fetchAnalysis(type) {
       } catch {
         console.error("Non-JSON response:", raw);
         showError("Server Error", `Server returned invalid response (not JSON):\n${raw.slice(0, 300)}...`);
+        hideLoader();
         break;
       }
 
@@ -947,6 +950,7 @@ async function fetchAnalysis(type) {
         if (attempt > MAX_RETRIES) {
           const msg = json?.detail || "Server je trenutno zauzet. Pokušaj ponovo.";
           showError("Server Error", msg);
+          hideLoader();
           break;
         }
         const wait = Math.min(1000 * Math.pow(1.6, attempt), 5000);
@@ -961,6 +965,7 @@ async function fetchAnalysis(type) {
         const msg = json?.detail || json?.error || JSON.stringify(json).slice(0, 300);
         console.error("Server error:", msg);
         showError("Server Error", `Server error: ${msg}`);
+        hideLoader();
         break;
       }
 
@@ -971,13 +976,14 @@ async function fetchAnalysis(type) {
       data.sort((a, b) => (b.final_percent ?? 0) - (a.final_percent ?? 0));
       renderResults(data, market);
       showToast(`Gotovo • ${data.length} utakmica`, "ok");
+      hideLoader();
       break;
     }
   } catch (err) {
     console.error("Fetch/parse error:", err);
     showError("Analysis Error", `Error during analysis: ${err}`);
-  } finally {
     hideLoader();
+  } finally {
     setBusyUI(false);
   }
 }

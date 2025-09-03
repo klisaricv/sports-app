@@ -127,48 +127,19 @@
 
     <!-- Results -->
     <section class="panel results">
-      <div class="results__container">
-        <!-- TOP 5 Section -->
-        <div class="results-section top-section">
-          <div class="section-header">
-            <h3 class="section-title">TOP 5 MATCHES</h3>
-            <div class="section-description">These are the 5 pairs with the highest probability for your selected time range</div>
-            <span class="count" id="countTop" aria-live="polite"></span>
-          </div>
-          <div class="matches-container" id="top5">
-            <div class="placeholder">No analysis results yet.</div>
-          </div>
-        </div>
+      <div class="results__grid">
+        <article class="section" id="top5">
+          <h3>
+            TOP 5
+            <span class="count" aria-live="polite"></span>
+          </h3>
+          <div class="placeholder">No analysis results yet.</div>
+        </article>
 
-        <!-- Other Section -->
-        <div class="results-section other-section">
-          <div class="section-header">
-            <h3 class="section-title">ADDITIONAL MATCHES</h3>
-            <div class="section-description">All other analyzed pairs for your selected time range</div>
-            <span class="count" id="countOther" aria-live="polite"></span>
-          </div>
-          <div class="matches-container" id="other">
-            <div class="placeholder">No analysis results yet.</div>
-          </div>
-        </div>
-
-        <!-- Pagination -->
-        <div class="pagination-container" id="pagination" style="display: none;">
-          <div class="pagination-info">
-            <span id="paginationInfo">Showing 1-10 of 0 matches</span>
-          </div>
-          <div class="pagination-controls">
-            <button id="prevPage" class="pagination-btn" disabled>
-              <svg width="16" height="16" viewBox="0 0 24 24"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
-              Previous
-            </button>
-            <div class="pagination-pages" id="paginationPages"></div>
-            <button id="nextPage" class="pagination-btn" disabled>
-              Next
-              <svg width="16" height="16" viewBox="0 0 24 24"><path d="M8.59 16.59L10 18l6-6-6-6-1.41 1.41L13.17 12z"/></svg>
-            </button>
-          </div>
-        </div>
+        <article class="section" id="other">
+          <h3>OTHER</h3>
+          <div class="placeholder">No analysis results yet.</div>
+        </article>
       </div>
     </section>
   </main>

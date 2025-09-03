@@ -6631,6 +6631,16 @@ async def api_global_loader_status():
         conn = get_db_connection()
         cur = conn.cursor(dictionary=True)
         
+        # Prvo očisti zastarele job-ove (starije od 10 minuta)
+        cur.execute("""
+            UPDATE prepare_jobs 
+            SET status = 'error', detail = 'Job timeout - automatically cancelled'
+            WHERE status IN ('running', 'queued')
+            AND created_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE)
+        """)
+        if cur.rowcount > 0:
+            print(f"🧹 [GLOBAL LOADER] Cleaned up {cur.rowcount} stale jobs")
+        
         # Proveri da li postoji aktivan prepare job (ne stariji od 1 sata)
         cur.execute("""
             SELECT status, progress, detail, created_at
@@ -6642,6 +6652,7 @@ async def api_global_loader_status():
         """)
         
         job = cur.fetchone()
+        conn.commit()
         conn.close()
         
         print(f"🔍 [GLOBAL LOADER STATUS] Found job: {job}")

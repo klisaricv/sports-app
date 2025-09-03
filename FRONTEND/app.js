@@ -202,11 +202,26 @@ async function checkGlobalLoaderStatus() {
     if (globalLoaderCheckCount > MAX_GLOBAL_LOADER_CHECKS) {
       console.log("🛑 [GLOBAL LOADER] Max checks reached, stopping polling");
       stopGlobalLoaderPolling();
+      hideGlobalLoader();
       return;
     }
     
     const response = await fetch('/api/global-loader-status');
     const data = await response.json();
+    
+    // Proveri da li je job zastareo (stariji od 5 minuta)
+    if (data.active && data.started_at) {
+      const startTime = new Date(data.started_at);
+      const now = new Date();
+      const diffMinutes = (now - startTime) / (1000 * 60);
+      
+      if (diffMinutes > 5) {
+        console.log("⚠️ [GLOBAL LOADER] Job is stale (older than 5 minutes), stopping polling");
+        stopGlobalLoaderPolling();
+        hideGlobalLoader();
+        return;
+      }
+    }
     
     if (data.active && !globalLoaderActive) {
       console.log("🌍 [GLOBAL LOADER] Showing global loader:", data);
@@ -222,6 +237,9 @@ async function checkGlobalLoaderStatus() {
     
   } catch (error) {
     console.error("❌ [GLOBAL LOADER] Error checking status:", error);
+    // Ako ima grešku, zaustavi polling
+    stopGlobalLoaderPolling();
+    hideGlobalLoader();
   }
 }
 
@@ -252,6 +270,19 @@ async function isPrepareDayRunning() {
     console.log("🔍 [PREPARE CHECK] API Response:", data);
     console.log("🔍 [PREPARE CHECK] Is active:", data.active);
     console.log("🔍 [PREPARE CHECK] Status:", data.status);
+    
+    // Ako je job stariji od 5 minuta, smatraj ga "zastarelim" i ne čekaj ga
+    if (data.active && data.started_at) {
+      const startTime = new Date(data.started_at);
+      const now = new Date();
+      const diffMinutes = (now - startTime) / (1000 * 60);
+      
+      if (diffMinutes > 5) {
+        console.log("⚠️ [PREPARE CHECK] Job is older than 5 minutes, considering it stale");
+        return false;
+      }
+    }
+    
     return data.active === true;
   } catch (error) {
     console.error("❌ [PREPARE CHECK] Error checking prepare status:", error);
@@ -307,6 +338,15 @@ function startGlobalLoaderPolling() {
   
   // Pokreni polling svakih 100ms
   loaderCheckInterval = setInterval(checkGlobalLoaderStatus, 100);
+  
+  // Dodaj timeout kao sigurnosnu mrežu - uvek sakrij loader nakon 30 sekundi
+  setTimeout(() => {
+    if (globalLoaderActive) {
+      console.log("⏰ [GLOBAL LOADER] Timeout reached, force hiding loader");
+      stopGlobalLoaderPolling();
+      hideGlobalLoader();
+    }
+  }, 30000); // 30 sekundi
   
   console.log("🌍 [GLOBAL LOADER] Started polling");
 }

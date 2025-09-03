@@ -657,14 +657,21 @@ function getAnalysisTitle(market) {
   return titles[market] || '📊 Analysis Results';
 }
 
+// Pagination state
+let currentPage = 1;
+const matchesPerPage = 10;
+let allMatches = [];
+
 function renderResults(data, market) {
   const currentMarket = market || "1h_over05";
   window.currentAnalysisResults = data;
+  allMatches = Array.isArray(data) ? data : [];
 
   const top5Container = document.getElementById("top5");
   const otherContainer = document.getElementById("other");
+  const paginationContainer = document.getElementById("pagination");
 
-  const total = Array.isArray(data) ? data.length : 0;
+  const total = allMatches.length;
 
   // Dodaj naslov analize iznad rezultata
   const analysisTitle = getAnalysisTitle(currentMarket);
@@ -684,14 +691,47 @@ function renderResults(data, market) {
     titleEl.querySelector('.analysis-subtitle').textContent = `Analysis completed • ${total} matches found`;
   }
 
-  // naslovi sa count badge
-  const countTop = document.getElementById("countTop");
-  const countOther = document.getElementById("countOther");
-  if (countTop) countTop.textContent = `(${total})`;
-  if (top5Container)
-    top5Container.innerHTML = `<div class="placeholder">Rendering top picks…</div>`;
-  if (otherContainer) otherContainer.innerHTML = "";
+  // Reset pagination
+  currentPage = 1;
 
+  // Render TOP 5 (always first 5)
+  const top5Matches = allMatches.slice(0, 5);
+  const countTop = document.getElementById("countTop");
+  if (countTop) countTop.textContent = `(${top5Matches.length})`;
+  
+  if (top5Container) {
+    if (top5Matches.length > 0) {
+      top5Container.innerHTML = top5Matches.map(cardHTML).join('');
+    } else {
+      top5Container.innerHTML = `<div class="placeholder">No top matches found.</div>`;
+    }
+  }
+
+  // Render Other section (remaining matches with pagination)
+  const remainingMatches = allMatches.slice(5);
+  const countOther = document.getElementById("countOther");
+  if (countOther) countOther.textContent = `(${remainingMatches.length})`;
+
+  if (remainingMatches.length > 0) {
+    // Show pagination
+    if (paginationContainer) {
+      paginationContainer.style.display = 'flex';
+      renderPagination(remainingMatches.length);
+    }
+    
+    // Render first page of remaining matches
+    renderOtherMatches(remainingMatches, 1);
+  } else {
+    // Hide pagination and show empty state
+    if (paginationContainer) {
+      paginationContainer.style.display = 'none';
+    }
+    if (otherContainer) {
+      otherContainer.innerHTML = `<div class="placeholder">No additional matches found.</div>`;
+    }
+  }
+
+  // Define cardHTML function
   const cardHTML = (m) => {
     const t1Sample = m.team1_total > 0 ? ` (${m.team1_hits}/${m.team1_total})` : "";
     const t2Sample = m.team2_total > 0 ? ` (${m.team2_hits}/${m.team2_total})` : "";
@@ -807,6 +847,98 @@ function renderResults(data, market) {
   if (countOther) {
     const otherCount = Math.max(total - 5, 0);
     countOther.textContent = `(${otherCount})`;
+  }
+}
+
+// ====== PAGINATION FUNCTIONS ======
+function renderPagination(totalMatches) {
+  const totalPages = Math.ceil(totalMatches / matchesPerPage);
+  const paginationInfo = document.getElementById('paginationInfo');
+  const paginationPages = document.getElementById('paginationPages');
+  const prevBtn = document.getElementById('prevPage');
+  const nextBtn = document.getElementById('nextPage');
+
+  // Update pagination info
+  const startIndex = (currentPage - 1) * matchesPerPage + 1;
+  const endIndex = Math.min(currentPage * matchesPerPage, totalMatches);
+  if (paginationInfo) {
+    paginationInfo.textContent = `Showing ${startIndex}-${endIndex} of ${totalMatches} matches`;
+  }
+
+  // Update prev/next buttons
+  if (prevBtn) {
+    prevBtn.disabled = currentPage === 1;
+  }
+  if (nextBtn) {
+    nextBtn.disabled = currentPage === totalPages;
+  }
+
+  // Render page numbers
+  if (paginationPages) {
+    paginationPages.innerHTML = '';
+    
+    // Show max 5 page numbers
+    const maxVisiblePages = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+    
+    // Adjust start if we're near the end
+    if (endPage - startPage + 1 < maxVisiblePages) {
+      startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+      const pageBtn = document.createElement('button');
+      pageBtn.className = `page-btn ${i === currentPage ? 'active' : ''}`;
+      pageBtn.textContent = i;
+      pageBtn.onclick = () => goToPage(i);
+      paginationPages.appendChild(pageBtn);
+    }
+  }
+}
+
+function renderOtherMatches(matches, page) {
+  const otherContainer = document.getElementById("other");
+  if (!otherContainer) return;
+
+  const startIndex = (page - 1) * matchesPerPage;
+  const endIndex = startIndex + matchesPerPage;
+  const pageMatches = matches.slice(startIndex, endIndex);
+
+  if (pageMatches.length > 0) {
+    otherContainer.innerHTML = pageMatches.map(cardHTML).join('');
+  } else {
+    otherContainer.innerHTML = `<div class="placeholder">No matches found for this page.</div>`;
+  }
+}
+
+function goToPage(page) {
+  if (page === currentPage) return;
+  
+  currentPage = page;
+  const remainingMatches = allMatches.slice(5);
+  
+  renderOtherMatches(remainingMatches, page);
+  renderPagination(remainingMatches.length);
+  
+  // Scroll to other section
+  const otherSection = document.querySelector('.other-section');
+  if (otherSection) {
+    otherSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+}
+
+function nextPage() {
+  const remainingMatches = allMatches.slice(5);
+  const totalPages = Math.ceil(remainingMatches.length / matchesPerPage);
+  if (currentPage < totalPages) {
+    goToPage(currentPage + 1);
+  }
+}
+
+function prevPage() {
+  if (currentPage > 1) {
+    goToPage(currentPage - 1);
   }
 }
 
@@ -1174,6 +1306,13 @@ document.addEventListener("DOMContentLoaded", () => {
   if (btn1pls) btn1pls.addEventListener("click", () => fetchAnalysis("O15"));
   if (btnFT2pl) btnFT2pl.addEventListener("click", () => fetchAnalysis("FT_O15"));
   if (btnPrep) btnPrep.addEventListener("click", prepareDay);
+
+  // Pagination event listeners
+  const prevPageBtn = document.getElementById('prevPage');
+  const nextPageBtn = document.getElementById('nextPage');
+  
+  if (prevPageBtn) prevPageBtn.addEventListener('click', prevPage);
+  if (nextPageBtn) nextPageBtn.addEventListener('click', nextPage);
 
   function doSavePdf() {
     if (!window.currentAnalysisResults || !window.currentAnalysisResults.length) {

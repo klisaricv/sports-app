@@ -35,6 +35,73 @@ function showError(message, title = "Error") {
   document.body.appendChild(modal);
 }
 
+function showFieldError(inputId, message) {
+  // Remove existing error for this field
+  clearFieldError(inputId);
+  
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  
+  const errorDiv = document.createElement('div');
+  errorDiv.className = 'field-error';
+  errorDiv.textContent = message;
+  
+  // Insert after the input wrapper
+  const inputWrapper = input.closest('.form-input-wrapper') || input.closest('.form-group');
+  if (inputWrapper) {
+    inputWrapper.parentNode.insertBefore(errorDiv, inputWrapper.nextSibling);
+  }
+  
+  // Add error class to input
+  input.classList.add('error');
+}
+
+function clearFieldError(inputId) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  
+  // Remove error class
+  input.classList.remove('error');
+  
+  // Remove existing error message
+  const existingError = input.closest('.form-group')?.querySelector('.field-error');
+  if (existingError) {
+    existingError.remove();
+  }
+}
+
+function clearAllFieldErrors() {
+  const errors = document.querySelectorAll('.field-error');
+  errors.forEach(error => error.remove());
+  
+  const errorInputs = document.querySelectorAll('.form-input.error');
+  errorInputs.forEach(input => input.classList.remove('error'));
+}
+
+function addLoadingAnimation(button) {
+  button.classList.add('loading');
+  button.style.position = 'relative';
+  button.style.overflow = 'hidden';
+  
+  // Add ripple effect
+  const ripple = document.createElement('div');
+  ripple.className = 'ripple-effect';
+  button.appendChild(ripple);
+  
+  // Trigger ripple animation
+  setTimeout(() => {
+    ripple.style.animation = 'ripple 0.6s ease-out';
+  }, 10);
+}
+
+function removeLoadingAnimation(button) {
+  button.classList.remove('loading');
+  const ripple = button.querySelector('.ripple-effect');
+  if (ripple) {
+    ripple.remove();
+  }
+}
+
 function showSuccess(message, title = "Success") {
   // Create custom success modal
   const modal = document.createElement('div');
@@ -91,20 +158,29 @@ async function handleLogin(event) {
   const password = formData.get('password');
   const rememberMe = formData.get('rememberMe');
   
+  // Clear previous errors
+  clearAllFieldErrors();
+  
   // Validation
+  let hasErrors = false;
+  
   if (!validateEmail(email)) {
-    showError("Please enter a valid email address.");
-    return;
+    showFieldError('email', 'Please enter a valid email address.');
+    hasErrors = true;
   }
   
   if (!password || password.length < 6) {
-    showError("Password must be at least 6 characters long.");
-    return;
+    showFieldError('password', 'Password must be at least 6 characters long.');
+    hasErrors = true;
   }
+  
+  if (hasErrors) return;
   
   // Show loading state with animation
   const submitBtn = form.querySelector('.auth-btn');
   const originalText = submitBtn.innerHTML;
+  
+  addLoadingAnimation(submitBtn);
   submitBtn.innerHTML = `
     <span>Signing In...</span>
     <div style="display: inline-block; width: 16px; height: 16px; margin-left: 8px;">
@@ -130,8 +206,6 @@ async function handleLogin(event) {
     const data = await response.json();
     
     if (data.success) {
-      showSuccess(`Welcome back, ${data.user.first_name}! You have been successfully logged in.`, "Login Successful!");
-      
       // Store user session
       localStorage.setItem('user', JSON.stringify({
         id: data.user.id,
@@ -144,20 +218,21 @@ async function handleLogin(event) {
         loginTime: new Date().toISOString()
       }));
       
-      // Redirect to main app after user closes modal
-      const modal = document.getElementById('customModalOverlay');
-      if (modal) {
-        modal.addEventListener('click', (e) => {
-          if (e.target === modal || e.target.classList.contains('customModalBtn')) {
-            setTimeout(() => {
-              window.location.href = '/';
-            }, 500);
-          }
-        });
-      }
+      // Show success animation and redirect
+      submitBtn.innerHTML = `
+        <span>Success!</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="margin-left: 8px;">
+          <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+        </svg>
+      `;
+      
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 1000);
     } else {
       if (data.message && (data.message.includes('Invalid') || data.message.includes('incorrect'))) {
-        showError("Invalid email or password. Please check your credentials and try again.");
+        showFieldError('email', 'Invalid email or password. Please check your credentials and try again.');
+        showFieldError('password', 'Invalid email or password. Please check your credentials and try again.');
       } else {
         showError(data.message || "Login failed. Please try again.");
       }
@@ -166,9 +241,12 @@ async function handleLogin(event) {
     console.error('Login error:', error);
     showError("Login failed. Please check your connection and try again.");
   } finally {
-    // Reset button
-    submitBtn.innerHTML = originalText;
-    submitBtn.disabled = false;
+    // Reset button only if not successful
+    if (!data?.success) {
+      removeLoadingAnimation(submitBtn);
+      submitBtn.innerHTML = originalText;
+      submitBtn.disabled = false;
+    }
   }
 }
 
@@ -185,35 +263,45 @@ async function handleRegister(event) {
   const confirmPassword = formData.get('confirmPassword');
   const agreeTerms = formData.get('agreeTerms');
   
+  // Clear previous errors
+  clearAllFieldErrors();
+  
   // Validation
+  let hasErrors = false;
+  
   if (!firstName || !lastName) {
-    showError("Please enter both first and last name.");
-    return;
+    if (!firstName) showFieldError('firstName', 'Please enter your first name.');
+    if (!lastName) showFieldError('lastName', 'Please enter your last name.');
+    hasErrors = true;
   }
   
   if (!validateEmail(email)) {
-    showError("Please enter a valid email address.");
-    return;
+    showFieldError('email', 'Please enter a valid email address.');
+    hasErrors = true;
   }
   
   if (!validatePassword(password)) {
-    showError("Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character (@$!%*?&).");
-    return;
+    showFieldError('password', 'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character (@$!%*?&).');
+    hasErrors = true;
   }
   
   if (password !== confirmPassword) {
-    showError("Passwords do not match.");
-    return;
+    showFieldError('confirmPassword', 'Passwords do not match.');
+    hasErrors = true;
   }
   
   if (!agreeTerms) {
-    showError("Please agree to the Terms of Service and Privacy Policy.");
-    return;
+    showFieldError('agreeTerms', 'Please agree to the Terms of Service and Privacy Policy.');
+    hasErrors = true;
   }
+  
+  if (hasErrors) return;
   
   // Show loading state with animation
   const submitBtn = form.querySelector('.auth-btn');
   const originalText = submitBtn.innerHTML;
+  
+  addLoadingAnimation(submitBtn);
   submitBtn.innerHTML = `
     <span>Creating Account...</span>
     <div style="display: inline-block; width: 16px; height: 16px; margin-left: 8px;">
@@ -240,7 +328,16 @@ async function handleRegister(event) {
     const data = await response.json();
     
     if (data.success) {
-      showSuccess(`Welcome ${firstName}! Your account has been created successfully. You can now sign in with your credentials.`, "Welcome to Sports Analysis!");
+      // Show success animation
+      submitBtn.innerHTML = `
+        <span>Account Created!</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="margin-left: 8px;">
+          <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+        </svg>
+      `;
+      
+      // Show welcome message
+      showSuccess(`Welcome to Sports Analysis, ${firstName}! Your account has been created successfully. You can now sign in with your credentials and start analyzing sports data.`, "Welcome to Sports Analysis!");
       
       // Redirect to login after user closes modal
       const modal = document.getElementById('customModalOverlay');
@@ -255,7 +352,7 @@ async function handleRegister(event) {
       }
     } else {
       if (data.message && data.message.includes('already exists')) {
-        showError("An account with this email address already exists. Please try logging in instead.");
+        showFieldError('email', 'An account with this email address already exists. Please try logging in instead.');
       } else {
         showError(data.message || "Registration failed. Please try again.");
       }
@@ -264,9 +361,12 @@ async function handleRegister(event) {
     console.error('Registration error:', error);
     showError("Registration failed. Please check your connection and try again.");
   } finally {
-    // Reset button
-    submitBtn.innerHTML = originalText;
-    submitBtn.disabled = false;
+    // Reset button only if not successful
+    if (!data?.success) {
+      removeLoadingAnimation(submitBtn);
+      submitBtn.innerHTML = originalText;
+      submitBtn.disabled = false;
+    }
   }
 }
 

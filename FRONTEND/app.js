@@ -561,8 +561,14 @@ function ensureModernShell() {
       const s2 = document.createElement("div");
       s2.className = "section";
       // Uvijek stavi title sa count bedgom
-      s1.innerHTML = `<h3>TOP 5 <span class="count" id="countTop">(0)</span></h3>`;
-      s2.innerHTML = `<h3>OTHER <span class="count" id="countOther">(0)</span></h3>`;
+      s1.innerHTML = `
+        <h3>TOP 5 <span class="count" id="countTop">(0)</span></h3>
+        <p class="section-description">These are the top 5 pairs for the selected period according to our analysis</p>
+      `;
+      s2.innerHTML = `
+        <h3>OTHER <span class="count" id="countOther">(0)</span></h3>
+        <p class="section-description">Other pairs for the selected period according to our analysis</p>
+      `;
       s1.appendChild(top);
       s2.appendChild(other);
       grid.appendChild(s1);

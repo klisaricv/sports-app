@@ -88,8 +88,8 @@ function clearAllFieldErrors() {
 }
 
 function resetForm(form, clearInputs = false) {
-  // Clear all field errors
-  clearAllFieldErrors();
+  // DON'T clear field errors - they should stay!
+  // clearAllFieldErrors(); // REMOVED - errors should stay!
   
   // Reset form inputs only if requested
   if (clearInputs) {
@@ -104,6 +104,36 @@ function resetForm(form, clearInputs = false) {
   }
   
   // Reset button
+  const submitBtn = form.querySelector('.auth-btn');
+  if (submitBtn) {
+    removeLoadingAnimation(submitBtn);
+    submitBtn.disabled = false;
+    
+    // Reset button text based on form type
+    if (form.id === 'loginForm') {
+      submitBtn.innerHTML = `
+        <span>Sign In</span>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M12 5L19 12L12 19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      `;
+    } else if (form.id === 'registerForm') {
+      submitBtn.innerHTML = `
+        <span>Create Account</span>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M16 21V19C16 17.9391 15.5786 16.9217 14.8284 16.1716C14.0783 15.4214 13.0609 15 12 15H5C3.93913 15 2.92172 15.4214 2.17157 16.1716C1.42143 16.9217 1 17.9391 1 19V21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M8.5 11C10.7091 11 12.5 9.20914 12.5 7C12.5 4.79086 10.7091 3 8.5 3C6.29086 3 4.5 4.79086 4.5 7C4.5 9.20914 6.29086 11 8.5 11Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M20 8V14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M17 11H23" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      `;
+    }
+  }
+}
+
+function resetButtonOnly(form) {
+  // Reset ONLY the button, keep all errors and input values
   const submitBtn = form.querySelector('.auth-btn');
   if (submitBtn) {
     removeLoadingAnimation(submitBtn);
@@ -289,9 +319,9 @@ async function handleLogin(event) {
       } else {
         showError(data.message || "Login failed. Please try again.");
       }
-      // Reset form after error (don't clear inputs for field errors)
+      // Reset ONLY button after error (keep errors and inputs)
       setTimeout(() => {
-        resetForm(form, false);
+        resetButtonOnly(form);
       }, 2000);
     }
   } catch (error) {
@@ -352,7 +382,8 @@ async function handleRegister(event) {
   }
   
   console.log('agreeTerms value:', agreeTerms); // Debug log
-  if (!agreeTerms || agreeTerms !== 'on') {
+  if (!agreeTerms) {
+    console.log('Terms not agreed - showing error'); // Debug log
     // For checkbox, we need to show error differently
     const termsWrapper = document.querySelector('.checkbox-wrapper');
     if (termsWrapper) {
@@ -366,8 +397,13 @@ async function handleRegister(event) {
       errorDiv.className = 'field-error';
       errorDiv.textContent = 'Please agree to the Terms of Service and Privacy Policy.';
       termsWrapper.parentNode.insertBefore(errorDiv, termsWrapper.nextSibling);
+      console.log('Error message added to DOM'); // Debug log
+    } else {
+      console.log('Terms wrapper not found!'); // Debug log
     }
     hasErrors = true;
+  } else {
+    console.log('Terms agreed - no error'); // Debug log
   }
   
   console.log('hasErrors:', hasErrors); // Debug log
@@ -432,9 +468,9 @@ async function handleRegister(event) {
       } else {
         showError(data.message || "Registration failed. Please try again.");
       }
-      // Reset form after error (don't clear inputs for field errors)
+      // Reset ONLY button after error (keep errors and inputs)
       setTimeout(() => {
-        resetForm(form, false);
+        resetButtonOnly(form);
       }, 2000);
     }
   } catch (error) {

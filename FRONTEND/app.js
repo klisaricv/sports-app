@@ -481,11 +481,36 @@ function ensureModernShell() {
           </div>
         </div>
         <div class="actions">
-          <button id="analyze1p" class="btn primary">Analyze 1+ 1H</button>
-          <button id="analyzeGG" class="btn subtle">Analyze GG 1H</button>
-          <button id="analyze2plus" class="btn subtle">Analyze 2+ 1H</button>
-          <button id="analyzeFT2plus" class="btn btn-ft">Analyze 2+ FT</button>
-          <button id="prepareDay" class="btn">Prepare day</button>
+          <button id="analyze1p" class="btn primary">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+            </svg>
+            <span>Analyze 1+ 1H</span>
+          </button>
+          <button id="analyzeGG" class="btn subtle">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.94-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+            </svg>
+            <span>Analyze GG 1H</span>
+          </button>
+          <button id="analyze2plus" class="btn subtle">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11H7v-2h10v2z"/>
+            </svg>
+            <span>Analyze 2+ 1H</span>
+          </button>
+          <button id="analyzeFT2plus" class="btn btn-ft">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.94-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+            </svg>
+            <span>Analyze 2+ FT</span>
+          </button>
+          <button id="prepareDay" class="btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M19 4h-4l-2-2H5a1 1 0 0 0-1 1v16h16V5a1 1 0 0 0-1-1z"/>
+            </svg>
+            <span>Prepare day</span>
+          </button>
         </div>
       </div>
     `;
@@ -548,15 +573,7 @@ function ensureModernShell() {
     }
   }
 
-  // FAB za mobile – klik radi isto što i #savePdf (ako postoji CSS .fab)
-  if (!document.getElementById("savePdfFab")) {
-    const fab = document.createElement("button");
-    fab.id = "savePdfFab";
-    fab.className = "fab";
-    fab.title = "Save PDF";
-    fab.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24"><path fill="currentColor" d="M5 22q-.825 0-1.413-.588T3 20V4q0-.825.588-1.413T5 2h8l6 6v12q0 .825-.588 1.413T17 22H5Zm7-13V3H5v17h12V9h-5Z"/></svg>`;
-    document.body.appendChild(fab);
-  }
+
 }
 
 // ====== UI HELPERS ======
@@ -565,8 +582,6 @@ const ANALYZE_BUTTON_IDS = [
   "analyzeGG",
   "analyze2plus",
   "analyzeFT2plus",
-  "savePdf",
-  "savePdfFab",
   "prepareDay",
 ];
 
@@ -1148,8 +1163,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnGG = document.getElementById("analyzeGG");
   const btn1pls = document.getElementById("analyze2plus");
   const btnFT2pl = document.getElementById("analyzeFT2plus");
-  const btnPDF = document.getElementById("savePdf");
-  const btnPDFFab = document.getElementById("savePdfFab");
   const btnPrep = document.getElementById("prepareDay");
 
   if (btn1p) btn1p.addEventListener("click", () => fetchAnalysis("1p"));
@@ -1157,36 +1170,6 @@ document.addEventListener("DOMContentLoaded", () => {
   if (btn1pls) btn1pls.addEventListener("click", () => fetchAnalysis("O15"));
   if (btnFT2pl) btnFT2pl.addEventListener("click", () => fetchAnalysis("FT_O15"));
   if (btnPrep) btnPrep.addEventListener("click", prepareDay);
-
-  function doSavePdf() {
-    if (!window.currentAnalysisResults || !window.currentAnalysisResults.length) {
-      showToast("Nema rezultata za PDF", "error");
-      return;
-    }
-    fetch(`${BACKEND_URL}/api/save-pdf`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ matches: window.currentAnalysisResults }),
-    })
-      .then((r) => r.blob())
-      .then((blob) => {
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "analysis_results.pdf";
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        showToast("PDF sačuvan");
-      })
-      .catch((e) => {
-        console.error(e);
-        showToast("Greška pri PDF exportu", "error");
-      });
-  }
-
-  if (btnPDF) btnPDF.addEventListener("click", doSavePdf);
-  if (btnPDFFab) btnPDFFab.addEventListener("click", doSavePdf);
 });
 
 // Safety net: ako je DOM već gotov (npr. skripta učitana kasnije), pozovi ručno

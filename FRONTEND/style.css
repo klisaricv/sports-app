@@ -227,8 +227,7 @@ html[data-theme="dark"] .icon-moon { display: inline; }
 }
 
 /* Primary Buttons */
-.primary-ghost,
-#savePdf {
+.primary-ghost {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-sm);
@@ -242,8 +241,7 @@ html[data-theme="dark"] .icon-moon { display: inline; }
   transition: var(--transition);
 }
 
-.primary-ghost:hover,
-#savePdf:hover {
+.primary-ghost:hover {
   background: var(--surface-elevated);
   color: var(--primary);
   border-color: var(--primary);
@@ -308,8 +306,7 @@ html[data-theme="dark"] .icon-moon { display: inline; }
 
 /* Disabled States */
 button[disabled],
-.btn[disabled],
-#savePdf[disabled] {
+.btn[disabled] {
   opacity: 0.5 !important;
   cursor: not-allowed !important;
   pointer-events: none !important;
@@ -1154,35 +1151,7 @@ button[disabled],
   font-weight: var(--font-weight-semibold);
 }
 
-/* ---------- FAB (Floating Action Button) ---------- */
-.fab {
-  position: fixed;
-  right: var(--spacing-lg);
-  bottom: var(--spacing-lg);
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: var(--primary);
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: var(--shadow-lg);
-  cursor: pointer;
-  transition: var(--transition);
-  z-index: 50;
-}
 
-.fab:hover {
-  opacity: 0.9;
-  transform: translateY(-2px);
-}
-
-@media (min-width: 1024px) {
-  .fab {
-    display: none;
-  }
-}
 
 /* ---------- Focus States ---------- */
 button:focus-visible,
@@ -1273,6 +1242,16 @@ input:focus-visible {
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+/* Auth logo clickable */
+.auth-logo {
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.auth-logo:hover {
+  transform: scale(1.05);
 }
 
 /* ---------- Custom Modal System ---------- */
@@ -1517,8 +1496,7 @@ input:focus-visible {
     height: 36px;
   }
   
-  .primary-ghost,
-  #savePdf {
+  .primary-ghost {
     height: 40px;
     padding: 0 var(--spacing-md);
     width: 100%;
@@ -1556,12 +1534,7 @@ input:focus-visible {
     font-size: var(--font-size-sm);
   }
   
-  .fab {
-    width: 48px;
-    height: 48px;
-    right: var(--spacing-md);
-    bottom: var(--spacing-md);
-  }
+
 }
 
 /* Extra small mobile devices */
@@ -1650,7 +1623,6 @@ input:focus-visible {
 /* ---------- Print Styles ---------- */
 @media print {
   .app-header,
-  .fab,
   #loaderOverlay,
   #toastHost {
     display: none !important;

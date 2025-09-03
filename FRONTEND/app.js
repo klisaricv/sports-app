@@ -244,6 +244,35 @@ async function checkGlobalLoaderStatusSilent() {
   }
 }
 
+// Funkcija za proveru da li se radi Prepare Day
+async function isPrepareDayRunning() {
+  try {
+    const response = await fetch('/api/global-loader-status');
+    const data = await response.json();
+    return data.active === true;
+  } catch (error) {
+    console.error("❌ [PREPARE CHECK] Error checking prepare status:", error);
+    return false;
+  }
+}
+
+// Funkcija za čekanje da se Prepare Day završi
+async function waitForPrepareDayToComplete() {
+  console.log("⏳ [PREPARE WAIT] Waiting for Prepare Day to complete...");
+  
+  while (true) {
+    const isRunning = await isPrepareDayRunning();
+    
+    if (!isRunning) {
+      console.log("✅ [PREPARE WAIT] Prepare Day completed, proceeding with analysis");
+      return true;
+    }
+    
+    console.log("⏳ [PREPARE WAIT] Prepare Day still running, waiting...");
+    await sleep(2000); // Čekaj 2 sekunde pre sledeće provere
+  }
+}
+
 function showGlobalLoader(title, progress = 0, detail = "Please wait...") {
   globalLoaderActive = true;
   showLoader(title);
@@ -771,6 +800,19 @@ async function fetchAnalysis(type) {
     'O15': '🔥 Analyzing Over 1.5 Goals...',
     'FT_O15': '🚀 Analyzing FT Over 1.5 Goals...'
   };
+
+  // 1) Proveri da li se radi Prepare Day
+  const isPrepareRunning = await isPrepareDayRunning();
+  if (isPrepareRunning) {
+    console.log("⏳ [ANALYSIS] Prepare Day is running, waiting for completion...");
+    showLoader("⏳ Waiting for Prepare Day to complete...");
+    setBusyUI(true, "Waiting for Prepare Day...");
+    
+    // Čekaj da se Prepare Day završi
+    await waitForPrepareDayToComplete();
+  }
+
+  // 2) Pokreni analizu
   showLoader(analysisTitles[type] || '🔍 Analyzing...');
 
   const fromEl = document.getElementById("fromDate");

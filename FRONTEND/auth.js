@@ -87,19 +87,21 @@ function clearAllFieldErrors() {
   }
 }
 
-function resetForm(form) {
+function resetForm(form, clearInputs = false) {
   // Clear all field errors
   clearAllFieldErrors();
   
-  // Reset form inputs
-  const inputs = form.querySelectorAll('input');
-  inputs.forEach(input => {
-    if (input.type === 'checkbox') {
-      input.checked = false;
-    } else {
-      input.value = '';
-    }
-  });
+  // Reset form inputs only if requested
+  if (clearInputs) {
+    const inputs = form.querySelectorAll('input');
+    inputs.forEach(input => {
+      if (input.type === 'checkbox') {
+        input.checked = false;
+      } else {
+        input.value = '';
+      }
+    });
+  }
   
   // Reset button
   const submitBtn = form.querySelector('.auth-btn');
@@ -288,17 +290,17 @@ async function handleLogin(event) {
       } else {
         showError(data.message || "Login failed. Please try again.");
       }
-      // Reset form after error
+      // Reset form after error (don't clear inputs for field errors)
       setTimeout(() => {
-        resetForm(form);
+        resetForm(form, false);
       }, 2000);
     }
   } catch (error) {
     console.error('Login error:', error);
     showError("Login failed. Please check your connection and try again.");
-    // Reset form after error
+    // Reset form after error (clear inputs for connection errors)
     setTimeout(() => {
-      resetForm(form);
+      resetForm(form, true);
     }, 2000);
   } finally {
     // Reset button only if not successful
@@ -350,7 +352,7 @@ async function handleRegister(event) {
     hasErrors = true;
   }
   
-  if (!agreeTerms) {
+  if (!agreeTerms || agreeTerms !== 'on') {
     // For checkbox, we need to show error differently
     const termsWrapper = document.querySelector('.checkbox-wrapper');
     if (termsWrapper) {
@@ -429,17 +431,17 @@ async function handleRegister(event) {
       } else {
         showError(data.message || "Registration failed. Please try again.");
       }
-      // Reset form after error
+      // Reset form after error (don't clear inputs for field errors)
       setTimeout(() => {
-        resetForm(form);
+        resetForm(form, false);
       }, 2000);
     }
   } catch (error) {
     console.error('Registration error:', error);
     showError("Registration failed. Please check your connection and try again.");
-    // Reset form after error
+    // Reset form after error (clear inputs for connection errors)
     setTimeout(() => {
-      resetForm(form);
+      resetForm(form, true);
     }, 2000);
   } finally {
     // Reset button only if not successful

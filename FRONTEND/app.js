@@ -879,54 +879,56 @@ async function fetchAnalysis(type) {
   // 2) Pokreni analizu
   showLoader(analysisTitles[type] || '🔍 Analyzing...');
 
-  const fromEl = document.getElementById("fromDate");
-  const toEl = document.getElementById("toDate");
-
-  if (!fromEl || !toEl || !fromEl.value || !toEl.value) {
-    showError("Date Selection Required", "Please select both From and To dates.");
-    return;
-  }
-
-  const fromDate = new Date(fromEl.value);
-  const toDate = new Date(toEl.value);
-  if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
-    showError("Invalid Dates", "Invalid date values.");
-    return;
-  }
-  if (toDate < fromDate) {
-    showError("Invalid Date Range", "End date/time must be after start date/time.");
-    return;
-  }
-
-  const fromIso = fromDate.toISOString();
-  const toIso = toDate.toISOString();
-
-  const fh = fromDate.getHours();
-  const th = toDate.getHours() + ((toDate.getMinutes() || toDate.getSeconds()) ? 1 : 0);
-
-  // market
-  let market;
-  if (type === "GG") market = "gg1h";
-  else if (type === "O15") market = "1h_over15";
-  else if (type === "FT_O15") market = "ft_over15";
-  else market = "1h_over05";
-
-  const url =
-    `${BACKEND_URL}/api/analyze` +
-    `?from_date=${encodeURIComponent(fromIso)}` +
-    `&to_date=${encodeURIComponent(toIso)}` +
-    `&from_hour=${fh}` +
-    `&to_hour=${th}` +
-    `&market=${encodeURIComponent(market)}&no_api=1`;
-
-  console.log("👉 calling:", url);
-
-  setBusyUI(true);
-
-  const MAX_RETRIES = 6;
-  let attempt = 0;
-
   try {
+    const fromEl = document.getElementById("fromDate");
+    const toEl = document.getElementById("toDate");
+
+    if (!fromEl || !toEl || !fromEl.value || !toEl.value) {
+      showError("Date Selection Required", "Please select both From and To dates.");
+      hideLoader();
+      return;
+    }
+
+    const fromDate = new Date(fromEl.value);
+    const toDate = new Date(toEl.value);
+    if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+      showError("Invalid Dates", "Invalid date values.");
+      hideLoader();
+      return;
+    }
+    if (toDate < fromDate) {
+      showError("Invalid Date Range", "End date/time must be after start date/time.");
+      hideLoader();
+      return;
+    }
+
+    const fromIso = fromDate.toISOString();
+    const toIso = toDate.toISOString();
+
+    const fh = fromDate.getHours();
+    const th = toDate.getHours() + ((toDate.getMinutes() || toDate.getSeconds()) ? 1 : 0);
+
+    // market
+    let market;
+    if (type === "GG") market = "gg1h";
+    else if (type === "O15") market = "1h_over15";
+    else if (type === "FT_O15") market = "ft_over15";
+    else market = "1h_over05";
+
+    const url =
+      `${BACKEND_URL}/api/analyze` +
+      `?from_date=${encodeURIComponent(fromIso)}` +
+      `&to_date=${encodeURIComponent(toIso)}` +
+      `&from_hour=${fh}` +
+      `&to_hour=${th}` +
+      `&market=${encodeURIComponent(market)}&no_api=1`;
+
+    console.log("👉 calling:", url);
+
+    setBusyUI(true);
+
+    const MAX_RETRIES = 6;
+    let attempt = 0;
     while (true) {
       const res = await fetch(url, { headers: { Accept: "application/json" } });
       const raw = await res.text();

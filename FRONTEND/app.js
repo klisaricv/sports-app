@@ -38,14 +38,8 @@ function disableAllButtons(disable) {
 }
 
 function ensureLoaderUI() {
-  console.log("🔍 [DEBUG] ensureLoaderUI called");
-  const existing = document.getElementById("loaderOverlay");
-  if (existing) {
-    console.log("🔍 [DEBUG] ensureLoaderUI - loaderOverlay already exists");
-    return;
-  }
+  if (document.getElementById("loaderOverlay")) return;
   
-  console.log("🔍 [DEBUG] ensureLoaderUI - creating new loaderOverlay");
   const overlay = document.createElement("div");
   overlay.id = "loaderOverlay";
   overlay.innerHTML = `
@@ -55,38 +49,16 @@ function ensureLoaderUI() {
       <div id="loaderDetail">Initializing system...</div>
     </div>`;
   
-  console.log("🔍 [DEBUG] ensureLoaderUI - appending to document.body");
   document.body.appendChild(overlay);
-  console.log("🔍 [DEBUG] ensureLoaderUI - overlay appended:", overlay);
 }
 function showLoader(title = "🚀 Preparing Analysis...") {
-  console.log("🔍 [DEBUG] showLoader called with title:", title);
-  console.log("🔍 [DEBUG] showLoader - document.body:", document.body);
-  console.log("🔍 [DEBUG] showLoader - document ready state:", document.readyState);
-  
-  try {
-    console.log("🔍 [DEBUG] showLoader - calling ensureLoaderUI");
   ensureLoaderUI();
-    console.log("🔍 [DEBUG] showLoader - ensureLoaderUI completed");
-  } catch (error) {
-    console.error("❌ [ERROR] showLoader - ensureLoaderUI failed:", error);
-    return;
-  }
   
   const overlay = document.getElementById("loaderOverlay");
   if (!overlay) {
     console.error("❌ [ERROR] loaderOverlay not found!");
-    console.error("❌ [ERROR] Available elements:", document.querySelectorAll('[id*="loader"]'));
     return;
   }
-  
-  console.log("🔍 [DEBUG] loaderOverlay found:", overlay);
-  console.log("🔍 [DEBUG] loaderOverlay current styles:", {
-    display: overlay.style.display,
-    visibility: overlay.style.visibility,
-    opacity: overlay.style.opacity,
-    zIndex: overlay.style.zIndex
-  });
   
   // Set content
   const titleEl = document.getElementById("loaderTitle");
@@ -94,16 +66,10 @@ function showLoader(title = "🚀 Preparing Analysis...") {
   
   if (titleEl) {
     titleEl.textContent = title;
-    console.log("🔍 [DEBUG] Title set:", title);
-  } else {
-    console.error("❌ [ERROR] loaderTitle not found!");
   }
   
   if (detailEl) {
     detailEl.textContent = "Initializing system...";
-    console.log("🔍 [DEBUG] Detail set");
-  } else {
-    console.error("❌ [ERROR] loaderDetail not found!");
   }
   
   // Make loader visible with high z-index
@@ -117,35 +83,11 @@ function showLoader(title = "🚀 Preparing Analysis...") {
   overlay.style.width = "100vw";
   overlay.style.height = "100vh";
   
-  console.log("🔍 [DEBUG] Loader styles applied:", {
-    zIndex: overlay.style.zIndex,
-    display: overlay.style.display,
-    visibility: overlay.style.visibility,
-    opacity: overlay.style.opacity,
-    position: overlay.style.position,
-    top: overlay.style.top,
-    left: overlay.style.left,
-    width: overlay.style.width,
-    height: overlay.style.height
-  });
-  
   // Force a reflow to ensure styles are applied
   overlay.offsetHeight;
   
-  // Check if loader is actually visible
-  const rect = overlay.getBoundingClientRect();
-  console.log("🔍 [DEBUG] Loader bounding rect:", rect);
-  console.log("🔍 [DEBUG] Loader computed styles:", {
-    display: window.getComputedStyle(overlay).display,
-    visibility: window.getComputedStyle(overlay).visibility,
-    opacity: window.getComputedStyle(overlay).opacity,
-    zIndex: window.getComputedStyle(overlay).zIndex
-  });
-  
   // Disable all buttons during loading
   disableAllButtons(true);
-  
-  console.log("🔍 [DEBUG] showLoader completed");
 }
 
 // Custom Modal System
@@ -233,13 +175,9 @@ function updateLoader(detail) {
   }
 }
 function hideLoader() {
-  console.log("🔍 [DEBUG] hideLoader called");
   const el = document.getElementById("loaderOverlay");
   if (el) {
-    console.log("🔍 [DEBUG] hideLoader - hiding overlay");
     el.style.display = "none";
-  } else {
-    console.log("🔍 [DEBUG] hideLoader - overlay not found");
   }
   
   // Re-enable all buttons after loading
@@ -251,7 +189,6 @@ function hideLoader() {
     loaderCheckInterval = null;
   }
   globalLoaderActive = false;
-  console.log("🔍 [DEBUG] hideLoader completed");
 }
 
 // Global loader functions
@@ -500,10 +437,8 @@ async function parseJsonSafe(resp) {
 
 
 function setBusyUI(busy, note = "") {
-  console.log("🔍 [DEBUG] setBusyUI called with busy:", busy, "note:", note);
   // Don't change button text anymore - the loader handles the UI feedback
   document.body.style.cursor = busy ? "progress" : "";
-  console.log("🔍 [DEBUG] setBusyUI completed");
 }
 
 // OLD showLoader function removed - was overriding the new one
@@ -688,16 +623,13 @@ function localYMD(d) {
 
 // ====== MAIN ACTION ======
 async function fetchAnalysis(type) {
-  console.log("🔍 [DEBUG] fetchAnalysis called with type:", type);
   const analysisTitles = {
     '1p': '🎯 Analyzing 1+ Goals...',
     'GG': '⚽ Analyzing Both Teams Score...',
     'O15': '🔥 Analyzing Over 1.5 Goals...',
     'FT_O15': '🚀 Analyzing FT Over 1.5 Goals...'
   };
-  console.log("🔍 [DEBUG] fetchAnalysis - calling showLoader");
   showLoader(analysisTitles[type] || '🔍 Analyzing...');
-  console.log("🔍 [DEBUG] fetchAnalysis - showLoader completed");
 
   const fromEl = document.getElementById("fromDate");
   const toEl = document.getElementById("toDate");
@@ -795,12 +727,12 @@ async function fetchAnalysis(type) {
     console.error("Fetch/parse error:", err);
     showError("Analysis Error", `Error during analysis: ${err}`);
   } finally {
+    hideLoader();
     setBusyUI(false);
   }
 }
 
 async function prepareDay() {
-  console.log("🔍 [DEBUG] prepareDay function called");
   try {
     // izaberi datum (From -> ili To -> ili danas)
     const fromEl = document.getElementById("fromDate");
@@ -810,12 +742,8 @@ async function prepareDay() {
     else if (toEl && toEl.value) base = new Date(toEl.value);
     const dayStr = localYMD(base); // tvoja postojeća util funkcija
 
-    console.log("🔍 [DEBUG] prepareDay - dayStr:", dayStr);
-    console.log("🔍 [DEBUG] prepareDay - calling setBusyUI");
     setBusyUI(true, `Pripremam ${dayStr}…`);
-    console.log("🔍 [DEBUG] prepareDay - calling showLoader");
     showLoader(`🚀 Preparing ${dayStr}...`);
-    console.log("🔍 [DEBUG] prepareDay - showLoader completed");
 
     // 1) enqueue
     const resp = await fetch(`/api/prepare-day`, {
@@ -892,19 +820,6 @@ document.addEventListener("DOMContentLoaded", () => {
   // 4) Start checking for global loader status
   // checkGlobalLoaderStatus(); // DISABLED - was causing too many requests
   // setInterval(checkGlobalLoaderStatus, 3000); // DISABLED
-  
-  // TEST: Add test button for loader
-  const testLoaderBtn = document.createElement("button");
-  testLoaderBtn.textContent = "TEST LOADER";
-  testLoaderBtn.style.cssText = "position: fixed; top: 10px; right: 10px; z-index: 100000; background: red; color: white; padding: 10px; border: none; border-radius: 5px; cursor: pointer;";
-  testLoaderBtn.onclick = () => {
-    console.log("🔍 [DEBUG] TEST LOADER button clicked");
-    showLoader("🧪 TEST LOADER");
-    setTimeout(() => {
-      hideLoader();
-    }, 3000);
-  };
-  document.body.appendChild(testLoaderBtn);
 
   // 4) Dugmad
   const btn1p = document.getElementById("analyze1p");

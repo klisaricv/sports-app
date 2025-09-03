@@ -443,8 +443,14 @@ button[disabled],
 }
 
 @keyframes borderGlow {
-  from { box-shadow: 0 0 10px rgba(79, 172, 254, 0.5); }
-  to { box-shadow: 0 0 20px rgba(0, 242, 254, 0.8); }
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes rotateGlow {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 @keyframes panelSlideIn {
@@ -784,19 +790,20 @@ input:focus-visible {
 #loaderOverlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.95);
-  backdrop-filter: blur(20px);
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.95) 0%, rgba(20, 20, 40, 0.98) 100%);
+  backdrop-filter: blur(25px);
   display: none;
   align-items: center;
   justify-content: center;
   z-index: 99999;
-  animation: loaderFadeIn 0.3s ease-out;
+  animation: loaderFadeIn 0.4s ease-out;
   width: 100vw;
   height: 100vh;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
+  overflow: hidden;
 }
 
 @keyframes loaderFadeIn {
@@ -805,17 +812,21 @@ input:focus-visible {
 }
 
 #loaderBox {
-  width: 500px;
+  width: 400px;
   max-width: 90vw;
-  background: var(--surface-glass);
-  backdrop-filter: blur(20px);
-  border-radius: var(--radius-xl);
-  padding: var(--spacing-2xl);
-  box-shadow: var(--shadow-glow);
-  border: 1px solid var(--border-glass);
-  animation: loaderSlideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(30px);
+  border-radius: 24px;
+  padding: 60px 40px;
+  box-shadow: 
+    0 25px 50px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  animation: loaderSlideIn 0.6s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
+  text-align: center;
 }
 
 #loaderBox::before {
@@ -824,9 +835,22 @@ input:focus-visible {
   top: 0;
   left: 0;
   right: 0;
-  height: 3px;
-  background: var(--gradient-accent);
-  animation: borderGlow 2s ease-in-out infinite alternate;
+  height: 4px;
+  background: linear-gradient(90deg, #00f5ff, #bf00ff, #00ff41, #ff0080);
+  background-size: 300% 100%;
+  animation: borderGlow 3s ease-in-out infinite;
+}
+
+#loaderBox::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: conic-gradient(from 0deg, transparent, rgba(0, 245, 255, 0.1), transparent);
+  animation: rotateGlow 4s linear infinite;
+  pointer-events: none;
 }
 
 @keyframes loaderSlideIn {
@@ -841,28 +865,29 @@ input:focus-visible {
 }
 
 #loaderTitle {
-  font-weight: var(--font-weight-bold);
-  font-size: var(--font-size-2xl);
-  color: var(--text-primary);
-  margin-bottom: var(--spacing-md);
+  font-weight: 700;
+  font-size: 1.8rem;
+  color: #ffffff;
+  margin-bottom: 30px;
   text-align: center;
-  text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
-  animation: titleGlow 2s ease-in-out infinite alternate;
+  background: linear-gradient(135deg, #00f5ff, #bf00ff, #00ff41);
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: textShimmer 2s ease-in-out infinite;
+  position: relative;
+  z-index: 2;
 }
 
-@keyframes titleGlow {
-  from { text-shadow: 0 0 20px rgba(255, 255, 255, 0.5); }
-  to { text-shadow: 0 0 30px rgba(0, 245, 255, 0.8); }
+@keyframes textShimmer {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
 }
 
 #loaderPct {
-  font-size: var(--font-size-lg);
-  color: var(--text-accent);
-  margin-bottom: var(--spacing-md);
-  font-weight: var(--font-weight-bold);
-  text-align: center;
-  text-shadow: 0 0 15px rgba(255, 215, 0, 0.8);
-  animation: percentPulse 1s ease-in-out infinite;
+  display: none;
 }
 
 @keyframes percentPulse {
@@ -871,13 +896,7 @@ input:focus-visible {
 }
 
 #loaderBar {
-  height: 12px;
-  background: var(--surface-glass-strong);
-  border-radius: var(--radius-full);
-  overflow: hidden;
-  margin-bottom: var(--spacing-md);
-  border: 1px solid var(--border-glass);
-  position: relative;
+  display: none;
 }
 
 #loaderBar::before {
@@ -924,18 +943,198 @@ input:focus-visible {
 }
 
 #loaderDetail {
-  font-size: var(--font-size-base);
-  color: var(--text-secondary);
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.8);
   min-height: 1.5em;
-  font-weight: var(--font-weight-medium);
+  font-weight: 500;
   text-align: center;
-  text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
   animation: detailFade 2s ease-in-out infinite alternate;
+  position: relative;
+  z-index: 2;
 }
 
 @keyframes detailFade {
   from { opacity: 0.7; }
   to { opacity: 1; }
+}
+
+/* Ultra Modern Spinner */
+#loaderSpinner {
+  width: 60px;
+  height: 60px;
+  margin: 30px auto;
+  position: relative;
+  z-index: 2;
+}
+
+#loaderSpinner::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: 3px solid transparent;
+  border-top: 3px solid #00f5ff;
+  border-right: 3px solid #bf00ff;
+  border-radius: 50%;
+  animation: spinGlow 1.5s linear infinite;
+}
+
+#loaderSpinner::after {
+  content: '';
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: calc(100% - 16px);
+  height: calc(100% - 16px);
+  border: 2px solid transparent;
+  border-bottom: 2px solid #00ff41;
+  border-left: 2px solid #ff0080;
+  border-radius: 50%;
+  animation: spinGlow 1s linear infinite reverse;
+}
+
+@keyframes spinGlow {
+  0% { 
+    transform: rotate(0deg);
+    box-shadow: 0 0 10px rgba(0, 245, 255, 0.5);
+  }
+  50% { 
+    box-shadow: 0 0 20px rgba(191, 0, 255, 0.8);
+  }
+  100% { 
+    transform: rotate(360deg);
+    box-shadow: 0 0 10px rgba(0, 255, 65, 0.5);
+  }
+}
+
+/* ---------- Custom Modal System ---------- */
+#customModalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(10px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 100000;
+  animation: modalFadeIn 0.3s ease-out;
+}
+
+#customModal {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(20px);
+  border-radius: 20px;
+  padding: 40px;
+  max-width: 500px;
+  width: 90vw;
+  box-shadow: 
+    0 25px 50px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  animation: modalSlideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+#customModal::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #00f5ff, #bf00ff, #00ff41, #ff0080);
+  background-size: 300% 100%;
+  animation: borderGlow 3s ease-in-out infinite;
+}
+
+#customModalTitle {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 20px;
+  background: linear-gradient(135deg, #00f5ff, #bf00ff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+#customModalMessage {
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 30px;
+  line-height: 1.6;
+}
+
+#customModalButtons {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.customModalBtn {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  min-width: 100px;
+}
+
+.customModalBtn.primary {
+  background: linear-gradient(135deg, #00f5ff, #00ff41);
+  color: #000;
+  box-shadow: 0 4px 15px rgba(0, 245, 255, 0.3);
+}
+
+.customModalBtn.primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 245, 255, 0.4);
+}
+
+.customModalBtn.secondary {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.customModalBtn.secondary:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+}
+
+.customModalBtn.danger {
+  background: linear-gradient(135deg, #ff0080, #ff6600);
+  color: #fff;
+  box-shadow: 0 4px 15px rgba(255, 0, 128, 0.3);
+}
+
+.customModalBtn.danger:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 0, 128, 0.4);
+}
+
+@keyframes modalFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.8) translateY(40px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
 /* ---------- Toast Notifications ---------- */
@@ -1274,5 +1473,55 @@ input:focus-visible {
     border: 1px solid #000;
     background: white;
     color: black;
+  }
+}
+
+/* Custom Modal Responsive Styles */
+@media (max-width: 768px) {
+  #customModal {
+    padding: 30px 20px;
+    margin: 20px;
+    max-width: calc(100vw - 40px);
+  }
+  
+  #customModalTitle {
+    font-size: 1.3rem;
+    margin-bottom: 15px;
+  }
+  
+  #customModalMessage {
+    font-size: 0.9rem;
+    margin-bottom: 25px;
+  }
+  
+  .customModalBtn {
+    padding: 10px 20px;
+    font-size: 0.85rem;
+    min-width: 80px;
+  }
+  
+  #customModalButtons {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .customModalBtn {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  #customModal {
+    padding: 25px 15px;
+    margin: 15px;
+    max-width: calc(100vw - 30px);
+  }
+  
+  #customModalTitle {
+    font-size: 1.2rem;
+  }
+  
+  #customModalMessage {
+    font-size: 0.85rem;
   }
 }

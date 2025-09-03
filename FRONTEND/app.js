@@ -44,8 +44,7 @@ function ensureLoaderUI() {
   overlay.innerHTML = `
     <div id="loaderBox" role="dialog" aria-live="polite" aria-label="Preparing">
       <div id="loaderTitle">🚀 Preparing Analysis...</div>
-      <div id="loaderPct">0%</div>
-      <div id="loaderBar"><div></div></div>
+      <div id="loaderSpinner"></div>
       <div id="loaderDetail">Initializing system...</div>
     </div>`;
   document.body.appendChild(overlay);
@@ -62,8 +61,6 @@ function showLoader(title = "🚀 Preparing Analysis...") {
   
   console.log("🔍 [DEBUG] loaderOverlay found, setting content...");
   document.getElementById("loaderTitle").textContent = title;
-  document.getElementById("loaderPct").textContent = "0%";
-  document.querySelector("#loaderBar > div").style.width = "0%";
   document.getElementById("loaderDetail").textContent = "Initializing system...";
   
   // Make loader visible with high z-index
@@ -91,11 +88,87 @@ function showLoader(title = "🚀 Preparing Analysis...") {
   // Disable all buttons during loading
   disableAllButtons(true);
 }
-function updateLoader(pct, detail) {
+
+// Custom Modal System
+function ensureCustomModalUI() {
+  if (document.getElementById("customModalOverlay")) return;
+  const overlay = document.createElement("div");
+  overlay.id = "customModalOverlay";
+  overlay.innerHTML = `
+    <div id="customModal">
+      <div id="customModalTitle">Title</div>
+      <div id="customModalMessage">Message</div>
+      <div id="customModalButtons"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+function showCustomModal(title, message, buttons = []) {
+  ensureCustomModalUI();
+  
+  const overlay = document.getElementById("customModalOverlay");
+  const modalTitle = document.getElementById("customModalTitle");
+  const modalMessage = document.getElementById("customModalMessage");
+  const modalButtons = document.getElementById("customModalButtons");
+  
+  modalTitle.textContent = title;
+  modalMessage.textContent = message;
+  
+  // Clear existing buttons
+  modalButtons.innerHTML = '';
+  
+  // Add buttons
+  buttons.forEach(button => {
+    const btn = document.createElement("button");
+    btn.className = `customModalBtn ${button.type || 'primary'}`;
+    btn.textContent = button.text;
+    btn.onclick = () => {
+      if (button.onClick) button.onClick();
+      hideCustomModal();
+    };
+    modalButtons.appendChild(btn);
+  });
+  
+  // Show modal
+  overlay.style.display = "flex";
+  overlay.style.zIndex = "100000";
+  
+  // Close on overlay click
+  overlay.onclick = (e) => {
+    if (e.target === overlay) {
+      hideCustomModal();
+    }
+  };
+}
+
+function hideCustomModal() {
+  const overlay = document.getElementById("customModalOverlay");
+  if (overlay) {
+    overlay.style.display = "none";
+  }
+}
+
+// Replace browser alerts with custom modals
+function showNotification(title, message) {
+  showCustomModal(title, message, [
+    { text: "OK", type: "primary", onClick: () => {} }
+  ]);
+}
+
+function showError(title, message) {
+  showCustomModal(title, message, [
+    { text: "OK", type: "danger", onClick: () => {} }
+  ]);
+}
+
+function showConfirm(title, message, onConfirm, onCancel = null) {
+  showCustomModal(title, message, [
+    { text: "Cancel", type: "secondary", onClick: onCancel },
+    { text: "Confirm", type: "primary", onClick: onConfirm }
+  ]);
+}
+function updateLoader(detail) {
   ensureLoaderUI();
-  const p = Math.max(0, Math.min(100, Number(pct) || 0));
-  document.getElementById("loaderPct").textContent = p + "%";
-  document.querySelector("#loaderBar > div").style.width = p + "%";
   if (detail !== undefined && detail !== null) {
     document.getElementById("loaderDetail").textContent = String(detail);
   }
@@ -139,7 +212,7 @@ async function checkGlobalLoaderStatus() {
 function showGlobalLoader(title, progress = 0, detail = "Please wait...") {
   globalLoaderActive = true;
   showLoader(title);
-  updateLoader(progress, detail);
+  updateLoader(detail);
   
   // Start checking for updates
   if (loaderCheckInterval) {
@@ -149,7 +222,7 @@ function showGlobalLoader(title, progress = 0, detail = "Please wait...") {
 }
 
 function updateGlobalLoader(progress, detail) {
-  updateLoader(progress, detail);
+  updateLoader(detail);
 }
 
 function hideGlobalLoader() {
@@ -585,18 +658,18 @@ async function fetchAnalysis(type) {
   const toEl = document.getElementById("toDate");
 
   if (!fromEl || !toEl || !fromEl.value || !toEl.value) {
-    alert("Please select both From and To dates.");
+    showError("Date Selection Required", "Please select both From and To dates.");
     return;
   }
 
   const fromDate = new Date(fromEl.value);
   const toDate = new Date(toEl.value);
   if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
-    alert("Invalid date values.");
+    showError("Invalid Dates", "Invalid date values.");
     return;
   }
   if (toDate < fromDate) {
-    alert("End date/time must be after start date/time.");
+    showError("Invalid Date Range", "End date/time must be after start date/time.");
     return;
   }
 
@@ -638,7 +711,7 @@ async function fetchAnalysis(type) {
         json = JSON.parse(raw);
       } catch {
         console.error("Non-JSON response:", raw);
-        alert(`Server vratio nevalidan odgovor (nije JSON):\n${raw.slice(0, 300)}...`);
+        showError("Server Error", `Server returned invalid response (not JSON):\n${raw.slice(0, 300)}...`);
         break;
       }
 
@@ -646,7 +719,7 @@ async function fetchAnalysis(type) {
         attempt += 1;
         if (attempt > MAX_RETRIES) {
           const msg = json?.detail || "Server je trenutno zauzet. Pokušaj ponovo.";
-          alert(msg);
+          showError("Server Error", msg);
           break;
         }
         const wait = Math.min(1000 * Math.pow(1.6, attempt), 5000);
@@ -660,7 +733,7 @@ async function fetchAnalysis(type) {
       if (!res.ok) {
         const msg = json?.detail || json?.error || JSON.stringify(json).slice(0, 300);
         console.error("Server error:", msg);
-        alert(`Greška sa servera: ${msg}`);
+        showError("Server Error", `Server error: ${msg}`);
         break;
       }
 
@@ -675,7 +748,7 @@ async function fetchAnalysis(type) {
     }
   } catch (err) {
     console.error("Fetch/parse error:", err);
-    alert(`Došlo je do greške pri analizi: ${err}`);
+    showError("Analysis Error", `Error during analysis: ${err}`);
   } finally {
     setBusyUI(false);
   }
@@ -704,7 +777,7 @@ async function prepareDay() {
     if (!data.ok || !data.job_id) throw new Error("Neuspešno pokretanje prepare posla");
 
     const jobId = data.job_id;
-    updateLoader(1, "queued");
+    updateLoader("queued");
 
     // 2) poll status
     let lastProgress = -1;
@@ -718,13 +791,13 @@ async function prepareDay() {
       if (sData.status === "queued" || sData.status === "running") {
         if (sData.progress !== lastProgress) {
           lastProgress = sData.progress;
-          updateLoader(sData.progress, sData.detail || "");
+          updateLoader(sData.detail || "");
         }
         continue;
       }
 
       if (sData.status === "done") {
-        updateLoader(100, "finished");
+        updateLoader("finished");
         const r = sData.result || {};
         const s = [
           `Dan: ${r.day}`,
@@ -735,7 +808,7 @@ async function prepareDay() {
           `Stats missing prije: ${r.stats_missing_before}`,
           r.computed ? `Computed: ${Object.entries(r.computed).map(([k,v]) => `${k}: ${v}`).join(", ")}` : ""
         ].filter(Boolean).join("\n");
-        alert(`Done.\n\n${s}`);
+        showNotification("Prepare Day Complete", s);
         break;
       }
 
@@ -747,7 +820,7 @@ async function prepareDay() {
     }
   } catch (err) {
     console.error(err);
-    alert(`Prepare-day greška: ${err}`);
+    showError("Prepare Day Error", `Prepare day error: ${err}`);
     showToast("Prepare-day greška", "error");
   } finally {
     hideLoader();

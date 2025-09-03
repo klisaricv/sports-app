@@ -149,7 +149,7 @@ async function handleLogin(event) {
       
       // Redirect to main app
       setTimeout(() => {
-        window.location.href = 'index.html';
+        window.location.href = '/';
       }, 1500);
     } else {
       showError(data.message || "Login failed. Please try again.");
@@ -231,7 +231,7 @@ async function handleRegister(event) {
       
       // Redirect to login
       setTimeout(() => {
-        window.location.href = 'login.html';
+        window.location.href = '/login';
       }, 1500);
     } else {
       showError(data.message || "Registration failed. Please try again.");

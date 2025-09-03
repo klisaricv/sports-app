@@ -2772,6 +2772,20 @@ def serve_home():
         return {"error": f"index.html not found at {index_path}"}
     return FileResponse(str(index_path))
 
+@app.get("/login")
+def serve_login():
+    login_path = FRONTEND_DIR / "login.html"
+    if not login_path.exists():
+        return {"error": f"login.html not found at {login_path}"}
+    return FileResponse(str(login_path))
+
+@app.get("/register")
+def serve_register():
+    register_path = FRONTEND_DIR / "register.html"
+    if not register_path.exists():
+        return {"error": f"register.html not found at {register_path}"}
+    return FileResponse(str(register_path))
+
 ALLOWED_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o.strip()]
 # CORS – da frontend može da pristupi backendu
 app.add_middleware(

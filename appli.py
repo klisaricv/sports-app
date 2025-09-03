@@ -26,6 +26,8 @@ from pydantic import BaseModel
 import os
 import hashlib
 from fastapi import BackgroundTasks
+import secrets
+from datetime import datetime, timedelta
 
 def _select_existing_fixture_ids(fixture_ids: Iterable[int]) -> Set[int]:
     """
@@ -479,6 +481,12 @@ WEIGHTS = {
     "FTSCS_ADJ":  0.05,         # blaga korekcija priora iz FTS/CleanSheet
     "FORM_ADJ":   0.03,         # mala forma/streak korekcija
     "COACH_ADJ":  0.02,         # opc. efekat promene trenera
+    
+    # kritični feature-i koji se skupljaju ali ne koriste
+    "PACE_DA_ADJ": 0.04,        # uticaj ukupnog tempa dangerous attacks
+    "LINEUPS_HAVE_ADJ": 0.03,   # da li imamo lineup podatke
+    "LINEUPS_FW_ADJ": 0.02,     # broj napadača u sastavu
+    "INJ_COUNT_ADJ": 0.02,      # broj povreda (negativan uticaj)
 }
 
 
@@ -550,6 +558,11 @@ CALIBRATION_FT = {
 # Ako želiš odvojene težine, kloniramo postojeće i koristićemo ih za FT:
 WEIGHTS_FT = dict(WEIGHTS)  # start sa istim; kasnije podešavaj po validaciji
 WEIGHTS_FT.setdefault("TIER_GAP", WEIGHTS.get("TIER_GAP", 0.35))
+# Dodaj kritične feature-e za FT
+WEIGHTS_FT.setdefault("PACE_DA_ADJ", WEIGHTS.get("PACE_DA_ADJ", 0.04))
+WEIGHTS_FT.setdefault("LINEUPS_HAVE_ADJ", WEIGHTS.get("LINEUPS_HAVE_ADJ", 0.03))
+WEIGHTS_FT.setdefault("LINEUPS_FW_ADJ", WEIGHTS.get("LINEUPS_FW_ADJ", 0.02))
+WEIGHTS_FT.setdefault("INJ_COUNT_ADJ", WEIGHTS.get("INJ_COUNT_ADJ", 0.02))
 
 # ========================= GENERIČKA OBJAŠNJENJA (BE) =========================
 from fastapi import Response
@@ -2139,6 +2152,40 @@ def calculate_final_probability_ft_over15(
     # Dodaj u prior
     p_prior = _inv_logit(_logit(p_prior) + WEIGHTS_FT.get("FORM_ADJ", 0.03) * form_adj)
     p_prior = _inv_logit(_logit(p_prior) + WEIGHTS_FT.get("COACH_ADJ", 0.02) * coach_adj)
+    
+    # --- KRITIČNI FEATURE-I ---
+    # Treba da uključimo 4 kritična feature-a u p_prior kalkulaciju
+    feats_temp = matchup_features_enhanced_ft(fixture, team_profiles_ft, league_baselines_ft, micro_db_ft=micro_db_ft, extras=extras)
+    
+    # 1. pace_da_total - tempo dangerous attacks (FT verzija)
+    pace_da_total = feats_temp.get("pace_da_total", 0.0)
+    if pace_da_total > 0:
+        base_da = _league_base_for_fixture(fixture, league_baselines_ft).get("mu_da_ft", 0.0)
+        pace_da_z = _z(pace_da_total, base_da, max(1.0, base_da * 0.5)) if base_da > 0 else 0.0
+        pace_da_adj = WEIGHTS_FT.get("PACE_DA_ADJ", 0.04) * pace_da_z
+        p_prior = _inv_logit(_logit(p_prior) + pace_da_adj)
+    
+    # 2. lineups_have - da li imamo lineup podatke (pozitivno)
+    lineups_have = feats_temp.get("lineups_have", False)
+    if lineups_have:
+        lineups_have_adj = WEIGHTS_FT.get("LINEUPS_HAVE_ADJ", 0.03)
+        p_prior = _inv_logit(_logit(p_prior) + lineups_have_adj)
+    
+    # 3. lineups_fw_count - broj napadača (pozitivno)
+    lineups_fw_count = feats_temp.get("lineups_fw_count")
+    if lineups_fw_count is not None and lineups_fw_count > 0:
+        # Normalizuj na 0-1 skalu (pretpostavljamo 1-4 napadača)
+        fw_normalized = max(0.0, min(1.0, (lineups_fw_count - 1) / 3.0))
+        lineups_fw_adj = WEIGHTS_FT.get("LINEUPS_FW_ADJ", 0.02) * fw_normalized
+        p_prior = _inv_logit(_logit(p_prior) + lineups_fw_adj)
+    
+    # 4. inj_count - broj povreda (negativno)
+    inj_count = feats_temp.get("inj_count")
+    if inj_count is not None and inj_count > 0:
+        # Negativan uticaj - više povreda = manja verovatnoća
+        inj_normalized = min(1.0, inj_count / 10.0)  # Normalizuj na 0-1
+        inj_count_adj = -WEIGHTS_FT.get("INJ_COUNT_ADJ", 0.02) * inj_normalized
+        p_prior = _inv_logit(_logit(p_prior) + inj_count_adj)
 
     # MICRO -> λ_home, λ_away -> P(Total≥2)
     feats = matchup_features_enhanced_ft(fixture, team_profiles_ft, league_baselines_ft, micro_db_ft=micro_db_ft, extras=extras)
@@ -2242,6 +2289,12 @@ def calculate_final_probability_ft_over15(
         # FORM_ADJ i COACH_ADJ
         "form_adj": form_adj,
         "coach_adj": coach_adj,
+        
+        # KRITIČNI FEATURE-I
+        "pace_da_total": feats.get("pace_da_total"),
+        "lineups_have": feats.get("lineups_have"),
+        "lineups_fw_count": feats.get("lineups_fw_count"),
+        "inj_count": feats.get("inj_count"),
         
         # Referee, weather, venue, lineups, injuries
         "ref_adj": extras.get("ref_adj", 0) if extras else 0,
@@ -2397,7 +2450,149 @@ from db_backend import (
     try_read_fixture_statistics,
     create_all_tables,
 )
+from mysql_database import (
+    create_user,
+    authenticate_user,
+    create_session,
+    get_session,
+    delete_session,
+    cleanup_expired_sessions,
+)
 
+# ====== AUTHENTICATION MODELS ======
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+    remember_me: bool = False
+
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
+    first_name: str
+    last_name: str
+
+class AuthResponse(BaseModel):
+    success: bool
+    message: str
+    user: dict = None
+    session_id: str = None
+
+
+# ====== AUTHENTICATION ENDPOINTS ======
+
+@app.post("/api/auth/register", response_model=AuthResponse)
+async def register_user(request: RegisterRequest):
+    """Register a new user."""
+    try:
+        # Validate email format
+        import re
+        if not re.match(r'^[^\s@]+@[^\s@]+\.[^\s@]+$', request.email):
+            return AuthResponse(success=False, message="Invalid email format")
+        
+        # Validate password strength
+        if len(request.password) < 8:
+            return AuthResponse(success=False, message="Password must be at least 8 characters long")
+        
+        # Create user
+        result = create_user(
+            email=request.email,
+            password=request.password,
+            first_name=request.first_name,
+            last_name=request.last_name
+        )
+        
+        if result["success"]:
+            return AuthResponse(
+                success=True,
+                message="User created successfully",
+                user=result["user"]
+            )
+        else:
+            return AuthResponse(success=False, message=result["error"])
+    
+    except Exception as e:
+        print(f"❌ [ERROR] Registration failed: {e}")
+        return AuthResponse(success=False, message="Registration failed")
+
+@app.post("/api/auth/login", response_model=AuthResponse)
+async def login_user(request: LoginRequest):
+    """Login user and create session."""
+    try:
+        # Authenticate user
+        result = authenticate_user(request.email, request.password)
+        
+        if not result["success"]:
+            return AuthResponse(success=False, message=result["error"])
+        
+        user = result["user"]
+        
+        # Create session
+        session_id = secrets.token_urlsafe(32)
+        expires_hours = 24 * 30 if request.remember_me else 24  # 30 days or 1 day
+        expires_at = (datetime.now() + timedelta(hours=expires_hours)).isoformat()
+        
+        session_created = create_session(
+            user_id=user["id"],
+            session_id=session_id,
+            expires_at=expires_at
+        )
+        
+        if session_created:
+            return AuthResponse(
+                success=True,
+                message="Login successful",
+                user=user,
+                session_id=session_id
+            )
+        else:
+            return AuthResponse(success=False, message="Failed to create session")
+    
+    except Exception as e:
+        print(f"❌ [ERROR] Login failed: {e}")
+        return AuthResponse(success=False, message="Login failed")
+
+@app.post("/api/auth/logout")
+async def logout_user(session_id: str = None):
+    """Logout user and delete session."""
+    try:
+        if session_id:
+            deleted = delete_session(session_id)
+            if deleted:
+                return {"success": True, "message": "Logged out successfully"}
+            else:
+                return {"success": False, "message": "Session not found"}
+        else:
+            return {"success": False, "message": "Session ID required"}
+    
+    except Exception as e:
+        print(f"❌ [ERROR] Logout failed: {e}")
+        return {"success": False, "message": "Logout failed"}
+
+@app.get("/api/auth/me")
+async def get_current_user(session_id: str = None):
+    """Get current user from session."""
+    try:
+        if not session_id:
+            return {"success": False, "message": "Session ID required"}
+        
+        session = get_session(session_id)
+        if session:
+            return {
+                "success": True,
+                "user": {
+                    "id": session["user_id"],
+                    "email": session["email"],
+                    "first_name": session["first_name"],
+                    "last_name": session["last_name"],
+                    "is_admin": session["is_admin"]
+                }
+            }
+        else:
+            return {"success": False, "message": "Invalid or expired session"}
+    
+    except Exception as e:
+        print(f"❌ [ERROR] Get user failed: {e}")
+        return {"success": False, "message": "Failed to get user"}
 
 @app.post("/admin/seed-day")
 def admin_seed_day(date_str: str | None = None):
@@ -5705,6 +5900,40 @@ def calculate_final_probability(
     # Dodaj u prior
     p_prior = _inv_logit(_logit(p_prior) + WEIGHTS.get("FORM_ADJ", 0.03) * form_adj)
     p_prior = _inv_logit(_logit(p_prior) + WEIGHTS.get("COACH_ADJ", 0.02) * coach_adj)
+    
+    # --- KRITIČNI FEATURE-I ---
+    # Treba da uključimo 4 kritična feature-a u p_prior kalkulaciju
+    feats_temp = matchup_features_enhanced(fixture, team_profiles, league_baselines, micro_db=micro_db, extras=extras)
+    
+    # 1. pace_da_total - tempo dangerous attacks
+    pace_da_total = feats_temp.get("pace_da_total", 0.0)
+    if pace_da_total > 0:
+        base_da = _league_base_for_fixture(fixture, league_baselines).get("mu_da1h", 0.0)
+        pace_da_z = _z(pace_da_total, base_da, max(1.0, base_da * 0.5)) if base_da > 0 else 0.0
+        pace_da_adj = WEIGHTS.get("PACE_DA_ADJ", 0.04) * pace_da_z
+        p_prior = _inv_logit(_logit(p_prior) + pace_da_adj)
+    
+    # 2. lineups_have - da li imamo lineup podatke (pozitivno)
+    lineups_have = feats_temp.get("lineups_have", False)
+    if lineups_have:
+        lineups_have_adj = WEIGHTS.get("LINEUPS_HAVE_ADJ", 0.03)
+        p_prior = _inv_logit(_logit(p_prior) + lineups_have_adj)
+    
+    # 3. lineups_fw_count - broj napadača (pozitivno)
+    lineups_fw_count = feats_temp.get("lineups_fw_count")
+    if lineups_fw_count is not None and lineups_fw_count > 0:
+        # Normalizuj na 0-1 skalu (pretpostavljamo 1-4 napadača)
+        fw_normalized = max(0.0, min(1.0, (lineups_fw_count - 1) / 3.0))
+        lineups_fw_adj = WEIGHTS.get("LINEUPS_FW_ADJ", 0.02) * fw_normalized
+        p_prior = _inv_logit(_logit(p_prior) + lineups_fw_adj)
+    
+    # 4. inj_count - broj povreda (negativno)
+    inj_count = feats_temp.get("inj_count")
+    if inj_count is not None and inj_count > 0:
+        # Negativan uticaj - više povreda = manja verovatnoća
+        inj_normalized = min(1.0, inj_count / 10.0)  # Normalizuj na 0-1
+        inj_count_adj = -WEIGHTS.get("INJ_COUNT_ADJ", 0.02) * inj_normalized
+        p_prior = _inv_logit(_logit(p_prior) + inj_count_adj)
 
     # --- MICRO ---
     feats = matchup_features_enhanced(fixture, team_profiles, league_baselines, micro_db=micro_db, extras=extras)
@@ -5778,6 +6007,12 @@ def calculate_final_probability(
         # FORM_ADJ i COACH_ADJ
         "form_adj": form_adj,
         "coach_adj": coach_adj,
+        
+        # KRITIČNI FEATURE-I
+        "pace_da_total": feats.get("pace_da_total"),
+        "lineups_have": feats.get("lineups_have"),
+        "lineups_fw_count": feats.get("lineups_fw_count"),
+        "inj_count": feats.get("inj_count"),
     }
     if market_odds_over05_1h:
         debug["market_odds_over05_1h"] = market_odds_over05_1h
@@ -5831,6 +6066,40 @@ def calculate_final_probability_gg(
     # Dodaj u prior
     p_prior = _inv_logit(_logit(p_prior) + WEIGHTS.get("FORM_ADJ", 0.03) * form_adj)
     p_prior = _inv_logit(_logit(p_prior) + WEIGHTS.get("COACH_ADJ", 0.02) * coach_adj)
+    
+    # --- KRITIČNI FEATURE-I ---
+    # Treba da uključimo 4 kritična feature-a u p_prior kalkulaciju
+    feats_temp = matchup_features_enhanced(fixture, team_profiles, league_baselines, micro_db=micro_db, extras=extras)
+    
+    # 1. pace_da_total - tempo dangerous attacks
+    pace_da_total = feats_temp.get("pace_da_total", 0.0)
+    if pace_da_total > 0:
+        base_da = _league_base_for_fixture(fixture, league_baselines).get("mu_da1h", 0.0)
+        pace_da_z = _z(pace_da_total, base_da, max(1.0, base_da * 0.5)) if base_da > 0 else 0.0
+        pace_da_adj = WEIGHTS.get("PACE_DA_ADJ", 0.04) * pace_da_z
+        p_prior = _inv_logit(_logit(p_prior) + pace_da_adj)
+    
+    # 2. lineups_have - da li imamo lineup podatke (pozitivno)
+    lineups_have = feats_temp.get("lineups_have", False)
+    if lineups_have:
+        lineups_have_adj = WEIGHTS.get("LINEUPS_HAVE_ADJ", 0.03)
+        p_prior = _inv_logit(_logit(p_prior) + lineups_have_adj)
+    
+    # 3. lineups_fw_count - broj napadača (pozitivno)
+    lineups_fw_count = feats_temp.get("lineups_fw_count")
+    if lineups_fw_count is not None and lineups_fw_count > 0:
+        # Normalizuj na 0-1 skalu (pretpostavljamo 1-4 napadača)
+        fw_normalized = max(0.0, min(1.0, (lineups_fw_count - 1) / 3.0))
+        lineups_fw_adj = WEIGHTS.get("LINEUPS_FW_ADJ", 0.02) * fw_normalized
+        p_prior = _inv_logit(_logit(p_prior) + lineups_fw_adj)
+    
+    # 4. inj_count - broj povreda (negativno)
+    inj_count = feats_temp.get("inj_count")
+    if inj_count is not None and inj_count > 0:
+        # Negativan uticaj - više povreda = manja verovatnoća
+        inj_normalized = min(1.0, inj_count / 10.0)  # Normalizuj na 0-1
+        inj_count_adj = -WEIGHTS.get("INJ_COUNT_ADJ", 0.02) * inj_normalized
+        p_prior = _inv_logit(_logit(p_prior) + inj_count_adj)
 
     # MICRO: p(home scores) i p(away scores) + korelacija
     feats = matchup_features_enhanced(fixture, team_profiles, league_baselines, micro_db=micro_db, extras=extras)
@@ -5874,6 +6143,12 @@ def calculate_final_probability_gg(
         # FORM_ADJ i COACH_ADJ
         "form_adj": form_adj,
         "coach_adj": coach_adj,
+        
+        # KRITIČNI FEATURE-I
+        "pace_da_total": feats.get("pace_da_total"),
+        "lineups_have": feats.get("lineups_have"),
+        "lineups_fw_count": feats.get("lineups_fw_count"),
+        "inj_count": feats.get("inj_count"),
     }
     if market_odds_btts_1h:
         debug["market_odds_btts_1h"] = market_odds_btts_1h
@@ -5946,6 +6221,40 @@ def calculate_final_probability_over15(
     # Dodaj u prior
     p_prior = _inv_logit(_logit(p_prior) + WEIGHTS.get("FORM_ADJ", 0.03) * form_adj)
     p_prior = _inv_logit(_logit(p_prior) + WEIGHTS.get("COACH_ADJ", 0.02) * coach_adj)
+    
+    # --- KRITIČNI FEATURE-I ---
+    # Treba da uključimo 4 kritična feature-a u p_prior kalkulaciju
+    feats_temp = matchup_features_enhanced(fixture, team_profiles, league_baselines, micro_db=micro_db, extras=extras)
+    
+    # 1. pace_da_total - tempo dangerous attacks
+    pace_da_total = feats_temp.get("pace_da_total", 0.0)
+    if pace_da_total > 0:
+        base_da = _league_base_for_fixture(fixture, league_baselines).get("mu_da1h", 0.0)
+        pace_da_z = _z(pace_da_total, base_da, max(1.0, base_da * 0.5)) if base_da > 0 else 0.0
+        pace_da_adj = WEIGHTS.get("PACE_DA_ADJ", 0.04) * pace_da_z
+        p_prior = _inv_logit(_logit(p_prior) + pace_da_adj)
+    
+    # 2. lineups_have - da li imamo lineup podatke (pozitivno)
+    lineups_have = feats_temp.get("lineups_have", False)
+    if lineups_have:
+        lineups_have_adj = WEIGHTS.get("LINEUPS_HAVE_ADJ", 0.03)
+        p_prior = _inv_logit(_logit(p_prior) + lineups_have_adj)
+    
+    # 3. lineups_fw_count - broj napadača (pozitivno)
+    lineups_fw_count = feats_temp.get("lineups_fw_count")
+    if lineups_fw_count is not None and lineups_fw_count > 0:
+        # Normalizuj na 0-1 skalu (pretpostavljamo 1-4 napadača)
+        fw_normalized = max(0.0, min(1.0, (lineups_fw_count - 1) / 3.0))
+        lineups_fw_adj = WEIGHTS.get("LINEUPS_FW_ADJ", 0.02) * fw_normalized
+        p_prior = _inv_logit(_logit(p_prior) + lineups_fw_adj)
+    
+    # 4. inj_count - broj povreda (negativno)
+    inj_count = feats_temp.get("inj_count")
+    if inj_count is not None and inj_count > 0:
+        # Negativan uticaj - više povreda = manja verovatnoća
+        inj_normalized = min(1.0, inj_count / 10.0)  # Normalizuj na 0-1
+        inj_count_adj = -WEIGHTS.get("INJ_COUNT_ADJ", 0.02) * inj_normalized
+        p_prior = _inv_logit(_logit(p_prior) + inj_count_adj)
 
     # MICRO: prvo p(≥1) kao u over05, pa u λ i p(≥2)
     feats = matchup_features_enhanced(fixture, team_profiles, league_baselines, micro_db=micro_db, extras=extras)
@@ -5999,6 +6308,12 @@ def calculate_final_probability_over15(
         # FORM_ADJ i COACH_ADJ
         "form_adj": form_adj,
         "coach_adj": coach_adj,
+        
+        # KRITIČNI FEATURE-I
+        "pace_da_total": feats.get("pace_da_total"),
+        "lineups_have": feats.get("lineups_have"),
+        "lineups_fw_count": feats.get("lineups_fw_count"),
+        "inj_count": feats.get("inj_count"),
     }
     if market_odds_over15_1h:
         debug["market_odds_over15_1h"] = market_odds_over15_1h

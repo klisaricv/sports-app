@@ -999,6 +999,56 @@ async function prepareDay() {
   }
 }
 
+// ====== AUTHENTICATION FUNCTIONS ======
+function checkAuthStatus() {
+  const user = localStorage.getItem('user');
+  const authButtons = document.getElementById('authButtons');
+  const userMenu = document.getElementById('userMenu');
+  const userName = document.getElementById('userName');
+  const userEmail = document.getElementById('userEmail');
+  
+  if (user) {
+    // User is logged in
+    const userData = JSON.parse(user);
+    if (authButtons) authButtons.style.display = 'none';
+    if (userMenu) userMenu.style.display = 'flex';
+    if (userName) userName.textContent = userData.name || 'User';
+    if (userEmail) userEmail.textContent = userData.email || 'user@example.com';
+  } else {
+    // User is not logged in
+    if (authButtons) authButtons.style.display = 'flex';
+    if (userMenu) userMenu.style.display = 'none';
+  }
+}
+
+async function logout() {
+  try {
+    const user = localStorage.getItem('user');
+    if (user) {
+      const userData = JSON.parse(user);
+      if (userData.session_id) {
+        // Call backend logout
+        await fetch(`${BACKEND_URL}/api/auth/logout`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            session_id: userData.session_id
+          })
+        });
+      }
+    }
+  } catch (error) {
+    console.error('Logout error:', error);
+  } finally {
+    // Always clear local storage and update UI
+    localStorage.removeItem('user');
+    checkAuthStatus();
+    showToast('Logged out successfully!', 'success');
+  }
+}
+
 // ====== WIRE EVENTS once DOM is ready ======
 document.addEventListener("DOMContentLoaded", () => {
   // NE proveravaj globalni loader status automatski - samo kada je potrebno
@@ -1008,7 +1058,16 @@ document.addEventListener("DOMContentLoaded", () => {
   // 2) Tema
   initTheme();
 
-  // 3) Podrazumijevani datumi (ako su prazni)
+  // 3) Authentication
+  checkAuthStatus();
+  
+  // 4) Initialize logout button
+  const logoutBtn = document.getElementById('logoutBtn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', logout);
+  }
+
+  // 5) Podrazumijevani datumi (ako su prazni)
   setDefaultDatesIfEmpty();
   
   // 4) Start checking for global loader status

@@ -288,6 +288,10 @@ async function handleLogin(event) {
       } else {
         showError(data.message || "Login failed. Please try again.");
       }
+      // Reset form after error
+      setTimeout(() => {
+        resetForm(form);
+      }, 2000);
     }
   } catch (error) {
     console.error('Login error:', error);
@@ -350,6 +354,12 @@ async function handleRegister(event) {
     // For checkbox, we need to show error differently
     const termsWrapper = document.querySelector('.checkbox-wrapper');
     if (termsWrapper) {
+      // Remove existing error first
+      const existingError = termsWrapper.parentNode.querySelector('.field-error');
+      if (existingError) {
+        existingError.remove();
+      }
+      
       const errorDiv = document.createElement('div');
       errorDiv.className = 'field-error';
       errorDiv.textContent = 'Please agree to the Terms of Service and Privacy Policy.';
@@ -419,6 +429,10 @@ async function handleRegister(event) {
       } else {
         showError(data.message || "Registration failed. Please try again.");
       }
+      // Reset form after error
+      setTimeout(() => {
+        resetForm(form);
+      }, 2000);
     }
   } catch (error) {
     console.error('Registration error:', error);

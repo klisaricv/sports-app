@@ -5579,26 +5579,30 @@ async def api_prepare_day(request: Request, background_tasks: BackgroundTasks):
     Body ili query: { "date": "YYYY-MM-DD", "prewarm": true/false }
     """
     try:
-        # Admin check - only klisaricf@gmail.com can access
-        session_id = request.headers.get('Authorization', '').replace('Bearer ', '')
-        if not session_id:
-            # Try to get from request body
-            try:
-                payload = await request.json()
-                session_id = payload.get('session_id', '')
-            except:
-                pass
-        
-        if session_id:
-            session_data = get_session(session_id)
-            if not session_data or session_data.get('user', {}).get('email') != 'klisaricf@gmail.com':
-                return {"error": "Access denied. Admin privileges required."}, 403
-        else:
-            return {"error": "Authentication required."}, 401
+        # Get request payload first
         try:
             payload = await request.json()
         except Exception:
             payload = {}
+        
+        # Admin check - only klisaricf@gmail.com can access
+        session_id = request.headers.get('Authorization', '').replace('Bearer ', '')
+        if not session_id:
+            session_id = payload.get('session_id', '')
+        
+        if session_id:
+            session_data = get_session(session_id)
+            print(f"DEBUG: session_id={session_id}")
+            print(f"DEBUG: session_data={session_data}")
+            if session_data:
+                user_email = session_data.get('user', {}).get('email')
+                print(f"DEBUG: user_email={user_email}")
+                if user_email != 'klisaricf@gmail.com':
+                    return {"error": "Access denied. Admin privileges required."}, 403
+            else:
+                return {"error": "Invalid session. Please log in again."}, 401
+        else:
+            return {"error": "Authentication required."}, 401
         date_str = (payload or {}).get("date") or request.query_params.get("date")
         prewarm  = bool((payload or {}).get("prewarm", True))
 

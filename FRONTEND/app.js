@@ -937,6 +937,9 @@ async function prepareDay() {
     const userData = user ? JSON.parse(user) : null;
     const sessionId = userData ? userData.session_id : null;
     
+    console.log("DEBUG: userData=", userData);
+    console.log("DEBUG: sessionId=", sessionId);
+    
     const resp = await fetch(`/api/prepare-day`, {
       method: "POST",
       headers: { 

@@ -38,7 +38,14 @@ function disableAllButtons(disable) {
 }
 
 function ensureLoaderUI() {
-  if (document.getElementById("loaderOverlay")) return;
+  console.log("🔍 [DEBUG] ensureLoaderUI called");
+  const existing = document.getElementById("loaderOverlay");
+  if (existing) {
+    console.log("🔍 [DEBUG] ensureLoaderUI - loaderOverlay already exists");
+    return;
+  }
+  
+  console.log("🔍 [DEBUG] ensureLoaderUI - creating new loaderOverlay");
   const overlay = document.createElement("div");
   overlay.id = "loaderOverlay";
   overlay.innerHTML = `
@@ -47,14 +54,24 @@ function ensureLoaderUI() {
       <div id="loaderSpinner"></div>
       <div id="loaderDetail">Initializing system...</div>
     </div>`;
+  
+  console.log("🔍 [DEBUG] ensureLoaderUI - appending to document.body");
   document.body.appendChild(overlay);
+  console.log("🔍 [DEBUG] ensureLoaderUI - overlay appended:", overlay);
 }
 function showLoader(title = "🚀 Preparing Analysis...") {
   console.log("🔍 [DEBUG] showLoader called with title:", title);
   console.log("🔍 [DEBUG] showLoader - document.body:", document.body);
   console.log("🔍 [DEBUG] showLoader - document ready state:", document.readyState);
   
+  try {
+    console.log("🔍 [DEBUG] showLoader - calling ensureLoaderUI");
   ensureLoaderUI();
+    console.log("🔍 [DEBUG] showLoader - ensureLoaderUI completed");
+  } catch (error) {
+    console.error("❌ [ERROR] showLoader - ensureLoaderUI failed:", error);
+    return;
+  }
   
   const overlay = document.getElementById("loaderOverlay");
   if (!overlay) {
@@ -216,8 +233,14 @@ function updateLoader(detail) {
   }
 }
 function hideLoader() {
+  console.log("🔍 [DEBUG] hideLoader called");
   const el = document.getElementById("loaderOverlay");
-  if (el) el.style.display = "none";
+  if (el) {
+    console.log("🔍 [DEBUG] hideLoader - hiding overlay");
+    el.style.display = "none";
+  } else {
+    console.log("🔍 [DEBUG] hideLoader - overlay not found");
+  }
   
   // Re-enable all buttons after loading
   disableAllButtons(false);
@@ -228,6 +251,7 @@ function hideLoader() {
     loaderCheckInterval = null;
   }
   globalLoaderActive = false;
+  console.log("🔍 [DEBUG] hideLoader completed");
 }
 
 // Global loader functions
@@ -476,22 +500,13 @@ async function parseJsonSafe(resp) {
 
 
 function setBusyUI(busy, note = "") {
+  console.log("🔍 [DEBUG] setBusyUI called with busy:", busy, "note:", note);
   // Don't change button text anymore - the loader handles the UI feedback
   document.body.style.cursor = busy ? "progress" : "";
+  console.log("🔍 [DEBUG] setBusyUI completed");
 }
 
-function showLoader() {
-  const top5 = document.getElementById("top5");
-  const other = document.getElementById("other");
-  const loaderHTML =
-    '<div class="loader" style="padding:12px;color:var(--muted)">Loading...</div>';
-  if (top5) top5.innerHTML = loaderHTML;
-  if (other) other.innerHTML = loaderHTML;
-  const ct = document.getElementById("countTop");
-  const co = document.getElementById("countOther");
-  if (ct) ct.textContent = "(0)";
-  if (co) co.textContent = "(0)";
-}
+// OLD showLoader function removed - was overriding the new one
 
 // ====== NARATIV ======
 function buildNarrative(m, marketHint) {

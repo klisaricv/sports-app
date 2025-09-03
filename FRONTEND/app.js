@@ -54,7 +54,6 @@ function ensureLoaderUI() {
   document.body.appendChild(overlay);
 }
 function showLoader(title = "🚀 Preparing Analysis...") {
-  console.log("🔍 [DEBUG] showLoader called with title:", title);
   ensureLoaderUI();
   
   const overlay = document.getElementById("loaderOverlay");
@@ -178,7 +177,6 @@ function updateLoader(detail) {
   }
 }
 function hideLoader() {
-  console.log("🔍 [DEBUG] hideLoader called");
   const el = document.getElementById("loaderOverlay");
   if (el) {
     el.style.display = "none";
@@ -1078,7 +1076,6 @@ async function prepareDay() {
     showError("Prepare Day Error", `Prepare day error: ${err}`);
     showToast("Prepare-day greška", "error");
   } finally {
-    hideLoader();
     setBusyUI(false);
     // Zaustavi globalni loader polling
     stopGlobalLoaderPolling();

@@ -720,7 +720,7 @@ function renderResults(data, market) {
               <span class="breakdown-value">${fmt(d.p_away_scores_1h, '%')}</span>
             </div>
           ` : ``}
-          ${isO15 ? `
+            ${isO15 ? `
             <div class="breakdown-item">
               <span class="breakdown-label">${o15Label}</span>
               <span class="breakdown-value">${fmt(d.lambda_total)}</span>
@@ -936,9 +936,6 @@ async function prepareDay() {
     const user = localStorage.getItem('user');
     const userData = user ? JSON.parse(user) : null;
     const sessionId = userData ? userData.session_id : null;
-    
-    console.log("DEBUG: userData=", userData);
-    console.log("DEBUG: sessionId=", sessionId);
     
     const resp = await fetch(`/api/prepare-day`, {
       method: "POST",

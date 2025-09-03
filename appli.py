@@ -5592,11 +5592,9 @@ async def api_prepare_day(request: Request, background_tasks: BackgroundTasks):
         
         if session_id:
             session_data = get_session(session_id)
-            print(f"DEBUG: session_id={session_id}")
-            print(f"DEBUG: session_data={session_data}")
             if session_data:
-                user_email = session_data.get('user', {}).get('email')
-                print(f"DEBUG: user_email={user_email}")
+                # Email is stored directly in session_data, not in session_data['user']
+                user_email = session_data.get('email')
                 if user_email != 'klisaricf@gmail.com':
                     return {"error": "Access denied. Admin privileges required."}, 403
             else:

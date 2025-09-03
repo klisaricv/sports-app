@@ -285,7 +285,6 @@ async function handleLogin(event) {
       }, 1000);
     } else {
       if (data.message && (data.message.includes('Invalid') || data.message.includes('incorrect'))) {
-        showFieldError('email', 'Invalid email or password. Please check your credentials and try again.');
         showFieldError('password', 'Invalid email or password. Please check your credentials and try again.');
       } else {
         showError(data.message || "Login failed. Please try again.");
@@ -352,6 +351,7 @@ async function handleRegister(event) {
     hasErrors = true;
   }
   
+  console.log('agreeTerms value:', agreeTerms); // Debug log
   if (!agreeTerms || agreeTerms !== 'on') {
     // For checkbox, we need to show error differently
     const termsWrapper = document.querySelector('.checkbox-wrapper');
@@ -370,6 +370,7 @@ async function handleRegister(event) {
     hasErrors = true;
   }
   
+  console.log('hasErrors:', hasErrors); // Debug log
   if (hasErrors) return;
   
   // Show loading state with animation

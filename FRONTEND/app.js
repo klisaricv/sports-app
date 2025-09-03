@@ -3,9 +3,11 @@ const BACKEND_URL = window.location.origin;
 // ako backend nije isti origin/port, otkomentariši sledeće:
 // const BACKEND_URL = "http://127.0.0.1:8000";
 
-// Global loader state - DISABLED
+// Global loader state
 let globalLoaderActive = false;
 let loaderCheckInterval = null;
+let globalLoaderCheckCount = 0;
+const MAX_GLOBAL_LOADER_CHECKS = 100; // Maksimalno 100 provera (10 sekundi sa 100ms intervalom)
 
 // ====== SMALL UTILS ======
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -193,8 +195,34 @@ function hideLoader() {
 
 // Global loader functions
 async function checkGlobalLoaderStatus() {
-  // DISABLED - was causing too many requests (50+ in 10 seconds)
-  return;
+  try {
+    globalLoaderCheckCount++;
+    
+    // Zaustavi provere ako je prekoračio limit
+    if (globalLoaderCheckCount > MAX_GLOBAL_LOADER_CHECKS) {
+      console.log("🛑 [GLOBAL LOADER] Max checks reached, stopping polling");
+      stopGlobalLoaderPolling();
+      return;
+    }
+    
+    const response = await fetch('/api/global-loader-status');
+    const data = await response.json();
+    
+    if (data.active && !globalLoaderActive) {
+      console.log("🌍 [GLOBAL LOADER] Showing global loader:", data);
+      showGlobalLoader(data.detail || "Preparing analysis...", data.progress || 0);
+    } else if (!data.active && globalLoaderActive) {
+      console.log("🌍 [GLOBAL LOADER] Hiding global loader");
+      hideGlobalLoader();
+      stopGlobalLoaderPolling();
+    } else if (data.active && globalLoaderActive) {
+      // Ažuriraj postojeći loader
+      updateGlobalLoader(data.detail || "Preparing analysis...", data.progress || 0);
+    }
+    
+  } catch (error) {
+    console.error("❌ [GLOBAL LOADER] Error checking status:", error);
+  }
 }
 
 function showGlobalLoader(title, progress = 0, detail = "Please wait...") {
@@ -202,20 +230,43 @@ function showGlobalLoader(title, progress = 0, detail = "Please wait...") {
   showLoader(title);
   updateLoader(detail);
   
-  // Start checking for updates
-  if (loaderCheckInterval) {
-    clearInterval(loaderCheckInterval);
+  // Pokreni polling ako nije već pokrenut
+  if (!loaderCheckInterval) {
+    startGlobalLoaderPolling();
   }
-  loaderCheckInterval = setInterval(checkGlobalLoaderStatus, 2000); // Check every 2 seconds
 }
 
-function updateGlobalLoader(progress, detail) {
+function updateGlobalLoader(detail, progress = 0) {
   updateLoader(detail);
 }
 
 function hideGlobalLoader() {
   globalLoaderActive = false;
   hideLoader();
+  stopGlobalLoaderPolling();
+}
+
+function startGlobalLoaderPolling() {
+  if (loaderCheckInterval) {
+    clearInterval(loaderCheckInterval);
+  }
+  
+  // Resetuj brojač
+  globalLoaderCheckCount = 0;
+  
+  // Pokreni polling svakih 100ms
+  loaderCheckInterval = setInterval(checkGlobalLoaderStatus, 100);
+  
+  console.log("🌍 [GLOBAL LOADER] Started polling");
+}
+
+function stopGlobalLoaderPolling() {
+  if (loaderCheckInterval) {
+    clearInterval(loaderCheckInterval);
+    loaderCheckInterval = null;
+  }
+  
+  console.log("🌍 [GLOBAL LOADER] Stopped polling");
 }
 
 // (ako nemaš već) bezbedno JSON parsiranje
@@ -808,6 +859,8 @@ async function prepareDay() {
 
 // ====== WIRE EVENTS once DOM is ready ======
 document.addEventListener("DOMContentLoaded", () => {
+  // Proveri globalni loader status kada se stranica učita
+  checkGlobalLoaderStatus();
   // 1) Kreiraj moderni shell (radi i sa starim HTML-om)
   ensureModernShell();
 

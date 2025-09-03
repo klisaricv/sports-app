@@ -6277,10 +6277,39 @@ def analyze_fixtures(start_date: datetime, end_date: datetime, from_hour=None, t
 
     return results
 
-# @app.get("/api/loader-status") - DISABLED - was causing too many requests
-# async def api_loader_status():
-#     """API endpoint za proveru statusa globalnog loadera - DISABLED"""
-#     return {"active": False}
+@app.get("/api/global-loader-status")
+async def api_global_loader_status():
+    """API endpoint za proveru statusa globalnog loadera"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(dictionary=True)
+        
+        # Proveri da li postoji aktivan prepare job
+        cur.execute("""
+            SELECT status, progress, detail, created_at
+            FROM prepare_jobs 
+            WHERE status IN ('running', 'queued')
+            ORDER BY created_at DESC 
+            LIMIT 1
+        """)
+        
+        job = cur.fetchone()
+        conn.close()
+        
+        if job:
+            return {
+                "active": True,
+                "status": job["status"],
+                "progress": job["progress"] or 0,
+                "detail": job["detail"] or "Preparing analysis...",
+                "started_at": job["created_at"].isoformat() if job["created_at"] else None
+            }
+        else:
+            return {"active": False}
+            
+    except Exception as e:
+        print(f"❌ [ERROR] Global loader status check failed: {e}")
+        return {"active": False}
 
 @app.get("/api/analyze")
 async def api_analyze(request: Request):

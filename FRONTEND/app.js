@@ -225,6 +225,51 @@ async function checkGlobalLoaderStatus() {
   }
 }
 
+// Server-Sent Events for real-time updates
+let globalLoaderSSE = null;
+
+function startGlobalLoaderSSE() {
+  if (globalLoaderSSE) {
+    globalLoaderSSE.close();
+  }
+  
+  globalLoaderSSE = new EventSource('/api/global-loader-events');
+  
+  globalLoaderSSE.onmessage = function(event) {
+    try {
+      const data = JSON.parse(event.data);
+      console.log("🌍 [SSE] Received global loader update:", data);
+      
+      if (data.active && !globalLoaderActive) {
+        showGlobalLoader(data.detail || "Preparing analysis...", data.progress || 0);
+      } else if (!data.active && globalLoaderActive) {
+        hideGlobalLoader();
+        stopGlobalLoaderSSE();
+      } else if (data.active && globalLoaderActive) {
+        updateGlobalLoader(data.detail || "Preparing analysis...", data.progress || 0);
+      }
+    } catch (error) {
+      console.error("Error parsing SSE data:", error);
+    }
+  };
+  
+  globalLoaderSSE.onerror = function(error) {
+    console.error("SSE connection error:", error);
+    // Fallback to polling if SSE fails
+    startGlobalLoaderPolling();
+  };
+  
+  console.log("🌍 [SSE] Started Server-Sent Events connection");
+}
+
+function stopGlobalLoaderSSE() {
+  if (globalLoaderSSE) {
+    globalLoaderSSE.close();
+    globalLoaderSSE = null;
+    console.log("🌍 [SSE] Stopped Server-Sent Events connection");
+  }
+}
+
 // Funkcija za proveru globalnog loader statusa BEZ automatskog prikazivanja
 async function checkGlobalLoaderStatusSilent() {
   try {
@@ -302,13 +347,22 @@ function startGlobalLoaderPolling() {
     clearInterval(loaderCheckInterval);
   }
   
+  // Zaustavi SSE ako postoji
+  stopGlobalLoaderSSE();
+  
   // Resetuj brojač
   globalLoaderCheckCount = 0;
   
-  // Pokreni polling svakih 100ms
-  loaderCheckInterval = setInterval(checkGlobalLoaderStatus, 100);
+  // Pokušaj SSE prvo, fallback na polling
+  try {
+    startGlobalLoaderSSE();
+  } catch (error) {
+    console.log("SSE not supported, falling back to polling");
+    // Pokreni polling svakih 2 sekunde (umesto 100ms)
+    loaderCheckInterval = setInterval(checkGlobalLoaderStatus, 2000);
+  }
   
-  console.log("🌍 [GLOBAL LOADER] Started polling");
+  console.log("🌍 [GLOBAL LOADER] Started real-time updates");
 }
 
 function stopGlobalLoaderPolling() {
@@ -317,7 +371,10 @@ function stopGlobalLoaderPolling() {
     loaderCheckInterval = null;
   }
   
-  console.log("🌍 [GLOBAL LOADER] Stopped polling");
+  // Zaustavi i SSE
+  stopGlobalLoaderSSE();
+  
+  console.log("🌍 [GLOBAL LOADER] Stopped all updates");
 }
 
 // (ako nemaš već) bezbedno JSON parsiranje

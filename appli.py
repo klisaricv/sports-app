@@ -1188,6 +1188,10 @@ def read_precomputed_results(from_dt: datetime, to_dt: datetime, fh, th, market:
             "att_adj": d.get("att_adj"),
             "def_adj": d.get("def_adj"),
             "tier_gap": d.get("tier_gap"),
+            
+            # FORM_ADJ i COACH_ADJ
+            "form_adj": d.get("form_adj"),
+            "coach_adj": d.get("coach_adj"),
         })
     return out
 
@@ -1506,6 +1510,10 @@ def persist_market_outputs_from_results(market: str, results: list[dict]):
         dbg.setdefault("away_shots_used", r.get("away_shots_used"))
         dbg.setdefault("away_attacks_used", r.get("away_attacks_used"))
         dbg.setdefault("form_percent", r.get("form_percent"))
+        
+        # FORM_ADJ i COACH_ADJ
+        dbg.setdefault("form_adj", r.get("form_adj"))
+        dbg.setdefault("coach_adj", r.get("coach_adj"))
 
         upsert_model_output(
             fixture_id=int(fid),
@@ -2120,8 +2128,17 @@ def calculate_final_probability_ft_over15(
         p_prior = p_prior_tmp
 
     # mali prior adj iz FTS/CS/Form (isti helper koristi)
-    prior_logit_adj = WEIGHTS_FT.get("FTSCS_ADJ", 0.05) * _fts_cs_form_coach_adj(repo, fixture, no_api=no_api)
+    fts_cs_adj = _fts_cs_form_coach_adj(repo, fixture, no_api=no_api)
+    prior_logit_adj = WEIGHTS_FT.get("FTSCS_ADJ", 0.05) * fts_cs_adj
     p_prior = _inv_logit(_logit(p_prior) + prior_logit_adj)
+    
+    # --- FORM_ADJ i COACH_ADJ implementacija ---
+    form_adj = _calculate_form_adjustment(fixture, team_last_matches, no_api=no_api)
+    coach_adj = _calculate_coach_adjustment(fixture, no_api=no_api)
+    
+    # Dodaj u prior
+    p_prior = _inv_logit(_logit(p_prior) + WEIGHTS_FT.get("FORM_ADJ", 0.03) * form_adj)
+    p_prior = _inv_logit(_logit(p_prior) + WEIGHTS_FT.get("COACH_ADJ", 0.02) * coach_adj)
 
     # MICRO -> λ_home, λ_away -> P(Total≥2)
     feats = matchup_features_enhanced_ft(fixture, team_profiles_ft, league_baselines_ft, micro_db_ft=micro_db_ft, extras=extras)
@@ -2221,6 +2238,10 @@ def calculate_final_probability_ft_over15(
         "effN_prior": (w_home or 0.0) + (w_away or 0.0) + effn_h2h,
         "effN_micro": feats.get("effN_micro", 0),
         "liga_baseline": m2p,
+        
+        # FORM_ADJ i COACH_ADJ
+        "form_adj": form_adj,
+        "coach_adj": coach_adj,
         
         # Referee, weather, venue, lineups, injuries
         "ref_adj": extras.get("ref_adj", 0) if extras else 0,
@@ -4315,6 +4336,61 @@ def _fts_cs_form_coach_adj(repo, fixture, no_api=False) -> float:
 
     return max(-0.08, min(0.08, adj))
 
+def _calculate_form_adjustment(fixture, team_last_matches, no_api=False) -> float:
+    """
+    Kalkuliše form adjustment na osnovu recentnih rezultata.
+    Vraća logit-adj skalar (-0.1 .. +0.1).
+    """
+    home_id = ((fixture.get('teams') or {}).get('home') or {}).get('id')
+    away_id = ((fixture.get('teams') or {}).get('away') or {}).get('id')
+    
+    if not home_id or not away_id:
+        return 0.0
+    
+    # Uzmi poslednje mečeve
+    home_matches = team_last_matches.get(home_id, [])[:5]  # poslednja 5
+    away_matches = team_last_matches.get(away_id, [])[:5]
+    
+    def _score_match(match):
+        """Score meča: 3 za pobedu, 1 za nerešeno, 0 za poraz"""
+        if not match or not isinstance(match, dict):
+            return 0
+        score = match.get('score', {})
+        if not score:
+            return 0
+        
+        home_goals = int(score.get('fulltime', {}).get('home', 0) or 0)
+        away_goals = int(score.get('fulltime', {}).get('away', 0) or 0)
+        
+        if home_goals > away_goals:
+            return 3
+        elif home_goals == away_goals:
+            return 1
+        else:
+            return 0
+    
+    # Kalkuliši form score
+    home_form_score = sum(_score_match(m) for m in home_matches) / max(1, len(home_matches))
+    away_form_score = sum(_score_match(m) for m in away_matches) / max(1, len(away_matches))
+    
+    # Kombinuj form score (home advantage)
+    combined_form = (home_form_score * 1.1 + away_form_score * 0.9) / 2.0
+    
+    # Konvertuj u logit adjustment
+    # Neutral form = 1.5 (50% pobeda), dobra forma > 1.5, loša < 1.5
+    form_adj = (combined_form - 1.5) * 0.1  # skaliramo
+    
+    return max(-0.1, min(0.1, form_adj))
+
+def _calculate_coach_adjustment(fixture, no_api=False) -> float:
+    """
+    Kalkuliše coach adjustment na osnovu promene trenera.
+    Vraća logit-adj skalar (-0.05 .. +0.05).
+    """
+    # TODO: Implementiraj kada bude dostupno u repo
+    # Za sada vraćamo 0, ali struktura je spremna
+    return 0.0
+
 # =============== NEW: Recency, EB shrink, league baselines, strengths, precision-merge ===============
 
 def beta_shrunk_rate(hits, total, m=0.55, tau=8.0):
@@ -5618,8 +5694,17 @@ def calculate_final_probability(
         p_prior = p_prior_tmp
 
     # --- Blagi prior logit-adj iz FTS/CS/Form ---
-    prior_logit_adj = WEIGHTS.get("FTSCS_ADJ", 0.05) * _fts_cs_form_coach_adj(repo, fixture, no_api=no_api)
+    fts_cs_adj = _fts_cs_form_coach_adj(repo, fixture, no_api=no_api)
+    prior_logit_adj = WEIGHTS.get("FTSCS_ADJ", 0.05) * fts_cs_adj
     p_prior = _inv_logit(_logit(p_prior) + prior_logit_adj)
+    
+    # --- FORM_ADJ i COACH_ADJ implementacija ---
+    form_adj = _calculate_form_adjustment(fixture, team_last_matches, no_api=no_api)
+    coach_adj = _calculate_coach_adjustment(fixture, no_api=no_api)
+    
+    # Dodaj u prior
+    p_prior = _inv_logit(_logit(p_prior) + WEIGHTS.get("FORM_ADJ", 0.03) * form_adj)
+    p_prior = _inv_logit(_logit(p_prior) + WEIGHTS.get("COACH_ADJ", 0.02) * coach_adj)
 
     # --- MICRO ---
     feats = matchup_features_enhanced(fixture, team_profiles, league_baselines, micro_db=micro_db, extras=extras)
@@ -5689,6 +5774,10 @@ def calculate_final_probability(
         "exp_sot_total": exp_sot_total,
         "exp_da_total":  exp_da_total,
         "fetch_source": FIXTURES_FETCH_SOURCE,
+        
+        # FORM_ADJ i COACH_ADJ
+        "form_adj": form_adj,
+        "coach_adj": coach_adj,
     }
     if market_odds_over05_1h:
         debug["market_odds_over05_1h"] = market_odds_over05_1h
@@ -5734,6 +5823,14 @@ def calculate_final_probability_gg(
         p_team_prior, (ph_tot or 0.0) + (pa_tot or 0.0),
         p_h2h,        effn_h2h
     )
+    
+    # --- FORM_ADJ i COACH_ADJ implementacija ---
+    form_adj = _calculate_form_adjustment(fixture, team_last_matches, no_api=no_api)
+    coach_adj = _calculate_coach_adjustment(fixture, no_api=no_api)
+    
+    # Dodaj u prior
+    p_prior = _inv_logit(_logit(p_prior) + WEIGHTS.get("FORM_ADJ", 0.03) * form_adj)
+    p_prior = _inv_logit(_logit(p_prior) + WEIGHTS.get("COACH_ADJ", 0.02) * coach_adj)
 
     # MICRO: p(home scores) i p(away scores) + korelacija
     feats = matchup_features_enhanced(fixture, team_profiles, league_baselines, micro_db=micro_db, extras=extras)
@@ -5773,6 +5870,10 @@ def calculate_final_probability_gg(
         "p_home_scores_1h": round(pH*100,2),
         "p_away_scores_1h": round(pA*100,2),
         "rho": round(rho,3),
+        
+        # FORM_ADJ i COACH_ADJ
+        "form_adj": form_adj,
+        "coach_adj": coach_adj,
     }
     if market_odds_btts_1h:
         debug["market_odds_btts_1h"] = market_odds_btts_1h
@@ -5834,8 +5935,17 @@ def calculate_final_probability_over15(
         p_prior = p_prior_tmp
 
     # blagi FTS/CS/Form adj ostavimo isti (malen)
-    prior_logit_adj = 0.8 * WEIGHTS.get("FTSCS_ADJ", 0.05) * _fts_cs_form_coach_adj(repo, fixture, no_api=no_api)
+    fts_cs_adj = _fts_cs_form_coach_adj(repo, fixture, no_api=no_api)
+    prior_logit_adj = 0.8 * WEIGHTS.get("FTSCS_ADJ", 0.05) * fts_cs_adj
     p_prior = _inv_logit(_logit(p_prior) + prior_logit_adj)
+    
+    # --- FORM_ADJ i COACH_ADJ implementacija ---
+    form_adj = _calculate_form_adjustment(fixture, team_last_matches, no_api=no_api)
+    coach_adj = _calculate_coach_adjustment(fixture, no_api=no_api)
+    
+    # Dodaj u prior
+    p_prior = _inv_logit(_logit(p_prior) + WEIGHTS.get("FORM_ADJ", 0.03) * form_adj)
+    p_prior = _inv_logit(_logit(p_prior) + WEIGHTS.get("COACH_ADJ", 0.02) * coach_adj)
 
     # MICRO: prvo p(≥1) kao u over05, pa u λ i p(≥2)
     feats = matchup_features_enhanced(fixture, team_profiles, league_baselines, micro_db=micro_db, extras=extras)
@@ -5885,6 +5995,10 @@ def calculate_final_probability_over15(
         "merge_weight_micro": round(w_micro_share,3),
         "p_ge1_micro": round(p_ge1_micro*100,2),
         "rho": round(rho,3),
+        
+        # FORM_ADJ i COACH_ADJ
+        "form_adj": form_adj,
+        "coach_adj": coach_adj,
     }
     if market_odds_over15_1h:
         debug["market_odds_over15_1h"] = market_odds_over15_1h

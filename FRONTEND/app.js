@@ -3,7 +3,7 @@ const BACKEND_URL = window.location.origin;
 // ako backend nije isti origin/port, otkomentariši sledeće:
 // const BACKEND_URL = "http://127.0.0.1:8000";
 
-// Global loader state
+// Global loader state - DISABLED
 let globalLoaderActive = false;
 let loaderCheckInterval = null;
 
@@ -51,42 +51,84 @@ function ensureLoaderUI() {
 }
 function showLoader(title = "🚀 Preparing Analysis...") {
   console.log("🔍 [DEBUG] showLoader called with title:", title);
+  console.log("🔍 [DEBUG] showLoader - document.body:", document.body);
+  console.log("🔍 [DEBUG] showLoader - document ready state:", document.readyState);
+  
   ensureLoaderUI();
   
   const overlay = document.getElementById("loaderOverlay");
   if (!overlay) {
     console.error("❌ [ERROR] loaderOverlay not found!");
+    console.error("❌ [ERROR] Available elements:", document.querySelectorAll('[id*="loader"]'));
     return;
   }
   
-  console.log("🔍 [DEBUG] loaderOverlay found, setting content...");
-  document.getElementById("loaderTitle").textContent = title;
-  document.getElementById("loaderDetail").textContent = "Initializing system...";
+  console.log("🔍 [DEBUG] loaderOverlay found:", overlay);
+  console.log("🔍 [DEBUG] loaderOverlay current styles:", {
+    display: overlay.style.display,
+    visibility: overlay.style.visibility,
+    opacity: overlay.style.opacity,
+    zIndex: overlay.style.zIndex
+  });
+  
+  // Set content
+  const titleEl = document.getElementById("loaderTitle");
+  const detailEl = document.getElementById("loaderDetail");
+  
+  if (titleEl) {
+    titleEl.textContent = title;
+    console.log("🔍 [DEBUG] Title set:", title);
+  } else {
+    console.error("❌ [ERROR] loaderTitle not found!");
+  }
+  
+  if (detailEl) {
+    detailEl.textContent = "Initializing system...";
+    console.log("🔍 [DEBUG] Detail set");
+  } else {
+    console.error("❌ [ERROR] loaderDetail not found!");
+  }
   
   // Make loader visible with high z-index
   overlay.style.zIndex = "99999";
   overlay.style.display = "flex";
   overlay.style.visibility = "visible";
   overlay.style.opacity = "1";
+  overlay.style.position = "fixed";
+  overlay.style.top = "0";
+  overlay.style.left = "0";
+  overlay.style.width = "100vw";
+  overlay.style.height = "100vh";
   
   console.log("🔍 [DEBUG] Loader styles applied:", {
     zIndex: overlay.style.zIndex,
     display: overlay.style.display,
     visibility: overlay.style.visibility,
-    opacity: overlay.style.opacity
+    opacity: overlay.style.opacity,
+    position: overlay.style.position,
+    top: overlay.style.top,
+    left: overlay.style.left,
+    width: overlay.style.width,
+    height: overlay.style.height
   });
   
   // Force a reflow to ensure styles are applied
   overlay.offsetHeight;
   
-  console.log("🔍 [DEBUG] loaderOverlay styles set:", {
-    display: overlay.style.display,
-    zIndex: overlay.style.zIndex,
-    visibility: overlay.style.visibility
+  // Check if loader is actually visible
+  const rect = overlay.getBoundingClientRect();
+  console.log("🔍 [DEBUG] Loader bounding rect:", rect);
+  console.log("🔍 [DEBUG] Loader computed styles:", {
+    display: window.getComputedStyle(overlay).display,
+    visibility: window.getComputedStyle(overlay).visibility,
+    opacity: window.getComputedStyle(overlay).opacity,
+    zIndex: window.getComputedStyle(overlay).zIndex
   });
   
   // Disable all buttons during loading
   disableAllButtons(true);
+  
+  console.log("🔍 [DEBUG] showLoader completed");
 }
 
 // Custom Modal System
@@ -190,23 +232,8 @@ function hideLoader() {
 
 // Global loader functions
 async function checkGlobalLoaderStatus() {
-  try {
-    const response = await fetch('/api/loader-status');
-    const data = await response.json();
-    
-    if (data.active && !globalLoaderActive) {
-      // Show global loader
-      showGlobalLoader(data.title || "🚀 System is preparing data...", data.progress || 0, data.detail || "Please wait...");
-    } else if (!data.active && globalLoaderActive) {
-      // Hide global loader
-      hideGlobalLoader();
-    } else if (data.active && globalLoaderActive) {
-      // Update global loader
-      updateGlobalLoader(data.progress || 0, data.detail || "Processing...");
-    }
-  } catch (error) {
-    console.log("Could not check loader status:", error);
-  }
+  // DISABLED - was causing too many requests (50+ in 10 seconds)
+  return;
 }
 
 function showGlobalLoader(title, progress = 0, detail = "Please wait...") {
@@ -646,13 +673,16 @@ function localYMD(d) {
 
 // ====== MAIN ACTION ======
 async function fetchAnalysis(type) {
+  console.log("🔍 [DEBUG] fetchAnalysis called with type:", type);
   const analysisTitles = {
     '1p': '🎯 Analyzing 1+ Goals...',
     'GG': '⚽ Analyzing Both Teams Score...',
     'O15': '🔥 Analyzing Over 1.5 Goals...',
     'FT_O15': '🚀 Analyzing FT Over 1.5 Goals...'
   };
+  console.log("🔍 [DEBUG] fetchAnalysis - calling showLoader");
   showLoader(analysisTitles[type] || '🔍 Analyzing...');
+  console.log("🔍 [DEBUG] fetchAnalysis - showLoader completed");
 
   const fromEl = document.getElementById("fromDate");
   const toEl = document.getElementById("toDate");
@@ -755,6 +785,7 @@ async function fetchAnalysis(type) {
 }
 
 async function prepareDay() {
+  console.log("🔍 [DEBUG] prepareDay function called");
   try {
     // izaberi datum (From -> ili To -> ili danas)
     const fromEl = document.getElementById("fromDate");
@@ -764,8 +795,12 @@ async function prepareDay() {
     else if (toEl && toEl.value) base = new Date(toEl.value);
     const dayStr = localYMD(base); // tvoja postojeća util funkcija
 
+    console.log("🔍 [DEBUG] prepareDay - dayStr:", dayStr);
+    console.log("🔍 [DEBUG] prepareDay - calling setBusyUI");
     setBusyUI(true, `Pripremam ${dayStr}…`);
+    console.log("🔍 [DEBUG] prepareDay - calling showLoader");
     showLoader(`🚀 Preparing ${dayStr}...`);
+    console.log("🔍 [DEBUG] prepareDay - showLoader completed");
 
     // 1) enqueue
     const resp = await fetch(`/api/prepare-day`, {
@@ -840,8 +875,21 @@ document.addEventListener("DOMContentLoaded", () => {
   setDefaultDatesIfEmpty();
   
   // 4) Start checking for global loader status
-  checkGlobalLoaderStatus();
-  setInterval(checkGlobalLoaderStatus, 3000); // Check every 3 seconds
+  // checkGlobalLoaderStatus(); // DISABLED - was causing too many requests
+  // setInterval(checkGlobalLoaderStatus, 3000); // DISABLED
+  
+  // TEST: Add test button for loader
+  const testLoaderBtn = document.createElement("button");
+  testLoaderBtn.textContent = "TEST LOADER";
+  testLoaderBtn.style.cssText = "position: fixed; top: 10px; right: 10px; z-index: 100000; background: red; color: white; padding: 10px; border: none; border-radius: 5px; cursor: pointer;";
+  testLoaderBtn.onclick = () => {
+    console.log("🔍 [DEBUG] TEST LOADER button clicked");
+    showLoader("🧪 TEST LOADER");
+    setTimeout(() => {
+      hideLoader();
+    }, 3000);
+  };
+  document.body.appendChild(testLoaderBtn);
 
   // 4) Dugmad
   const btn1p = document.getElementById("analyze1p");

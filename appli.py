@@ -6163,49 +6163,10 @@ def analyze_fixtures(start_date: datetime, end_date: datetime, from_hour=None, t
 
     return results
 
-@app.get("/api/loader-status")
-async def api_loader_status():
-    """API endpoint za proveru statusa globalnog loadera"""
-    try:
-        # Proveri da li postoji aktivni prepare job
-        conn = get_db_connection()
-        cur = conn.cursor()
-        cur.execute("""
-            SELECT status, progress, detail, created_at 
-            FROM prepare_jobs 
-            WHERE status IN ('running', 'pending') 
-            ORDER BY created_at DESC 
-            LIMIT 1
-        """)
-        row = cur.fetchone()
-        conn.close()
-        
-        if row:
-            status, progress, detail, created_at = row
-            return {
-                "active": True,
-                "title": "🚀 Preparing Day...",
-                "progress": progress or 0,
-                "detail": detail or "Processing data...",
-                "status": status
-            }
-        else:
-            return {
-                "active": False,
-                "title": "",
-                "progress": 0,
-                "detail": "",
-                "status": "idle"
-            }
-    except Exception as e:
-        print(f"Error checking loader status: {e}")
-        return {
-            "active": False,
-            "title": "",
-            "progress": 0,
-            "detail": "",
-            "status": "error"
-        }
+# @app.get("/api/loader-status") - DISABLED - was causing too many requests
+# async def api_loader_status():
+#     """API endpoint za proveru statusa globalnog loadera - DISABLED"""
+#     return {"active": False}
 
 @app.get("/api/analyze")
 async def api_analyze(request: Request):

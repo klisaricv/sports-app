@@ -76,6 +76,58 @@ function clearAllFieldErrors() {
   
   const errorInputs = document.querySelectorAll('.form-input.error');
   errorInputs.forEach(input => input.classList.remove('error'));
+  
+  // Clear terms checkbox error
+  const termsWrapper = document.querySelector('.checkbox-wrapper');
+  if (termsWrapper) {
+    const termsError = termsWrapper.parentNode.querySelector('.field-error');
+    if (termsError) {
+      termsError.remove();
+    }
+  }
+}
+
+function resetForm(form) {
+  // Clear all field errors
+  clearAllFieldErrors();
+  
+  // Reset form inputs
+  const inputs = form.querySelectorAll('input');
+  inputs.forEach(input => {
+    if (input.type === 'checkbox') {
+      input.checked = false;
+    } else {
+      input.value = '';
+    }
+  });
+  
+  // Reset button
+  const submitBtn = form.querySelector('.auth-btn');
+  if (submitBtn) {
+    removeLoadingAnimation(submitBtn);
+    submitBtn.disabled = false;
+    
+    // Reset button text based on form type
+    if (form.id === 'loginForm') {
+      submitBtn.innerHTML = `
+        <span>Sign In</span>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M12 5L19 12L12 19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      `;
+    } else if (form.id === 'registerForm') {
+      submitBtn.innerHTML = `
+        <span>Create Account</span>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M16 21V19C16 17.9391 15.5786 16.9217 14.8284 16.1716C14.0783 15.4214 13.0609 15 12 15H5C3.93913 15 2.92172 15.4214 2.17157 16.1716C1.42143 16.9217 1 17.9391 1 19V21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M8.5 11C10.7091 11 12.5 9.20914 12.5 7C12.5 4.79086 10.7091 3 8.5 3C6.29086 3 4.5 4.79086 4.5 7C4.5 9.20914 6.29086 11 8.5 11Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M20 8V14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M17 11H23" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      `;
+    }
+  }
 }
 
 function addLoadingAnimation(button) {
@@ -240,6 +292,10 @@ async function handleLogin(event) {
   } catch (error) {
     console.error('Login error:', error);
     showError("Login failed. Please check your connection and try again.");
+    // Reset form after error
+    setTimeout(() => {
+      resetForm(form);
+    }, 2000);
   } finally {
     // Reset button only if not successful
     if (!data?.success) {
@@ -291,7 +347,14 @@ async function handleRegister(event) {
   }
   
   if (!agreeTerms) {
-    showFieldError('agreeTerms', 'Please agree to the Terms of Service and Privacy Policy.');
+    // For checkbox, we need to show error differently
+    const termsWrapper = document.querySelector('.checkbox-wrapper');
+    if (termsWrapper) {
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'field-error';
+      errorDiv.textContent = 'Please agree to the Terms of Service and Privacy Policy.';
+      termsWrapper.parentNode.insertBefore(errorDiv, termsWrapper.nextSibling);
+    }
     hasErrors = true;
   }
   
@@ -360,6 +423,10 @@ async function handleRegister(event) {
   } catch (error) {
     console.error('Registration error:', error);
     showError("Registration failed. Please check your connection and try again.");
+    // Reset form after error
+    setTimeout(() => {
+      resetForm(form);
+    }, 2000);
   } finally {
     // Reset button only if not successful
     if (!data?.success) {

@@ -225,6 +225,25 @@ async function checkGlobalLoaderStatus() {
   }
 }
 
+// Funkcija za proveru globalnog loader statusa BEZ automatskog prikazivanja
+async function checkGlobalLoaderStatusSilent() {
+  try {
+    const response = await fetch('/api/global-loader-status');
+    const data = await response.json();
+    
+    if (data.active && !globalLoaderActive) {
+      console.log("🌍 [GLOBAL LOADER] Found active job, starting polling:", data);
+      // Pokreni polling samo ako postoji aktivan job
+      startGlobalLoaderPolling();
+    }
+    
+    return data;
+  } catch (error) {
+    console.error("❌ [GLOBAL LOADER] Error checking status silently:", error);
+    return { active: false };
+  }
+}
+
 function showGlobalLoader(title, progress = 0, detail = "Please wait...") {
   globalLoaderActive = true;
   showLoader(title);
@@ -539,6 +558,16 @@ function buildNarrative(m, marketHint) {
 }
 
 // ====== RENDER ======
+function getAnalysisTitle(market) {
+  const titles = {
+    '1h_over05': '🎯 Over 0.5 Goals - 1st Half',
+    'gg1h': '⚽ Both Teams to Score - 1st Half', 
+    '1h_over15': '🎯 Over 1.5 Goals - 1st Half',
+    'ft_over15': '🎯 Over 1.5 Goals - Full Time'
+  };
+  return titles[market] || '📊 Analysis Results';
+}
+
 function renderResults(data, market) {
   const currentMarket = market || "1h_over05";
   window.currentAnalysisResults = data;
@@ -547,6 +576,24 @@ function renderResults(data, market) {
   const otherContainer = document.getElementById("other");
 
   const total = Array.isArray(data) ? data.length : 0;
+
+  // Dodaj naslov analize iznad rezultata
+  const analysisTitle = getAnalysisTitle(currentMarket);
+  const resultsSection = document.querySelector('.results');
+  if (resultsSection && !document.getElementById('analysis-title')) {
+    const titleElement = document.createElement('div');
+    titleElement.id = 'analysis-title';
+    titleElement.className = 'analysis-title';
+    titleElement.innerHTML = `
+      <h2>${analysisTitle}</h2>
+      <div class="analysis-subtitle">Analysis completed • ${total} matches found</div>
+    `;
+    resultsSection.insertBefore(titleElement, resultsSection.firstChild);
+  } else if (document.getElementById('analysis-title')) {
+    const titleEl = document.getElementById('analysis-title');
+    titleEl.querySelector('h2').textContent = analysisTitle;
+    titleEl.querySelector('.analysis-subtitle').textContent = `Analysis completed • ${total} matches found`;
+  }
 
   // naslovi sa count badge
   const countTop = document.getElementById("countTop");
@@ -574,43 +621,87 @@ function renderResults(data, market) {
 
     return `
       <div class="match">
-        <div style="font-weight:700;margin-bottom:6px">${fmt(m.league)}: ${fmt(m.team1)} vs ${fmt(m.team2)}</div>
-
-        <div style="margin:6px 0">
-          <div>${fmt(m.team1)} – Last ${fmt(m.team1_total)}: <strong>${fmt(m.team1_percent, '%')}</strong>${t1Sample}</div>
-          <div>${fmt(m.team2)} – Last ${fmt(m.team2_total)}: <strong>${fmt(m.team2_percent, '%')}</strong>${t2Sample}</div>
-          <div>H2H: <strong>${fmt(m.h2h_percent, '%')}</strong>${h2hSample}</div>
+        <div class="match-header">
+          <div class="match-league">${fmt(m.league)}</div>
+          <div class="match-teams">${fmt(m.team1)} vs ${fmt(m.team2)}</div>
         </div>
 
-        <div style="margin:6px 0">
-          <div><em>1H mikro signali (po timu):</em></div>
-          <div>Shots on Target (1H): Home ${shotHome} (used ${fmt(m.home_shots_used)}), Away ${shotAway} (used ${fmt(m.away_shots_used)})</div>
-          <div>Dangerous Attacks (1H): Home ${attHome} (used ${fmt(m.home_attacks_used)}), Away ${attAway} (used ${fmt(m.away_attacks_used)})</div>
-          <div>Form (sredina dostupnih signala): <strong>${fmt(m.form_percent, '%')}</strong></div>
+        <div class="match-stats">
+          <div class="stat-row">
+            <span class="stat-label">${fmt(m.team1)}</span>
+            <span class="stat-value">${fmt(m.team1_percent, '%')}</span>
+            <span class="stat-sample">(${fmt(m.team1_hits)}/${fmt(m.team1_total)})</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">${fmt(m.team2)}</span>
+            <span class="stat-value">${fmt(m.team2_percent, '%')}</span>
+            <span class="stat-sample">(${fmt(m.team2_hits)}/${fmt(m.team2_total)})</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">H2H</span>
+            <span class="stat-value">${fmt(m.h2h_percent, '%')}</span>
+            <span class="stat-sample">(${fmt(m.h2h_hits)}/${fmt(m.h2h_total)})</span>
+          </div>
         </div>
 
-        <div style="margin:6px 0;padding:8px;background:var(--surface-2);border-radius:10px;border:1px solid var(--border)">
-          <div style="font-weight:600;margin-bottom:4px">Model breakdown</div>
-          <div>Prior (recent form + H2H): <strong>${fmt(d.prior_percent, '%')}</strong></div>
-          <div>Micro (league-normalized): <strong>${fmt(d.micro_percent, '%')}</strong>
-            <span style="color:var(--muted)">[exp SOT total: ${fmt(d.exp_sot1h_total)}, exp DA total: ${fmt(d.exp_da1h_total)}, pos-edge: ${fmt(d.pos_edge_percent, '%')}]</span>
+        <div class="micro-signals">
+          <div class="micro-title">1H Micro Signals</div>
+          <div class="micro-grid">
+            <div class="micro-item">
+              <span class="micro-label">Shots on Target</span>
+              <span class="micro-values">H: ${shotHome} | A: ${shotAway}</span>
+            </div>
+            <div class="micro-item">
+              <span class="micro-label">Dangerous Attacks</span>
+              <span class="micro-values">H: ${attHome} | A: ${attAway}</span>
+            </div>
+            <div class="micro-item">
+              <span class="micro-label">Form Average</span>
+              <span class="micro-values">${fmt(m.form_percent, '%')}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="model-breakdown">
+          <div class="breakdown-title">Model Analysis</div>
+          <div class="breakdown-grid">
+            <div class="breakdown-item">
+              <span class="breakdown-label">Prior (Form + H2H)</span>
+              <span class="breakdown-value">${fmt(d.prior_percent, '%')}</span>
+            </div>
+            <div class="breakdown-item">
+              <span class="breakdown-label">Micro (League-normalized)</span>
+              <span class="breakdown-value">${fmt(d.micro_percent, '%')}</span>
+            </div>
+            <div class="breakdown-item">
+              <span class="breakdown-label">Micro Share</span>
+              <span class="breakdown-value">${fmt(d.merge_weight_micro)}</span>
+            </div>
           </div>
           ${isGG ? `
-            <div>Team 1 scores 1H: <strong>${fmt(d.p_home_scores_1h, '%')}</strong>,
-                 Team 2: <strong>${fmt(d.p_away_scores_1h, '%')}</strong>
-                 <span style="color:var(--muted)">${d.rho!=null?`(ρ=${fmt(d.rho)})`:''}</span>
-            </div>` : ``}
-            ${isO15 ? `
-            <div>${o15Label}: total <strong>${fmt(d.lambda_total)}</strong>
-                <span style="color:var(--muted)">(home ${fmt(d.lambda_home)}, away ${fmt(d.lambda_away)})</span>
-            </div>` : ``}
-          <div>Merged (precision-weighted): <span style="color:var(--text)">micro share ≈ ${fmt(d.merge_weight_micro)}</span></div>
-          <div style="color:var(--muted)">effN prior: ${fmt(d.effn_prior)}, effN micro: ${fmt(d.effn_micro)}, ligaški baseline: ${fmt(d.m_league, '%')}</div>
+            <div class="breakdown-item">
+              <span class="breakdown-label">Team 1 scores 1H</span>
+              <span class="breakdown-value">${fmt(d.p_home_scores_1h, '%')}</span>
+            </div>
+            <div class="breakdown-item">
+              <span class="breakdown-label">Team 2 scores 1H</span>
+              <span class="breakdown-value">${fmt(d.p_away_scores_1h, '%')}</span>
+            </div>
+          ` : ``}
+          ${isO15 ? `
+            <div class="breakdown-item">
+              <span class="breakdown-label">${o15Label}</span>
+              <span class="breakdown-value">${fmt(d.lambda_total)}</span>
+            </div>
+          ` : ``}
         </div>
 
-        <div style="margin-top:8px">
-          <div><strong>Final Probability: ${fmt(m.final_percent, '%')}</strong></div>
-          <div style="margin-top:6px; font-size:0.92em; line-height:1.35; color:var(--text);">
+        <div class="final-result">
+          <div class="final-probability">
+            <span class="final-label">Final Probability</span>
+            <span class="final-value">${fmt(m.final_percent, '%')}</span>
+          </div>
+          <div class="narrative">
             ${buildNarrative(m, currentMarket)}
           </div>
         </div>
@@ -808,7 +899,11 @@ async function prepareDay() {
     const jobId = data.job_id;
     updateLoader("queued");
 
-    // 2) poll status
+    // 2) Pokreni globalni loader polling
+    console.log("🌍 [GLOBAL LOADER] Starting global loader for prepare day");
+    startGlobalLoaderPolling();
+
+    // 3) poll status
     let lastProgress = -1;
     while (true) {
       await sleep(3000);
@@ -854,13 +949,14 @@ async function prepareDay() {
   } finally {
     hideLoader();
     setBusyUI(false);
+    // Zaustavi globalni loader polling
+    stopGlobalLoaderPolling();
   }
 }
 
 // ====== WIRE EVENTS once DOM is ready ======
 document.addEventListener("DOMContentLoaded", () => {
-  // Proveri globalni loader status kada se stranica učita
-  checkGlobalLoaderStatus();
+  // NE proveravaj globalni loader status automatski - samo kada je potrebno
   // 1) Kreiraj moderni shell (radi i sa starim HTML-om)
   ensureModernShell();
 

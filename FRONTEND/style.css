@@ -578,6 +578,24 @@ button[disabled],
   .actions {
     grid-template-columns: repeat(5, 1fr);
   }
+  
+  .micro-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  
+  .breakdown-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .micro-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  
+  .breakdown-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
 }
 
 /* ---------- Results Grid ---------- */
@@ -661,14 +679,40 @@ button[disabled],
   50% { transform: scale(1.1); }
 }
 
+/* ---------- Analysis Title ---------- */
+.analysis-title {
+  text-align: center;
+  margin-bottom: var(--spacing-xl);
+  padding: var(--spacing-lg);
+  background: var(--surface-glass);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-soft);
+}
+
+.analysis-title h2 {
+  margin: 0 0 var(--spacing-sm);
+  font-size: var(--font-size-3xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+  text-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+}
+
+.analysis-subtitle {
+  color: var(--text-secondary);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-medium);
+}
+
 /* ---------- Match Cards ---------- */
 .match {
-  background: var(--surface-glass);
-  border: 1px solid var(--border-glass);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--radius-lg);
   padding: var(--spacing-lg);
   margin-bottom: var(--spacing-md);
-  backdrop-filter: blur(10px);
+  backdrop-filter: blur(15px);
   transition: all var(--transition-fast);
   animation: matchSlideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
@@ -691,9 +735,194 @@ button[disabled],
 }
 
 .match:hover {
-  transform: translateY(-4px) scale(1.02);
-  box-shadow: var(--shadow-glow);
-  border-color: var(--neon-blue);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Match Header */
+.match-header {
+  margin-bottom: var(--spacing-md);
+  padding-bottom: var(--spacing-sm);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.match-league {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  font-weight: var(--font-weight-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: var(--spacing-xs);
+}
+
+.match-teams {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+}
+
+/* Match Stats */
+.match-stats {
+  margin-bottom: var(--spacing-md);
+}
+
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-xs) 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.stat-row:last-child {
+  border-bottom: none;
+}
+
+.stat-label {
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-medium);
+  flex: 1;
+}
+
+.stat-value {
+  color: var(--text-primary);
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-lg);
+  margin: 0 var(--spacing-sm);
+}
+
+.stat-sample {
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-normal);
+}
+
+/* Micro Signals */
+.micro-signals {
+  margin-bottom: var(--spacing-md);
+  padding: var(--spacing-md);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.micro-title {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-sm);
+  text-align: center;
+}
+
+.micro-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--spacing-sm);
+}
+
+.micro-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-xs) 0;
+}
+
+.micro-label {
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-sm);
+}
+
+.micro-values {
+  color: var(--text-primary);
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-sm);
+}
+
+/* Model Breakdown */
+.model-breakdown {
+  margin-bottom: var(--spacing-md);
+  padding: var(--spacing-md);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.breakdown-title {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-sm);
+  text-align: center;
+}
+
+.breakdown-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--spacing-sm);
+}
+
+.breakdown-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-xs) 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.breakdown-item:last-child {
+  border-bottom: none;
+}
+
+.breakdown-label {
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-sm);
+}
+
+.breakdown-value {
+  color: var(--text-primary);
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-sm);
+}
+
+/* Final Result */
+.final-result {
+  padding-top: var(--spacing-md);
+  border-top: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+.final-probability {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-sm);
+  padding: var(--spacing-sm);
+  background: rgba(0, 245, 255, 0.1);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(0, 245, 255, 0.2);
+}
+
+.final-label {
+  color: var(--text-primary);
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-lg);
+}
+
+.final-value {
+  color: var(--neon-blue);
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-2xl);
+  text-shadow: 0 0 10px rgba(0, 245, 255, 0.5);
+}
+
+.narrative {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+  font-style: italic;
 }
 
 @keyframes matchSlideIn {

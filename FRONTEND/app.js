@@ -933,12 +933,29 @@ async function prepareDay() {
     showLoader(`🚀 Preparing ${dayStr}...`);
 
     // 1) enqueue
+    const user = localStorage.getItem('user');
+    const userData = user ? JSON.parse(user) : null;
+    const sessionId = userData ? userData.session_id : null;
+    
     const resp = await fetch(`/api/prepare-day`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Accept": "application/json" },
-      body: JSON.stringify({ date: dayStr, prewarm: true })
+      headers: { 
+        "Content-Type": "application/json", 
+        "Accept": "application/json",
+        "Authorization": `Bearer ${sessionId}`
+      },
+      body: JSON.stringify({ date: dayStr, prewarm: true, session_id: sessionId })
     });
     const data = await parseJsonSafe(resp);
+    
+    // Check for admin access error
+    if (resp.status === 403) {
+      throw new Error("Access denied. Admin privileges required.");
+    }
+    if (resp.status === 401) {
+      throw new Error("Authentication required. Please log in.");
+    }
+    
     if (!data.ok || !data.job_id) throw new Error("Neuspešno pokretanje prepare posla");
 
     const jobId = data.job_id;
@@ -1006,6 +1023,7 @@ function checkAuthStatus() {
   const userMenu = document.getElementById('userMenu');
   const userName = document.getElementById('userName');
   const userEmail = document.getElementById('userEmail');
+  const prepareDayBtn = document.getElementById('prepareDay');
   
   if (user) {
     // User is logged in
@@ -1014,10 +1032,21 @@ function checkAuthStatus() {
     if (userMenu) userMenu.style.display = 'flex';
     if (userName) userName.textContent = userData.name || 'User';
     if (userEmail) userEmail.textContent = userData.email || 'user@example.com';
+    
+    // Show Prepare Day button only for admin user
+    if (prepareDayBtn) {
+      const isAdmin = userData.email === 'klisaricf@gmail.com';
+      if (isAdmin) {
+        prepareDayBtn.classList.add('show');
+      } else {
+        prepareDayBtn.classList.remove('show');
+      }
+    }
   } else {
     // User is not logged in
     if (authButtons) authButtons.style.display = 'flex';
     if (userMenu) userMenu.style.display = 'none';
+    if (prepareDayBtn) prepareDayBtn.classList.remove('show');
   }
 }
 

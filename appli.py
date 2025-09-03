@@ -5579,6 +5579,22 @@ async def api_prepare_day(request: Request, background_tasks: BackgroundTasks):
     Body ili query: { "date": "YYYY-MM-DD", "prewarm": true/false }
     """
     try:
+        # Admin check - only klisaricf@gmail.com can access
+        session_id = request.headers.get('Authorization', '').replace('Bearer ', '')
+        if not session_id:
+            # Try to get from request body
+            try:
+                payload = await request.json()
+                session_id = payload.get('session_id', '')
+            except:
+                pass
+        
+        if session_id:
+            session_data = get_session(session_id)
+            if not session_data or session_data.get('user', {}).get('email') != 'klisaricf@gmail.com':
+                return {"error": "Access denied. Admin privileges required."}, 403
+        else:
+            return {"error": "Authentication required."}, 401
         try:
             payload = await request.json()
         except Exception:

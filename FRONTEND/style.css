@@ -1463,6 +1463,17 @@ button[disabled],
 }
 
 /* =========================================
+   ADMIN ONLY ELEMENTS
+   ========================================= */
+.admin-only {
+  display: none !important;
+}
+
+.admin-only.show {
+  display: flex !important;
+}
+
+/* =========================================
    HEADER AUTH BUTTONS STYLES
    ========================================= */
 

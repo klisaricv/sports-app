@@ -14,17 +14,31 @@
         <div class="auth-card">
             <div class="auth-header">
                 <div class="auth-logo">
-                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <defs>
                             <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                                <stop offset="0%" style="stop-color:currentColor;stop-opacity:1" />
-                                <stop offset="100%" style="stop-color:currentColor;stop-opacity:0.7" />
+                                <stop offset="0%" style="stop-color:#22c55e;stop-opacity:1" />
+                                <stop offset="100%" style="stop-color:#16a34a;stop-opacity:1" />
                             </linearGradient>
                         </defs>
-                        <circle cx="12" cy="12" r="10" fill="url(#logoGradient)" opacity="0.1"/>
-                        <path d="M12 2L15.5 8.5L22 9L17.5 14.5L18.5 22L12 18.5L5.5 22L6.5 14.5L2 9L8.5 8.5L12 2Z" fill="url(#logoGradient)"/>
-                        <circle cx="12" cy="12" r="2" fill="white" opacity="0.9"/>
-                        <path d="M8 12L10 14L16 8" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                        <!-- Football -->
+                        <circle cx="8" cy="8" r="6" fill="url(#logoGradient)" opacity="0.9"/>
+                        <path d="M8 2L10.5 5.5L8 8L5.5 5.5L8 2Z" fill="white" opacity="0.8"/>
+                        <path d="M8 8L10.5 10.5L8 13L5.5 10.5L8 8Z" fill="white" opacity="0.6"/>
+                        <path d="M8 13L10.5 15.5L8 18L5.5 15.5L8 13Z" fill="white" opacity="0.4"/>
+                        
+                        <!-- Curved Arc -->
+                        <path d="M2 8Q8 2 14 8Q20 14 16 20" stroke="url(#logoGradient)" stroke-width="2" fill="none" opacity="0.7"/>
+                        
+                        <!-- Bar Chart -->
+                        <rect x="14" y="12" width="2" height="4" fill="url(#logoGradient)" opacity="0.8"/>
+                        <rect x="16.5" y="10" width="2" height="6" fill="url(#logoGradient)" opacity="0.9"/>
+                        <rect x="19" y="8" width="2" height="8" fill="url(#logoGradient)"/>
+                        
+                        <!-- Line Graph -->
+                        <path d="M14 12L16.5 10L19 8L21 6" stroke="white" stroke-width="1.5" fill="none" opacity="0.9"/>
+                        <circle cx="16.5" cy="10" r="1" fill="white"/>
+                        <circle cx="21" cy="6" r="1" fill="white"/>
                     </svg>
                 </div>
                 <h1 class="auth-title">Welcome Back</h1>

@@ -674,12 +674,12 @@ function buildNarrative(m, marketHint) {
 // ====== RENDER ======
 function getAnalysisTitle(market) {
   const titles = {
-    '1h_over05': '🎯 Over 0.5 Goals - 1st Half',
-    'gg1h': '⚽ Both Teams to Score - 1st Half', 
-    '1h_over15': '🎯 Over 1.5 Goals - 1st Half',
-    'ft_over15': '🎯 Over 1.5 Goals - Full Time'
+    '1h_over05': '🎯 Preko 0.5 golova - 1. poluvreme',
+    'gg1h': '⚽ Oba tima da postignu gol - 1. poluvreme', 
+    '1h_over15': '🎯 Preko 1.5 golova - 1. poluvreme',
+    'ft_over15': '🎯 Preko 1.5 golova - ceo meč'
   };
-  return titles[market] || '📊 Analysis Results';
+  return titles[market] || '📊 Rezultati analize';
 }
 
 function renderResults(data, market) {
@@ -700,20 +700,15 @@ function renderResults(data, market) {
     titleElement.className = 'analysis-title';
     titleElement.innerHTML = `
       <h2>${analysisTitle}</h2>
-      <div class="analysis-subtitle">Analysis completed • ${total} matches found</div>
+      <div class="analysis-subtitle">Analiza završena • ${total} mečeva pronađeno</div>
     `;
     resultsSection.insertBefore(titleElement, resultsSection.firstChild);
   } else if (document.getElementById('analysis-title')) {
     const titleEl = document.getElementById('analysis-title');
     titleEl.querySelector('h2').textContent = analysisTitle;
-    titleEl.querySelector('.analysis-subtitle').textContent = `Analysis completed • ${total} matches found`;
+    titleEl.querySelector('.analysis-subtitle').textContent = `Analiza završena • ${total} mečeva pronađeno`;
   }
 
-  // Update count badges
-  const countTop = document.getElementById("countTop");
-  const countOther = document.getElementById("countOther");
-  if (countTop) countTop.textContent = `(${total})`;
-  
   // Clear content areas, preserve section titles and descriptions
   const top5ContentArea = top5Container?.querySelector('.section-content');
   const otherContentArea = otherContainer?.querySelector('.section-content');
@@ -835,11 +830,6 @@ function renderResults(data, market) {
       otherContentArea.innerHTML = (otherContentArea.innerHTML || "") + html;
     }
   });
-
-  if (countOther) {
-    const otherCount = Math.max(total - 5, 0);
-    countOther.textContent = `(${otherCount})`;
-  }
 }
 
 // ====== HELPERS ======
@@ -892,18 +882,18 @@ function isUserLoggedIn() {
 
 function showAuthRequiredModal() {
   showCustomModal(
-    "🔐 Authentication Required",
-    "You can view match analysis only as a logged-in user. Please log in to continue.\n\nIf you don't have an account, please register to see the analysis.",
+    "🔐 Potrebna je autentifikacija",
+    "Možete videti analizu mečeva samo kao ulogovani korisnik. Molim vas prijavite se da nastavite.\n\nAko nemate nalog, molim vas registrujte se da vidite analizu.",
     [
       { 
-        text: "Login", 
+        text: "Prijavi se", 
         type: "primary", 
         onClick: () => {
           window.location.href = '/login';
         }
       },
       { 
-        text: "Register", 
+        text: "Registruj se", 
         type: "secondary", 
         onClick: () => {
           window.location.href = '/register';
@@ -922,32 +912,38 @@ async function fetchAnalysis(type) {
   }
 
   const analysisTitles = {
-    '1p': '🎯 Analyzing 1+ Goals...',
-    'GG': '⚽ Analyzing Both Teams Score...',
-    'O15': '🔥 Analyzing Over 1.5 Goals...',
-    'FT_O15': '🚀 Analyzing FT Over 1.5 Goals...'
+    '1p': '🎯 Analiziram 1+ gol...',
+    'GG': '⚽ Analiziram oba tima da postignu gol...',
+    'O15': '🔥 Analiziram preko 1.5 golova...',
+    'FT_O15': '🚀 Analiziram preko 1.5 golova ceo meč...'
   };
 
   // 1) Proveri da li se radi Prepare Day
   const isPrepareRunning = await isPrepareDayRunning();
   if (isPrepareRunning) {
     console.log("⏳ [ANALYSIS] Prepare Day is running, waiting for completion...");
-    showLoader("⏳ Waiting for Prepare Day to complete...");
-    setBusyUI(true, "Waiting for Prepare Day...");
+    showLoader("⏳ Čekam da se završi priprema dana...");
+    setBusyUI(true, "Čekam pripremu dana...");
     
     // Čekaj da se Prepare Day završi
     await waitForPrepareDayToComplete();
   }
 
   // 2) Pokreni analizu
-  showLoader(analysisTitles[type] || '🔍 Analyzing...');
+  showLoader(analysisTitles[type] || '🔍 Analiziram...');
+  
+  // Prikaži sekciju sa rezultatima
+  const resultsSection = document.getElementById('resultsSection');
+  if (resultsSection) {
+    resultsSection.style.display = 'block';
+  }
 
   try {
     const fromEl = document.getElementById("fromDate");
     const toEl = document.getElementById("toDate");
 
     if (!fromEl || !toEl || !fromEl.value || !toEl.value) {
-      showError("Date Selection Required", "Please select both From and To dates.");
+      showError("Potrebno je odabrati datume", "Molim vas odaberite i početni i završni datum.");
       hideLoader();
       return;
     }
@@ -955,12 +951,12 @@ async function fetchAnalysis(type) {
     const fromDate = new Date(fromEl.value);
     const toDate = new Date(toEl.value);
     if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
-      showError("Invalid Dates", "Invalid date values.");
+      showError("Neispravni datumi", "Neispravne vrednosti datuma.");
       hideLoader();
       return;
     }
     if (toDate < fromDate) {
-      showError("Invalid Date Range", "End date/time must be after start date/time.");
+      showError("Neispravan opseg datuma", "Završni datum/vreme mora biti posle početnog datuma/vremena.");
       hideLoader();
       return;
     }
@@ -1001,7 +997,7 @@ async function fetchAnalysis(type) {
         json = JSON.parse(raw);
       } catch {
         console.error("Non-JSON response:", raw);
-        showError("Server Error", `Server returned invalid response (not JSON):\n${raw.slice(0, 300)}...`);
+        showError("Greška servera", `Server je vratio neispravan odgovor (nije JSON):\n${raw.slice(0, 300)}...`);
         hideLoader();
         break;
       }
@@ -1010,7 +1006,7 @@ async function fetchAnalysis(type) {
         attempt += 1;
         if (attempt > MAX_RETRIES) {
           const msg = json?.detail || "Server je trenutno zauzet. Pokušaj ponovo.";
-          showError("Server Error", msg);
+          showError("Greška servera", msg);
           hideLoader();
           break;
         }
@@ -1025,7 +1021,7 @@ async function fetchAnalysis(type) {
       if (!res.ok) {
         const msg = json?.detail || json?.error || JSON.stringify(json).slice(0, 300);
         console.error("Server error:", msg);
-        showError("Server Error", `Server error: ${msg}`);
+        showError("Greška servera", `Greška servera: ${msg}`);
         hideLoader();
         break;
       }
@@ -1036,13 +1032,13 @@ async function fetchAnalysis(type) {
 
       data.sort((a, b) => (b.final_percent ?? 0) - (a.final_percent ?? 0));
       renderResults(data, market);
-      showToast(`Gotovo • ${data.length} utakmica`, "ok");
+      showToast(`Završeno • ${data.length} mečeva`, "ok");
       hideLoader();
       break;
     }
   } catch (err) {
     console.error("Fetch/parse error:", err);
-    showError("Analysis Error", `Error during analysis: ${err}`);
+    showError("Greška analize", `Greška tokom analize: ${err}`);
     hideLoader();
   } finally {
     setBusyUI(false);

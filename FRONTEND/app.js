@@ -877,8 +877,43 @@ function localYMD(d) {
   return `${y}-${m}-${day}`;
 }
 
+// ====== AUTHENTICATION CHECK ======
+function isUserLoggedIn() {
+  const user = localStorage.getItem('user');
+  return user !== null && user !== undefined;
+}
+
+function showAuthRequiredModal() {
+  showCustomModal(
+    "🔐 Authentication Required",
+    "You can view match analysis only as a logged-in user. Please log in to continue.\n\nIf you don't have an account, please register to see the analysis.",
+    [
+      { 
+        text: "Login", 
+        type: "primary", 
+        onClick: () => {
+          window.location.href = '/login';
+        }
+      },
+      { 
+        text: "Register", 
+        type: "secondary", 
+        onClick: () => {
+          window.location.href = '/register';
+        }
+      }
+    ]
+  );
+}
+
 // ====== MAIN ACTION ======
 async function fetchAnalysis(type) {
+  // Check if user is logged in first
+  if (!isUserLoggedIn()) {
+    showAuthRequiredModal();
+    return;
+  }
+
   const analysisTitles = {
     '1p': '🎯 Analyzing 1+ Goals...',
     'GG': '⚽ Analyzing Both Teams Score...',

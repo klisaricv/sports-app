@@ -691,8 +691,8 @@ function buildSimplifiedNarrative(m, marketHint) {
     marketDescription = "da bude preko 0.5 golova u prvom poluvremenu";
   }
 
-  const formData = d.prior_percent ? `forma timova i istorijski rezultati (${fmt(d.prior_percent, '%')})` : "forma timova i istorijski rezultati";
-  const microData = d.micro_percent ? `mikro-signali i statistike (${fmt(d.micro_percent, '%')})` : "mikro-signali i statistike";
+  const formData = "forma timova i istorijski rezultati";
+  const microData = "mikro-signali i statistike";
 
   return `Na osnovu analize ${formData}, kao i ${microData}, finalna verovatnoća da će na ovom meču doći ${marketDescription} iznosi ${fmt(m.final_percent, '%')}.`;
 }

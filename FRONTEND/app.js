@@ -1501,6 +1501,8 @@ async function prepareDayForDate(dateStr) {
         const errorDetail = sData.detail || "unknown";
         if (errorDetail.includes("pool exhausted") || errorDetail.includes("connection")) {
           throw new Error(`Database connection error. Please try again in a few moments. Server is busy.`);
+        } else if (errorDetail.includes("HTTP 500") || errorDetail.includes("Internal Server Error")) {
+          throw new Error(`Server error occurred. Please try again in a few moments.`);
         } else {
           throw new Error(`Prepare-day error: ${errorDetail}`);
         }
@@ -1520,6 +1522,8 @@ async function prepareDayForDate(dateStr) {
     // Check if it's a database connection error
     if (err.message.includes("Database connection error") || err.message.includes("pool exhausted")) {
       showError("Server Busy", `The server is currently busy with other requests. Please wait a moment and try again.\n\nError: ${err.message}`);
+    } else if (err.message.includes("Server error occurred") || err.message.includes("HTTP 500")) {
+      showError("Server Error", `A server error occurred. Please wait a moment and try again.\n\nError: ${err.message}`);
     } else {
       showError("Prepare Day Error", `Prepare day error: ${err.message}`);
     }

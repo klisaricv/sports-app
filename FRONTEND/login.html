@@ -15,9 +15,16 @@
             <div class="auth-header">
                 <div class="auth-logo">
                     <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none"/>
-                        <path d="M12 2L15.09 8.26L22 9L17 14.74L18.18 22L12 18.77L5.82 22L7 14.74L2 9L8.91 8.26L12 2Z" fill="currentColor"/>
-                        <circle cx="12" cy="12" r="3" fill="white"/>
+                        <defs>
+                            <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" style="stop-color:currentColor;stop-opacity:1" />
+                                <stop offset="100%" style="stop-color:currentColor;stop-opacity:0.7" />
+                            </linearGradient>
+                        </defs>
+                        <circle cx="12" cy="12" r="10" fill="url(#logoGradient)" opacity="0.1"/>
+                        <path d="M12 2L15.5 8.5L22 9L17.5 14.5L18.5 22L12 18.5L5.5 22L6.5 14.5L2 9L8.5 8.5L12 2Z" fill="url(#logoGradient)"/>
+                        <circle cx="12" cy="12" r="2" fill="white" opacity="0.9"/>
+                        <path d="M8 12L10 14L16 8" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
                     </svg>
                 </div>
                 <h1 class="auth-title">Welcome Back</h1>

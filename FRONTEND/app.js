@@ -700,12 +700,12 @@ function buildSimplifiedNarrative(m, marketHint) {
 // ====== RENDER ======
 function getAnalysisTitle(market) {
   const titles = {
-    '1h_over05': '🎯 Preko 0.5 golova - 1. poluvreme',
-    'gg1h': '⚽ Oba tima da postignu gol - 1. poluvreme', 
-    '1h_over15': '🎯 Preko 1.5 golova - 1. poluvreme',
-    'ft_over15': '🎯 Preko 1.5 golova - ceo meč'
+    '1h_over05': '⚽ Preko 0.5 golova - 1. poluvreme',
+    'gg1h': '🥅 Oba tima da postignu gol - 1. poluvreme', 
+    '1h_over15': '⚽ Preko 1.5 golova - 1. poluvreme',
+    'ft_over15': '⚽ Preko 1.5 golova - ceo meč'
   };
-  return titles[market] || '📊 Rezultati analize';
+  return titles[market] || '📈 Rezultati analize';
 }
 
 function renderResults(data, market) {

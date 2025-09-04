@@ -674,6 +674,29 @@ function buildNarrative(m, marketHint) {
   return s;
 }
 
+function buildSimplifiedNarrative(m, marketHint) {
+  const d = m.debug || {};
+  const isGG = marketHint === "gg1h";
+  const isO15_1H = marketHint === "1h_over15";
+  const isO15_FT = marketHint === "ft_over15";
+
+  let marketDescription = "";
+  if (isGG) {
+    marketDescription = "da oba tima postignu gol u prvom poluvremenu";
+  } else if (isO15_1H) {
+    marketDescription = "da bude preko 1.5 golova u prvom poluvremenu";
+  } else if (isO15_FT) {
+    marketDescription = "da bude preko 1.5 golova u celom meču";
+  } else {
+    marketDescription = "da bude preko 0.5 golova u prvom poluvremenu";
+  }
+
+  const formData = "forma timova i istorijski rezultati";
+  const microData = "mikro-signali i statistike";
+
+  return `Na osnovu analize ${formData}, kao i ${microData}, finalna verovatnoća da će na ovom meču doći ${marketDescription} iznosi ${fmt(m.final_percent, '%')}.`;
+}
+
 // ====== RENDER ======
 function getAnalysisTitle(market) {
   const titles = {
@@ -720,96 +743,30 @@ function renderResults(data, market) {
   if (otherContentArea) otherContentArea.innerHTML = '';
 
   const cardHTML = (m) => {
-    const t1Sample = m.team1_total > 0 ? ` (${m.team1_hits}/${m.team1_total})` : "";
-    const t2Sample = m.team2_total > 0 ? ` (${m.team2_hits}/${m.team2_total})` : "";
-    const h2hSample = m.h2h_total > 0 ? ` (${m.h2h_hits}/${m.h2h_total})` : "";
-
-    const shotHome = m.home_shots_used > 0 ? fmt(m.home_shots_percent, "%") : "—";
-    const shotAway = m.away_shots_used > 0 ? fmt(m.away_shots_percent, "%") : "—";
-
-    const attHome = m.home_attacks_used > 0 ? fmt(m.home_attacks_percent, "%") : "—";
-    const attAway = m.away_attacks_used > 0 ? fmt(m.away_attacks_percent, "%") : "—";
-
-    const d = m.debug || {};
-    const isGG = currentMarket === "gg1h";
-    const isO15 = currentMarket === "1h_over15" || currentMarket === "ft_over15";
-    const o15Label = currentMarket === "ft_over15" ? "Poisson λ (FT)" : "Poisson λ (1H)";
+    // Format kickoff time
+    const formatKickoffTime = (kickoff) => {
+      if (!kickoff) return "—";
+      try {
+        const date = new Date(kickoff);
+        return date.toLocaleString('sr-RS', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          timeZone: 'Europe/Belgrade'
+        });
+      } catch (e) {
+        return "—";
+      }
+    };
 
     return `
       <div class="match">
         <div class="match-header">
           <div class="match-league">${fmt(m.league)}</div>
           <div class="match-teams">${fmt(m.team1)} vs ${fmt(m.team2)}</div>
-        </div>
-
-        <div class="match-stats">
-          <div class="stat-row">
-            <span class="stat-label">${fmt(m.team1)}</span>
-            <span class="stat-value">${fmt(m.team1_percent, '%')}</span>
-            <span class="stat-sample">(${fmt(m.team1_hits)}/${fmt(m.team1_total)})</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-label">${fmt(m.team2)}</span>
-            <span class="stat-value">${fmt(m.team2_percent, '%')}</span>
-            <span class="stat-sample">(${fmt(m.team2_hits)}/${fmt(m.team2_total)})</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-label">H2H</span>
-            <span class="stat-value">${fmt(m.h2h_percent, '%')}</span>
-            <span class="stat-sample">(${fmt(m.h2h_hits)}/${fmt(m.h2h_total)})</span>
-          </div>
-        </div>
-
-        <div class="micro-signals">
-          <div class="micro-title">1H Micro Signals</div>
-          <div class="micro-grid">
-            <div class="micro-item">
-              <span class="micro-label">Shots on Target</span>
-              <span class="micro-values">H: ${shotHome} | A: ${shotAway}</span>
-            </div>
-            <div class="micro-item">
-              <span class="micro-label">Dangerous Attacks</span>
-              <span class="micro-values">H: ${attHome} | A: ${attAway}</span>
-            </div>
-            <div class="micro-item">
-              <span class="micro-label">Form Average</span>
-              <span class="micro-values">${fmt(m.form_percent, '%')}</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="model-breakdown">
-          <div class="breakdown-title">Model Analysis</div>
-          <div class="breakdown-grid">
-            <div class="breakdown-item">
-              <span class="breakdown-label">Prior (Form + H2H)</span>
-              <span class="breakdown-value">${fmt(d.prior_percent, '%')}</span>
-            </div>
-            <div class="breakdown-item">
-              <span class="breakdown-label">Micro (League-normalized)</span>
-              <span class="breakdown-value">${fmt(d.micro_percent, '%')}</span>
-            </div>
-            <div class="breakdown-item">
-              <span class="breakdown-label">Micro Share</span>
-              <span class="breakdown-value">${fmt(d.merge_weight_micro)}</span>
-            </div>
-          </div>
-          ${isGG ? `
-            <div class="breakdown-item">
-              <span class="breakdown-label">Team 1 scores 1H</span>
-              <span class="breakdown-value">${fmt(d.p_home_scores_1h, '%')}</span>
-            </div>
-            <div class="breakdown-item">
-              <span class="breakdown-label">Team 2 scores 1H</span>
-              <span class="breakdown-value">${fmt(d.p_away_scores_1h, '%')}</span>
-            </div>
-          ` : ``}
-            ${isO15 ? `
-            <div class="breakdown-item">
-              <span class="breakdown-label">${o15Label}</span>
-              <span class="breakdown-value">${fmt(d.lambda_total)}</span>
-            </div>
-          ` : ``}
+          <div class="match-kickoff">${formatKickoffTime(m.kickoff)}</div>
         </div>
 
         <div class="final-result">
@@ -818,7 +775,7 @@ function renderResults(data, market) {
             <span class="final-value">${fmt(m.final_percent, '%')}</span>
           </div>
           <div class="narrative">
-            ${buildNarrative(m, currentMarket)}
+            ${buildSimplifiedNarrative(m, currentMarket)}
           </div>
         </div>
       </div>

@@ -174,6 +174,12 @@ function showError(title, message) {
   ]);
 }
 
+function showSuccess(title, message) {
+  showCustomModal(title, message, [
+    { text: "OK", type: "success", onClick: () => {} }
+  ]);
+}
+
 function showConfirm(title, message, onConfirm, onCancel = null) {
   showCustomModal(title, message, [
     { text: "Cancel", type: "secondary", onClick: onCancel },

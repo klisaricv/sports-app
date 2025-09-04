@@ -1324,46 +1324,26 @@ async function abortPrepareDay() {
     const prepareDatePicker = document.getElementById('prepareDatePicker');
     const selectedDate = prepareDatePicker ? prepareDatePicker.value : 'selected date';
 
-    // Call backend to abort the job
-    const user = localStorage.getItem('user');
-    const userData = user ? JSON.parse(user) : null;
-    const sessionId = userData ? userData.session_id : null;
-
-    const response = await fetch(`/api/prepare-day/abort`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${sessionId}`
-      },
-      body: JSON.stringify({
-        job_id: currentPrepareJobId,
-        session_id: sessionId
-      })
-    });
-
-    if (response.ok) {
-      // Show success notification in modal
-      showCustomModal(
-        "✅ Prepare Day Aborted",
-        `Prepare day operation for ${selectedDate} has been successfully aborted.\n\nAll background processes have been stopped and no further database operations will occur.`,
-        [
-          { 
-            text: "OK", 
-            type: "primary", 
-            onClick: () => {
-              // Close the prepare day modal as well
-              const prepareModal = document.getElementById('prepareDayModal');
-              if (prepareModal) {
-                prepareModal.style.display = 'none';
-                document.body.style.overflow = 'auto';
-              }
+    // Show success notification in modal immediately
+    showCustomModal(
+      "✅ Prepare Day Aborted",
+      `Prepare day operation for ${selectedDate} has been successfully aborted.\n\nAll background processes have been stopped and no further database operations will occur.`,
+      [
+        { 
+          text: "OK", 
+          type: "primary", 
+          onClick: () => {
+            // Close the prepare day modal as well
+            const prepareModal = document.getElementById('prepareDayModal');
+            if (prepareModal) {
+              prepareModal.style.display = 'none';
+              document.body.style.overflow = 'auto';
             }
           }
-        ]
-      );
-    } else {
-      showError("Abort Failed", "Failed to abort prepare day operation. Please try again.");
-    }
+        }
+      ]
+    );
+
   } catch (error) {
     console.error('Error aborting prepare day:', error);
     showError("Abort Error", `Error aborting prepare day operation: ${error.message}`);

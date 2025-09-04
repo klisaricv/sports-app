@@ -32,9 +32,6 @@ window.sleep = window.sleep || (ms => new Promise(r => setTimeout(r, ms)));
 function disableAllButtons(disable) {
   const buttons = document.querySelectorAll('button, .btn, #savePdf, .primary-ghost');
   buttons.forEach(btn => {
-    // Don't disable abort button in loader
-    if (btn.id === 'loaderAbortBtn') return;
-    
     if (disable) {
       btn.disabled = true;
       btn.style.pointerEvents = 'none';
@@ -1314,43 +1311,45 @@ async function abortPrepareDay() {
     return;
   }
 
-  // Cancel any ongoing fetch requests immediately
-  if (prepareAbortController) {
-    prepareAbortController.abort();
+  try {
+    // Cancel any ongoing fetch requests
+    if (prepareAbortController) {
+      prepareAbortController.abort();
+    }
+
+    // Call backend to abort the job
+    const user = localStorage.getItem('user');
+    const userData = user ? JSON.parse(user) : null;
+    const sessionId = userData ? userData.session_id : null;
+
+    const response = await fetch(`/api/prepare-day/abort`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${sessionId}`
+      },
+      body: JSON.stringify({
+        job_id: currentPrepareJobId,
+        session_id: sessionId
+      })
+    });
+
+    if (response.ok) {
+      showToast('Prepare day operation aborted successfully', 'success');
+    } else {
+      showToast('Failed to abort prepare day operation', 'error');
+    }
+  } catch (error) {
+    console.error('Error aborting prepare day:', error);
+    showToast('Error aborting prepare day operation', 'error');
+  } finally {
+    // Reset state
+    currentPrepareJobId = null;
+    prepareAbortController = null;
+    
+    // Hide loader
+    hideLoader();
   }
-
-  // Get current date for notification
-  const prepareDatePicker = document.getElementById('prepareDatePicker');
-  const selectedDate = prepareDatePicker ? prepareDatePicker.value : 'selected date';
-
-  // Show success notification in modal immediately
-  showCustomModal(
-    "✅ Prepare Day Aborted",
-    `Prepare day operation for ${selectedDate} has been successfully aborted.\n\nAll background processes have been stopped and no further database operations will occur.`,
-    [
-      { 
-        text: "OK", 
-        type: "primary", 
-        onClick: () => {
-          // Close the prepare day modal as well
-          const prepareModal = document.getElementById('prepareDayModal');
-          if (prepareModal) {
-            prepareModal.style.display = 'none';
-            document.body.style.overflow = 'auto';
-          }
-        }
-      }
-    ]
-  );
-
-  // Hide loader immediately
-  hideLoader();
-  
-  // Re-enable all buttons immediately
-  disableAllButtons(false);
-
-  // DON'T reset state - let the abort signal handle it
-  // The abort signal will cause the while loop to exit and then reset state
 }
 
 // Initialize prepare day modal
@@ -1608,20 +1607,9 @@ async function prepareDayForDate(dateStr) {
     // Poll for completion
     let lastProgress = -1;
     while (true) {
-      // Check if operation was aborted
-      if (prepareAbortController && prepareAbortController.signal.aborted) {
-        console.log("Prepare day operation was aborted, stopping polling");
-        // Reset state when aborted
-        currentPrepareJobId = null;
-        prepareAbortController = null;
-        return;
-      }
-      
       await sleep(3000);
       
-      const statusResp = await fetch(`/api/prepare-day/status?job_id=${jobId}`, {
-        signal: prepareAbortController ? prepareAbortController.signal : undefined
-      });
+      const statusResp = await fetch(`/api/prepare-day/status?job_id=${jobId}`);
       const sData = await parseJsonSafe(statusResp);
       
       if (sData.status === "done") {
@@ -1682,7 +1670,7 @@ async function prepareDayForDate(dateStr) {
     throw err;
   } finally {
     setBusyUI(false);
-    // Reset abort state when function completes (success or error)
+    // Reset abort state
     currentPrepareJobId = null;
     prepareAbortController = null;
   }

@@ -304,6 +304,18 @@ html[data-theme="dark"] .icon-moon { display: inline; }
   border-color: var(--warning);
 }
 
+.btn.danger {
+  background: var(--danger);
+  color: white;
+  border-color: var(--danger);
+}
+
+.btn.danger:hover {
+  background: var(--surface-elevated);
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
 /* Disabled States */
 button[disabled],
 .btn[disabled] {

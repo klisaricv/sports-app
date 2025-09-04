@@ -10,6 +10,10 @@ let loaderCheckInterval = null;
 let globalLoaderCheckCount = 0;
 const MAX_GLOBAL_LOADER_CHECKS = 100; // Maksimalno 100 provera (10 sekundi sa 100ms intervalom)
 
+// Prepare day abort state
+let currentPrepareJobId = null;
+let prepareAbortController = null;
+
 // ====== SMALL UTILS ======
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const fmt = (v, suffix = "") =>
@@ -1276,12 +1280,70 @@ function isAdmin() {
   }
 }
 
+// Abort prepare day function
+async function abortPrepareDay() {
+  if (!currentPrepareJobId) {
+    console.log("No active prepare job to abort");
+    return;
+  }
+
+  try {
+    // Cancel any ongoing fetch requests
+    if (prepareAbortController) {
+      prepareAbortController.abort();
+    }
+
+    // Call backend to abort the job
+    const user = localStorage.getItem('user');
+    const userData = user ? JSON.parse(user) : null;
+    const sessionId = userData ? userData.session_id : null;
+
+    const response = await fetch(`/api/prepare-day/abort`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${sessionId}`
+      },
+      body: JSON.stringify({
+        job_id: currentPrepareJobId,
+        session_id: sessionId
+      })
+    });
+
+    if (response.ok) {
+      showToast('Prepare day operation aborted successfully', 'success');
+    } else {
+      showToast('Failed to abort prepare day operation', 'error');
+    }
+  } catch (error) {
+    console.error('Error aborting prepare day:', error);
+    showToast('Error aborting prepare day operation', 'error');
+  } finally {
+    // Reset state
+    currentPrepareJobId = null;
+    prepareAbortController = null;
+    
+    // Hide abort button and show normal buttons
+    const abortBtn = document.getElementById('abortPrepare');
+    const confirmBtn = document.getElementById('confirmPrepare');
+    const cancelBtn = document.getElementById('cancelPrepare');
+    
+    if (abortBtn) abortBtn.style.display = 'none';
+    if (confirmBtn) confirmBtn.style.display = 'inline-flex';
+    if (cancelBtn) cancelBtn.style.display = 'inline-flex';
+    
+    // Hide loader
+    hideLoader();
+  }
+}
+
 // Initialize prepare day modal
 function initPrepareDayModal() {
   const prepareDayModal = document.getElementById('prepareDayModal');
   const prepareDatePicker = document.getElementById('prepareDatePicker');
   const confirmPrepareBtn = document.getElementById('confirmPrepare');
   const cancelPrepareBtn = document.getElementById('cancelPrepare');
+  const abortPrepareBtn = document.getElementById('abortPrepare');
   const closePrepareModal = document.getElementById('closePrepareModal');
   const prepareStatus = document.getElementById('prepareStatus');
   
@@ -1304,6 +1366,7 @@ function initPrepareDayModal() {
   // Add event listeners
   confirmPrepareBtn.addEventListener('click', handleConfirmPrepare);
   cancelPrepareBtn.addEventListener('click', closeModal);
+  if (abortPrepareBtn) abortPrepareBtn.addEventListener('click', abortPrepareDay);
   closePrepareModal.addEventListener('click', closeModal);
   prepareDatePicker.addEventListener('change', handlePrepareDateChange);
   
@@ -1442,9 +1505,14 @@ async function handleConfirmPrepare() {
   const selectedDate = prepareDatePicker.value;
   console.log("🔍 [DEBUG] Preparing selected day:", selectedDate);
   
-  // Disable button and show loading
-  confirmPrepareBtn.disabled = true;
-  confirmPrepareBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 4h-4l-2-2H5a1 1 0 0 0-1 1v16h16V5a1 1 0 0 0-1-1z"/></svg><span>Preparing...</span>';
+  // Show abort button and hide other buttons
+  const abortBtn = document.getElementById('abortPrepare');
+  const cancelBtn = document.getElementById('cancelPrepare');
+  
+  if (abortBtn) abortBtn.style.display = 'inline-flex';
+  if (confirmBtn) confirmBtn.style.display = 'none';
+  if (cancelBtn) cancelBtn.style.display = 'none';
+  
   prepareStatus.textContent = `Starting preparation for ${selectedDate}...`;
   prepareStatus.className = 'prepare-status info';
   
@@ -1488,6 +1556,9 @@ async function prepareDayForDate(dateStr) {
     console.log("🔍 [DEBUG] Session ID:", sessionId);
     console.log("🔍 [DEBUG] User data:", userData);
     
+    // Create abort controller for this request
+    prepareAbortController = new AbortController();
+    
     // Call prepare day API
     const requestBody = { date: dateStr, prewarm: true, session_id: sessionId };
     console.log("🔍 [DEBUG] Request body:", requestBody);
@@ -1499,7 +1570,8 @@ async function prepareDayForDate(dateStr) {
         "Accept": "application/json",
         "Authorization": `Bearer ${sessionId}`
       },
-      body: JSON.stringify(requestBody)
+      body: JSON.stringify(requestBody),
+      signal: prepareAbortController.signal
     });
     
     console.log("🔍 [DEBUG] Response status:", resp.status);
@@ -1521,6 +1593,7 @@ async function prepareDayForDate(dateStr) {
     }
     
     const jobId = data.job_id;
+    currentPrepareJobId = jobId; // Save job ID for abort functionality
     updateLoader("queued");
     
     // Poll for completion
@@ -1543,6 +1616,19 @@ async function prepareDayForDate(dateStr) {
         
         showSuccess("Prepare Day Complete", `Analysis preparation completed successfully for ${dateStr}!\n\n📊 Processed ${fixturesCount} fixtures\n👥 ${teamsCount} teams analyzed\n🔗 ${pairsCount} pairs created\n⏱️ Completed in ${duration}`);
         hideLoader();
+        
+        // Reset buttons
+        const abortBtn = document.getElementById('abortPrepare');
+        const confirmBtn = document.getElementById('confirmPrepare');
+        const cancelBtn = document.getElementById('cancelPrepare');
+        
+        if (abortBtn) abortBtn.style.display = 'none';
+        if (confirmBtn) confirmBtn.style.display = 'inline-flex';
+        if (cancelBtn) cancelBtn.style.display = 'inline-flex';
+        
+        // Reset state
+        currentPrepareJobId = null;
+        prepareAbortController = null;
         break;
       }
       
@@ -1568,6 +1654,13 @@ async function prepareDayForDate(dateStr) {
     console.log("🔍 [DEBUG] prepareDayForDate - error occurred, hiding loader");
     console.error(err);
     
+    // Check if it's an abort error
+    if (err.name === 'AbortError') {
+      console.log("Prepare day operation was aborted by user");
+      showToast("Prepare day operation aborted", "info");
+      return; // Don't show error for user-initiated abort
+    }
+    
     // Check if it's a database connection error
     if (err.message.includes("Database connection error") || err.message.includes("pool exhausted")) {
       showError("Server Busy", `The server is currently busy with other requests. Please wait a moment and try again.\n\nError: ${err.message}`);
@@ -1582,6 +1675,9 @@ async function prepareDayForDate(dateStr) {
     throw err;
   } finally {
     setBusyUI(false);
+    // Reset abort state
+    currentPrepareJobId = null;
+    prepareAbortController = null;
   }
 }
 

@@ -1314,50 +1314,46 @@ async function abortPrepareDay() {
     return;
   }
 
-  try {
-    // Cancel any ongoing fetch requests immediately
-    if (prepareAbortController) {
-      prepareAbortController.abort();
-    }
+  // Cancel any ongoing fetch requests immediately
+  if (prepareAbortController) {
+    prepareAbortController.abort();
+  }
 
-    // Get current date for notification
-    const prepareDatePicker = document.getElementById('prepareDatePicker');
-    const selectedDate = prepareDatePicker ? prepareDatePicker.value : 'selected date';
+  // Get current date for notification
+  const prepareDatePicker = document.getElementById('prepareDatePicker');
+  const selectedDate = prepareDatePicker ? prepareDatePicker.value : 'selected date';
 
-    // Show success notification in modal immediately
-    showCustomModal(
-      "✅ Prepare Day Aborted",
-      `Prepare day operation for ${selectedDate} has been successfully aborted.\n\nAll background processes have been stopped and no further database operations will occur.`,
-      [
-        { 
-          text: "OK", 
-          type: "primary", 
-          onClick: () => {
-            // Close the prepare day modal as well
-            const prepareModal = document.getElementById('prepareDayModal');
-            if (prepareModal) {
-              prepareModal.style.display = 'none';
-              document.body.style.overflow = 'auto';
-            }
+  // Show success notification in modal immediately
+  showCustomModal(
+    "✅ Prepare Day Aborted",
+    `Prepare day operation for ${selectedDate} has been successfully aborted.\n\nAll background processes have been stopped and no further database operations will occur.`,
+    [
+      { 
+        text: "OK", 
+        type: "primary", 
+        onClick: () => {
+          // Close the prepare day modal as well
+          const prepareModal = document.getElementById('prepareDayModal');
+          if (prepareModal) {
+            prepareModal.style.display = 'none';
+            document.body.style.overflow = 'auto';
           }
         }
-      ]
-    );
+      }
+    ]
+  );
 
-  } catch (error) {
-    console.error('Error aborting prepare day:', error);
-    showError("Abort Error", `Error aborting prepare day operation: ${error.message}`);
-  } finally {
-    // Reset state immediately
+  // Hide loader immediately
+  hideLoader();
+  
+  // Re-enable all buttons immediately
+  disableAllButtons(false);
+
+  // Reset state after a short delay to ensure abort signal is processed
+  setTimeout(() => {
     currentPrepareJobId = null;
     prepareAbortController = null;
-    
-    // Hide loader
-    hideLoader();
-    
-    // Re-enable all buttons
-    disableAllButtons(false);
-  }
+  }, 100);
 }
 
 // Initialize prepare day modal
@@ -1686,9 +1682,7 @@ async function prepareDayForDate(dateStr) {
     throw err;
   } finally {
     setBusyUI(false);
-    // Reset abort state
-    currentPrepareJobId = null;
-    prepareAbortController = null;
+    // Don't reset abort state here - let abortPrepareDay handle it
   }
 }
 

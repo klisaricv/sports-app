@@ -1349,11 +1349,8 @@ async function abortPrepareDay() {
   // Re-enable all buttons immediately
   disableAllButtons(false);
 
-  // Reset state after a short delay to ensure abort signal is processed
-  setTimeout(() => {
-    currentPrepareJobId = null;
-    prepareAbortController = null;
-  }, 100);
+  // DON'T reset state - let the abort signal handle it
+  // The abort signal will cause the while loop to exit and then reset state
 }
 
 // Initialize prepare day modal
@@ -1614,6 +1611,9 @@ async function prepareDayForDate(dateStr) {
       // Check if operation was aborted
       if (prepareAbortController && prepareAbortController.signal.aborted) {
         console.log("Prepare day operation was aborted, stopping polling");
+        // Reset state when aborted
+        currentPrepareJobId = null;
+        prepareAbortController = null;
         return;
       }
       
@@ -1682,7 +1682,9 @@ async function prepareDayForDate(dateStr) {
     throw err;
   } finally {
     setBusyUI(false);
-    // Don't reset abort state here - let abortPrepareDay handle it
+    // Reset abort state when function completes (success or error)
+    currentPrepareJobId = null;
+    prepareAbortController = null;
   }
 }
 

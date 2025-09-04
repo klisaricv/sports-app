@@ -1498,7 +1498,12 @@ async function prepareDayForDate(dateStr) {
       }
       
       if (sData.status === "error") {
-        throw new Error(`Prepare-day error: ${sData.detail || "unknown"}`);
+        const errorDetail = sData.detail || "unknown";
+        if (errorDetail.includes("pool exhausted") || errorDetail.includes("connection")) {
+          throw new Error(`Database connection error. Please try again in a few moments. Server is busy.`);
+        } else {
+          throw new Error(`Prepare-day error: ${errorDetail}`);
+        }
       }
       
       // Update progress
@@ -1511,7 +1516,14 @@ async function prepareDayForDate(dateStr) {
   } catch (err) {
     console.log("🔍 [DEBUG] prepareDayForDate - error occurred, hiding loader");
     console.error(err);
-    showError("Prepare Day Error", `Prepare day error: ${err}`);
+    
+    // Check if it's a database connection error
+    if (err.message.includes("Database connection error") || err.message.includes("pool exhausted")) {
+      showError("Server Busy", `The server is currently busy with other requests. Please wait a moment and try again.\n\nError: ${err.message}`);
+    } else {
+      showError("Prepare Day Error", `Prepare day error: ${err.message}`);
+    }
+    
     showToast("Prepare-day greška", "error");
     hideLoader();
     throw err;

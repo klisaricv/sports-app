@@ -1765,6 +1765,18 @@ input:focus-visible {
   }
 }
 
+/* ===== Section Content Styles ===== */
+.section-content {
+  margin-top: var(--spacing-md);
+}
+
+.section-content .placeholder {
+  color: var(--text-muted);
+  font-style: italic;
+  text-align: center;
+  padding: var(--spacing-lg);
+}
+
 /* ===== Prepare Day Modal Styles ===== */
 .modal-overlay {
   position: fixed;

@@ -709,13 +709,17 @@ function renderResults(data, market) {
     titleEl.querySelector('.analysis-subtitle').textContent = `Analysis completed • ${total} matches found`;
   }
 
-  // naslovi sa count badge
+  // Update count badges
   const countTop = document.getElementById("countTop");
   const countOther = document.getElementById("countOther");
   if (countTop) countTop.textContent = `(${total})`;
-  if (top5Container)
-    top5Container.innerHTML = `<div class="placeholder">Rendering top picks…</div>`;
-  if (otherContainer) otherContainer.innerHTML = "";
+  
+  // Clear content areas, preserve section titles and descriptions
+  const top5ContentArea = top5Container?.querySelector('.section-content');
+  const otherContentArea = otherContainer?.querySelector('.section-content');
+  
+  if (top5ContentArea) top5ContentArea.innerHTML = '';
+  if (otherContentArea) otherContentArea.innerHTML = '';
 
   const cardHTML = (m) => {
     const t1Sample = m.team1_total > 0 ? ` (${m.team1_hits}/${m.team1_total})` : "";
@@ -825,8 +829,11 @@ function renderResults(data, market) {
 
   (data || []).forEach((match, index) => {
     const html = cardHTML(match);
-    if (index < 5) top5Container.innerHTML = (top5Container.innerHTML || "") + html;
-    else otherContainer.innerHTML = (otherContainer.innerHTML || "") + html;
+    if (index < 5) {
+      top5ContentArea.innerHTML = (top5ContentArea.innerHTML || "") + html;
+    } else {
+      otherContentArea.innerHTML = (otherContentArea.innerHTML || "") + html;
+    }
   });
 
   if (countOther) {

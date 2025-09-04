@@ -32,9 +32,6 @@ window.sleep = window.sleep || (ms => new Promise(r => setTimeout(r, ms)));
 function disableAllButtons(disable) {
   const buttons = document.querySelectorAll('button, .btn, #savePdf, .primary-ghost');
   buttons.forEach(btn => {
-    // Don't disable abort button in loader
-    if (btn.id === 'loaderAbortBtn') return;
-    
     if (disable) {
       btn.disabled = true;
       btn.style.pointerEvents = 'none';
@@ -1315,14 +1312,10 @@ async function abortPrepareDay() {
   }
 
   try {
-    // Cancel any ongoing fetch requests immediately
+    // Cancel any ongoing fetch requests
     if (prepareAbortController) {
       prepareAbortController.abort();
     }
-
-    // Get current date for notification
-    const prepareDatePicker = document.getElementById('prepareDatePicker');
-    const selectedDate = prepareDatePicker ? prepareDatePicker.value : 'selected date';
 
     // Call backend to abort the job
     const user = localStorage.getItem('user');
@@ -1342,41 +1335,20 @@ async function abortPrepareDay() {
     });
 
     if (response.ok) {
-      // Show success notification in modal
-      showCustomModal(
-        "✅ Prepare Day Aborted",
-        `Prepare day operation for ${selectedDate} has been successfully aborted.\n\nAll background processes have been stopped and no further database operations will occur.`,
-        [
-          { 
-            text: "OK", 
-            type: "primary", 
-            onClick: () => {
-              // Close the prepare day modal as well
-              const prepareModal = document.getElementById('prepareDayModal');
-              if (prepareModal) {
-                prepareModal.style.display = 'none';
-                document.body.style.overflow = 'auto';
-              }
-            }
-          }
-        ]
-      );
+      showToast('Prepare day operation aborted successfully', 'success');
     } else {
-      showError("Abort Failed", "Failed to abort prepare day operation. Please try again.");
+      showToast('Failed to abort prepare day operation', 'error');
     }
   } catch (error) {
     console.error('Error aborting prepare day:', error);
-    showError("Abort Error", `Error aborting prepare day operation: ${error.message}`);
+    showToast('Error aborting prepare day operation', 'error');
   } finally {
-    // Reset state immediately
+    // Reset state
     currentPrepareJobId = null;
     prepareAbortController = null;
     
     // Hide loader
     hideLoader();
-    
-    // Re-enable all buttons
-    disableAllButtons(false);
   }
 }
 
@@ -1635,17 +1607,9 @@ async function prepareDayForDate(dateStr) {
     // Poll for completion
     let lastProgress = -1;
     while (true) {
-      // Check if operation was aborted
-      if (prepareAbortController && prepareAbortController.signal.aborted) {
-        console.log("Prepare day operation was aborted, stopping polling");
-        return;
-      }
-      
       await sleep(3000);
       
-      const statusResp = await fetch(`/api/prepare-day/status?job_id=${jobId}`, {
-        signal: prepareAbortController ? prepareAbortController.signal : undefined
-      });
+      const statusResp = await fetch(`/api/prepare-day/status?job_id=${jobId}`);
       const sData = await parseJsonSafe(statusResp);
       
       if (sData.status === "done") {

@@ -1,4 +1,5 @@
 // ====== CONFIG ======
+console.log("🔍 [DEBUG] app.js script loaded!");
 const BACKEND_URL = window.location.origin;
 // ako backend nije isti origin/port, otkomentariši sledeće:
 // const BACKEND_URL = "http://127.0.0.1:8000";
@@ -1047,7 +1048,7 @@ async function prepareDay() {
 
     // 2) Pokreni globalni loader polling
     console.log("🌍 [GLOBAL LOADER] Starting global loader for prepare day");
-    startGlobalLoaderPolling();
+    // startGlobalLoaderPolling(); // DISABLED - was hiding our loader
 
     // 3) poll status
     let lastProgress = -1;
@@ -1192,11 +1193,13 @@ document.addEventListener("DOMContentLoaded", () => {
   // setInterval(checkGlobalLoaderStatus, 3000); // DISABLED
 
   // 4) Dugmad
+  console.log("🔍 [DEBUG] Looking for buttons...");
   const btn1p = document.getElementById("analyze1p");
   const btnGG = document.getElementById("analyzeGG");
   const btn1pls = document.getElementById("analyze2plus");
   const btnFT2pl = document.getElementById("analyzeFT2plus");
   const btnPrep = document.getElementById("prepareDay");
+  console.log("🔍 [DEBUG] prepareDay button found:", btnPrep);
 
   if (btn1p) btn1p.addEventListener("click", () => fetchAnalysis("1p"));
   if (btnGG) btnGG.addEventListener("click", () => fetchAnalysis("GG"));

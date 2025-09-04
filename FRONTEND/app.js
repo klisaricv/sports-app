@@ -40,8 +40,13 @@ function disableAllButtons(disable) {
 }
 
 function ensureLoaderUI() {
-  if (document.getElementById("loaderOverlay")) return;
+  console.log("🔍 [DEBUG] ensureLoaderUI called");
+  if (document.getElementById("loaderOverlay")) {
+    console.log("🔍 [DEBUG] loaderOverlay already exists");
+    return;
+  }
   
+  console.log("🔍 [DEBUG] creating loaderOverlay");
   const overlay = document.createElement("div");
   overlay.id = "loaderOverlay";
   overlay.innerHTML = `
@@ -52,8 +57,10 @@ function ensureLoaderUI() {
     </div>`;
   
   document.body.appendChild(overlay);
+  console.log("🔍 [DEBUG] loaderOverlay created and appended to body");
 }
 function showLoader(title = "🚀 Preparing Analysis...") {
+  console.log("🔍 [DEBUG] showLoader called with title:", title);
   ensureLoaderUI();
   
   const overlay = document.getElementById("loaderOverlay");
@@ -177,6 +184,7 @@ function updateLoader(detail) {
   }
 }
 function hideLoader() {
+  console.log("🔍 [DEBUG] hideLoader called");
   const el = document.getElementById("loaderOverlay");
   if (el) {
     el.style.display = "none";
@@ -996,8 +1004,10 @@ async function prepareDay() {
     else if (toEl && toEl.value) base = new Date(toEl.value);
     const dayStr = localYMD(base); // tvoja postojeća util funkcija
 
+    console.log("🔍 [DEBUG] prepareDay - about to show loader");
     setBusyUI(true, `Pripremam ${dayStr}…`);
     showLoader(`🚀 Preparing ${dayStr}...`);
+    console.log("🔍 [DEBUG] prepareDay - loader should be visible now");
 
     // 1) enqueue
     const user = localStorage.getItem('user');
@@ -1050,6 +1060,7 @@ async function prepareDay() {
       }
 
       if (sData.status === "done") {
+        console.log("🔍 [DEBUG] prepareDay - status done, hiding loader");
         updateLoader("finished");
         const r = sData.result || {};
         const s = [
@@ -1073,11 +1084,13 @@ async function prepareDay() {
       await sleep(1500);
     }
   } catch (err) {
+    console.log("🔍 [DEBUG] prepareDay - error occurred, hiding loader");
     console.error(err);
     showError("Prepare Day Error", `Prepare day error: ${err}`);
     showToast("Prepare-day greška", "error");
     hideLoader();
   } finally {
+    console.log("🔍 [DEBUG] prepareDay - finally block, stopping global loader");
     setBusyUI(false);
     // Zaustavi globalni loader polling
     stopGlobalLoaderPolling();

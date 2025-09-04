@@ -421,6 +421,9 @@ function ensureToastHost() {
   }
 }
 function showToast(msg, kind = "info") {
+  // Notifikacije su isključene
+  return;
+  
   ensureToastHost();
   const t = document.createElement("div");
   t.textContent = msg;

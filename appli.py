@@ -6675,6 +6675,84 @@ async def api_global_loader_status():
         print(f"❌ [ERROR] Global loader status check failed: {e}")
         return {"active": False}
 
+@app.get("/api/check-analysis-exists")
+async def api_check_analysis_exists(request: Request):
+    """
+    Check if analysis already exists in database for a specific date.
+    Query params: { "date": "YYYY-MM-DD" }
+    """
+    try:
+        # Admin check - only klisaricf@gmail.com can access
+        session_id = request.headers.get('Authorization', '').replace('Bearer ', '')
+        if not session_id:
+            return {"error": "Authentication required."}, 401
+        
+        session_data = get_session(session_id)
+        if not session_data:
+            return {"error": "Invalid session. Please log in again."}, 401
+        
+        user_email = session_data.get('email')
+        if user_email != 'klisaricf@gmail.com':
+            return {"error": "Access denied. Admin privileges required."}, 403
+        
+        # Get date parameter
+        date_str = request.query_params.get("date")
+        if not date_str:
+            return {"error": "Date parameter is required"}, 400
+        
+        try:
+            d_local = date.fromisoformat(date_str)
+        except ValueError:
+            return {"error": "Invalid date format. Use YYYY-MM-DD"}, 400
+        
+        # Check if analysis exists for this date
+        start_dt, end_dt = _day_bounds_utc(d_local)
+        
+        # Check if we have fixtures for this day
+        fixtures = _list_fixtures_for_day(d_local)
+        has_fixtures = len(fixtures) > 0 if fixtures else False
+        
+        # Check if we have model outputs for this day
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Count model outputs for this day
+        cur.execute("""
+            SELECT COUNT(*) FROM model_outputs 
+            WHERE fixture_id IN (
+                SELECT id FROM fixtures 
+                WHERE DATE(utc_datetime) = %s
+            )
+        """, (d_local.isoformat(),))
+        model_outputs_count = cur.fetchone()[0] if cur.fetchone() else 0
+        
+        # Count analysis cache entries for this day
+        cur.execute("""
+            SELECT COUNT(*) FROM analysis_cache 
+            WHERE created_at >= %s AND created_at < %s
+        """, (start_dt.isoformat(), end_dt.isoformat()))
+        cache_entries_count = cur.fetchone()[0] if cur.fetchone() else 0
+        
+        conn.close()
+        
+        # Determine if analysis is complete
+        analysis_exists = has_fixtures and model_outputs_count > 0 and cache_entries_count > 0
+        analysis_complete = analysis_exists and model_outputs_count >= len(fixtures) if fixtures else False
+        
+        return {
+            "date": date_str,
+            "analysis_exists": analysis_exists,
+            "analysis_complete": analysis_complete,
+            "fixtures_count": len(fixtures) if fixtures else 0,
+            "model_outputs_count": model_outputs_count,
+            "cache_entries_count": cache_entries_count,
+            "needs_preparation": not analysis_complete
+        }
+        
+    except Exception as e:
+        print(f"❌ [ERROR] Check analysis exists failed: {e}")
+        return {"error": "Failed to check analysis status"}, 500
+
 @app.get("/api/analyze")
 async def api_analyze(request: Request):
     """

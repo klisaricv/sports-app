@@ -1764,3 +1764,127 @@ input:focus-visible {
     font-size: var(--font-size-xs);
   }
 }
+
+/* ===== Admin Calendar Styles ===== */
+.admin-calendar {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: 2px solid #5a67d8;
+  border-radius: 12px;
+  margin-bottom: var(--spacing-lg);
+}
+
+.admin-calendar__header {
+  text-align: center;
+  margin-bottom: var(--spacing-lg);
+}
+
+.admin-calendar__header h3 {
+  color: white;
+  margin: 0 0 var(--spacing-sm) 0;
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+}
+
+.admin-calendar__description {
+  color: rgba(255, 255, 255, 0.9);
+  margin: 0;
+  font-size: var(--font-size-sm);
+}
+
+.admin-calendar__content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  align-items: center;
+}
+
+.date-picker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.date-picker label {
+  color: white;
+  font-weight: 500;
+  font-size: var(--font-size-sm);
+}
+
+.date-input {
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  font-size: var(--font-size-base);
+  min-width: 200px;
+  text-align: center;
+}
+
+.date-input:focus {
+  outline: none;
+  border-color: white;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.date-input::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  cursor: pointer;
+}
+
+.admin-calendar__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.admin-calendar__status {
+  min-height: 20px;
+  font-size: var(--font-size-sm);
+  text-align: center;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.admin-calendar__status.success {
+  color: #4ade80;
+}
+
+.admin-calendar__status.error {
+  color: #f87171;
+}
+
+.admin-calendar__status.info {
+  color: #60a5fa;
+}
+
+/* Admin-only elements visibility */
+.admin-only {
+  display: none;
+}
+
+.user-is-admin .admin-only {
+  display: inline-flex;
+}
+
+.user-is-admin #adminCalendar {
+  display: block;
+}
+
+/* Responsive admin calendar */
+@media (max-width: 768px) {
+  .admin-calendar__content {
+    gap: var(--spacing-sm);
+  }
+  
+  .date-input {
+    min-width: 150px;
+    font-size: var(--font-size-sm);
+  }
+  
+  .admin-calendar__header h3 {
+    font-size: var(--font-size-base);
+  }
+}

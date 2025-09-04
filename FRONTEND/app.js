@@ -1192,7 +1192,10 @@ document.addEventListener("DOMContentLoaded", () => {
   // checkGlobalLoaderStatus(); // DISABLED - was causing too many requests
   // setInterval(checkGlobalLoaderStatus, 3000); // DISABLED
 
-  // 4) Dugmad
+  // 4) Initialize admin calendar
+  initAdminCalendar();
+  
+  // 5) Dugmad
   console.log("🔍 [DEBUG] Looking for buttons...");
   const btn1p = document.getElementById("analyze1p");
   const btnGG = document.getElementById("analyzeGG");
@@ -1213,6 +1216,251 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 });
+
+// ===== ADMIN CALENDAR FUNCTIONS =====
+
+// Check if user is admin
+function isAdmin() {
+  const user = localStorage.getItem('user');
+  if (!user) return false;
+  
+  try {
+    const userData = JSON.parse(user);
+    return userData.email === 'klisaricf@gmail.com';
+  } catch (e) {
+    return false;
+  }
+}
+
+// Initialize admin calendar
+function initAdminCalendar() {
+  const adminCalendar = document.getElementById('adminCalendar');
+  const adminDatePicker = document.getElementById('adminDatePicker');
+  const prepareSelectedDayBtn = document.getElementById('prepareSelectedDay');
+  const adminCalendarStatus = document.getElementById('adminCalendarStatus');
+  
+  if (!adminCalendar || !adminDatePicker || !prepareSelectedDayBtn) {
+    console.log("🔍 [DEBUG] Admin calendar elements not found");
+    return;
+  }
+  
+  // Show admin calendar only for admin users
+  if (isAdmin()) {
+    document.body.classList.add('user-is-admin');
+    adminCalendar.style.display = 'block';
+    console.log("🔍 [DEBUG] Admin calendar initialized for admin user");
+  } else {
+    console.log("🔍 [DEBUG] User is not admin, hiding admin calendar");
+    return;
+  }
+  
+  // Set date picker constraints (next 3 days)
+  const today = new Date();
+  const maxDate = new Date(today);
+  maxDate.setDate(today.getDate() + 3);
+  
+  adminDatePicker.min = today.toISOString().split('T')[0];
+  adminDatePicker.max = maxDate.toISOString().split('T')[0];
+  
+  // Set default to today
+  adminDatePicker.value = today.toISOString().split('T')[0];
+  
+  // Add event listeners
+  prepareSelectedDayBtn.addEventListener('click', handlePrepareSelectedDay);
+  adminDatePicker.addEventListener('change', handleDateChange);
+  
+  console.log("🔍 [DEBUG] Admin calendar event listeners added");
+}
+
+// Handle date picker change
+async function handleDateChange() {
+  const adminDatePicker = document.getElementById('adminDatePicker');
+  const adminCalendarStatus = document.getElementById('adminCalendarStatus');
+  
+  if (adminDatePicker.value) {
+    adminCalendarStatus.textContent = `Checking analysis status for ${adminDatePicker.value}...`;
+    adminCalendarStatus.className = 'admin-calendar__status info';
+    
+    // Check if analysis already exists
+    try {
+      const analysisStatus = await checkAnalysisExists(adminDatePicker.value);
+      updateAnalysisStatus(analysisStatus);
+    } catch (error) {
+      console.error("Error checking analysis status:", error);
+      adminCalendarStatus.textContent = `Error checking status: ${error.message}`;
+      adminCalendarStatus.className = 'admin-calendar__status error';
+    }
+  } else {
+    adminCalendarStatus.textContent = '';
+    adminCalendarStatus.className = 'admin-calendar__status';
+  }
+}
+
+// Check if analysis exists for a specific date
+async function checkAnalysisExists(dateStr) {
+  const user = localStorage.getItem('user');
+  const userData = user ? JSON.parse(user) : null;
+  const sessionId = userData ? userData.session_id : null;
+  
+  const response = await fetch(`/api/check-analysis-exists?date=${dateStr}`, {
+    method: "GET",
+    headers: {
+      "Authorization": `Bearer ${sessionId}`
+    }
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || 'Failed to check analysis status');
+  }
+  
+  return await response.json();
+}
+
+// Update analysis status display
+function updateAnalysisStatus(status) {
+  const adminCalendarStatus = document.getElementById('adminCalendarStatus');
+  const prepareSelectedDayBtn = document.getElementById('prepareSelectedDay');
+  
+  if (status.analysis_complete) {
+    adminCalendarStatus.textContent = `✅ Analysis complete for ${status.date} (${status.fixtures_count} fixtures, ${status.model_outputs_count} outputs)`;
+    adminCalendarStatus.className = 'admin-calendar__status success';
+    prepareSelectedDayBtn.textContent = 'Re-prepare Selected Day';
+    prepareSelectedDayBtn.disabled = false;
+  } else if (status.analysis_exists) {
+    adminCalendarStatus.textContent = `⚠️ Partial analysis exists for ${status.date} (${status.fixtures_count} fixtures, ${status.model_outputs_count} outputs) - needs completion`;
+    adminCalendarStatus.className = 'admin-calendar__status error';
+    prepareSelectedDayBtn.textContent = 'Complete Analysis';
+    prepareSelectedDayBtn.disabled = false;
+  } else {
+    adminCalendarStatus.textContent = `❌ No analysis found for ${status.date} (${status.fixtures_count} fixtures) - needs preparation`;
+    adminCalendarStatus.className = 'admin-calendar__status error';
+    prepareSelectedDayBtn.textContent = 'Prepare Selected Day';
+    prepareSelectedDayBtn.disabled = false;
+  }
+}
+
+// Handle prepare selected day
+async function handlePrepareSelectedDay() {
+  const adminDatePicker = document.getElementById('adminDatePicker');
+  const prepareSelectedDayBtn = document.getElementById('prepareSelectedDay');
+  const adminCalendarStatus = document.getElementById('adminCalendarStatus');
+  
+  if (!adminDatePicker.value) {
+    adminCalendarStatus.textContent = 'Please select a date first';
+    adminCalendarStatus.className = 'admin-calendar__status error';
+    return;
+  }
+  
+  const selectedDate = adminDatePicker.value;
+  console.log("🔍 [DEBUG] Preparing selected day:", selectedDate);
+  
+  // Disable button and show status
+  prepareSelectedDayBtn.disabled = true;
+  prepareSelectedDayBtn.textContent = 'Preparing...';
+  adminCalendarStatus.textContent = `Preparing analysis for ${selectedDate}...`;
+  adminCalendarStatus.className = 'admin-calendar__status info';
+  
+  try {
+    // Call prepare day for selected date
+    await prepareDayForDate(selectedDate);
+    
+    adminCalendarStatus.textContent = `Successfully prepared analysis for ${selectedDate}`;
+    adminCalendarStatus.className = 'admin-calendar__status success';
+  } catch (error) {
+    console.error("Error preparing selected day:", error);
+    adminCalendarStatus.textContent = `Error: ${error.message}`;
+    adminCalendarStatus.className = 'admin-calendar__status error';
+  } finally {
+    // Re-enable button
+    prepareSelectedDayBtn.disabled = false;
+    prepareSelectedDayBtn.textContent = 'Prepare Selected Day';
+  }
+}
+
+// Prepare day for specific date
+async function prepareDayForDate(dateStr) {
+  console.log("🔍 [DEBUG] prepareDayForDate called with date:", dateStr);
+  
+  try {
+    // Show loader
+    showLoader(`🚀 Preparing ${dateStr}...`);
+    
+    // Get user session
+    const user = localStorage.getItem('user');
+    const userData = user ? JSON.parse(user) : null;
+    const sessionId = userData ? userData.session_id : null;
+    
+    // Call prepare day API
+    const resp = await fetch(`/api/prepare-day`, {
+      method: "POST",
+      headers: { 
+        "Content-Type": "application/json", 
+        "Accept": "application/json",
+        "Authorization": `Bearer ${sessionId}`
+      },
+      body: JSON.stringify({ date: dateStr, prewarm: true, session_id: sessionId })
+    });
+    
+    const data = await parseJsonSafe(resp);
+    
+    // Check for errors
+    if (resp.status === 403) {
+      throw new Error("Access denied. Admin privileges required.");
+    }
+    if (resp.status === 401) {
+      throw new Error("Authentication required. Please log in.");
+    }
+    
+    if (!data.ok || !data.job_id) {
+      throw new Error("Failed to start prepare job");
+    }
+    
+    const jobId = data.job_id;
+    updateLoader("queued");
+    
+    // Poll for completion
+    let lastProgress = -1;
+    while (true) {
+      await sleep(3000);
+      
+      const statusResp = await fetch(`/api/prepare-day/status?job_id=${jobId}`);
+      const sData = await parseJsonSafe(statusResp);
+      
+      if (sData.status === "done") {
+        console.log("🔍 [DEBUG] prepareDayForDate - status done, hiding loader");
+        const s = [
+          `✅ Prepare day completed for ${dateStr}`,
+          `📊 ${sData.fixtures || 0} fixtures processed`,
+          `⏱️ Completed in ${sData.duration || 'unknown'}`
+        ].filter(Boolean).join("\n");
+        showNotification("Prepare Day Complete", s);
+        hideLoader();
+        break;
+      }
+      
+      if (sData.status === "error") {
+        throw new Error(`Prepare-day error: ${sData.detail || "unknown"}`);
+      }
+      
+      // Update progress
+      if (sData.progress !== lastProgress) {
+        lastProgress = sData.progress;
+        updateLoader(sData.detail || "Processing...");
+      }
+    }
+    
+  } catch (err) {
+    console.log("🔍 [DEBUG] prepareDayForDate - error occurred, hiding loader");
+    console.error(err);
+    showError("Prepare Day Error", `Prepare day error: ${err}`);
+    showToast("Prepare-day greška", "error");
+    hideLoader();
+    throw err;
+  } finally {
+    setBusyUI(false);
+  }
+}
 
 // Safety net: ako je DOM već gotov (npr. skripta učitana kasnije), pozovi ručno
 if (document.readyState === "interactive" || document.readyState === "complete") {

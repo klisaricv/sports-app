@@ -1192,8 +1192,8 @@ document.addEventListener("DOMContentLoaded", () => {
   // checkGlobalLoaderStatus(); // DISABLED - was causing too many requests
   // setInterval(checkGlobalLoaderStatus, 3000); // DISABLED
 
-  // 4) Initialize admin calendar
-  initAdminCalendar();
+  // 4) Initialize prepare day modal
+  initPrepareDayModal();
   
   // 5) Dugmad
   console.log("🔍 [DEBUG] Looking for buttons...");
@@ -1212,12 +1212,12 @@ document.addEventListener("DOMContentLoaded", () => {
     console.log("🔍 [DEBUG] Adding click listener to prepareDay button");
     btnPrep.addEventListener("click", () => {
       console.log("🔍 [DEBUG] Prepare Day button clicked!");
-      prepareDay();
+      showPrepareDayModal();
     });
   }
 });
 
-// ===== ADMIN CALENDAR FUNCTIONS =====
+// ===== PREPARE DAY MODAL FUNCTIONS =====
 
 // Check if user is admin
 function isAdmin() {
@@ -1232,25 +1232,17 @@ function isAdmin() {
   }
 }
 
-// Initialize admin calendar
-function initAdminCalendar() {
-  const adminCalendar = document.getElementById('adminCalendar');
-  const adminDatePicker = document.getElementById('adminDatePicker');
-  const prepareSelectedDayBtn = document.getElementById('prepareSelectedDay');
-  const adminCalendarStatus = document.getElementById('adminCalendarStatus');
+// Initialize prepare day modal
+function initPrepareDayModal() {
+  const prepareDayModal = document.getElementById('prepareDayModal');
+  const prepareDatePicker = document.getElementById('prepareDatePicker');
+  const confirmPrepareBtn = document.getElementById('confirmPrepare');
+  const cancelPrepareBtn = document.getElementById('cancelPrepare');
+  const closePrepareModal = document.getElementById('closePrepareModal');
+  const prepareStatus = document.getElementById('prepareStatus');
   
-  if (!adminCalendar || !adminDatePicker || !prepareSelectedDayBtn) {
-    console.log("🔍 [DEBUG] Admin calendar elements not found");
-    return;
-  }
-  
-  // Show admin calendar only for admin users
-  if (isAdmin()) {
-    document.body.classList.add('user-is-admin');
-    adminCalendar.style.display = 'block';
-    console.log("🔍 [DEBUG] Admin calendar initialized for admin user");
-  } else {
-    console.log("🔍 [DEBUG] User is not admin, hiding admin calendar");
+  if (!prepareDayModal || !prepareDatePicker || !confirmPrepareBtn) {
+    console.log("🔍 [DEBUG] Prepare day modal elements not found");
     return;
   }
   
@@ -1259,40 +1251,80 @@ function initAdminCalendar() {
   const maxDate = new Date(today);
   maxDate.setDate(today.getDate() + 3);
   
-  adminDatePicker.min = today.toISOString().split('T')[0];
-  adminDatePicker.max = maxDate.toISOString().split('T')[0];
+  prepareDatePicker.min = today.toISOString().split('T')[0];
+  prepareDatePicker.max = maxDate.toISOString().split('T')[0];
   
   // Set default to today
-  adminDatePicker.value = today.toISOString().split('T')[0];
+  prepareDatePicker.value = today.toISOString().split('T')[0];
   
   // Add event listeners
-  prepareSelectedDayBtn.addEventListener('click', handlePrepareSelectedDay);
-  adminDatePicker.addEventListener('change', handleDateChange);
+  confirmPrepareBtn.addEventListener('click', handleConfirmPrepare);
+  cancelPrepareBtn.addEventListener('click', closeModal);
+  closePrepareModal.addEventListener('click', closeModal);
+  prepareDatePicker.addEventListener('change', handlePrepareDateChange);
   
-  console.log("🔍 [DEBUG] Admin calendar event listeners added");
+  // Close modal when clicking outside
+  prepareDayModal.addEventListener('click', (e) => {
+    if (e.target === prepareDayModal) {
+      closeModal();
+    }
+  });
+  
+  console.log("🔍 [DEBUG] Prepare day modal initialized");
 }
 
-// Handle date picker change
-async function handleDateChange() {
-  const adminDatePicker = document.getElementById('adminDatePicker');
-  const adminCalendarStatus = document.getElementById('adminCalendarStatus');
+// Show prepare day modal
+function showPrepareDayModal() {
+  const modal = document.getElementById('prepareDayModal');
+  const prepareDatePicker = document.getElementById('prepareDatePicker');
+  const prepareStatus = document.getElementById('prepareStatus');
   
-  if (adminDatePicker.value) {
-    adminCalendarStatus.textContent = `Checking analysis status for ${adminDatePicker.value}...`;
-    adminCalendarStatus.className = 'admin-calendar__status info';
+  if (!isAdmin()) {
+    showError("Access Denied", "Admin privileges required to prepare days.");
+    return;
+  }
+  
+  // Reset modal state
+  prepareDatePicker.value = new Date().toISOString().split('T')[0];
+  prepareStatus.textContent = '';
+  prepareStatus.className = 'prepare-status';
+  
+  // Show modal
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  
+  // Check initial date status
+  handlePrepareDateChange();
+}
+
+// Close modal
+function closeModal() {
+  const modal = document.getElementById('prepareDayModal');
+  modal.style.display = 'none';
+  document.body.style.overflow = 'auto';
+}
+
+// Handle prepare date picker change
+async function handlePrepareDateChange() {
+  const prepareDatePicker = document.getElementById('prepareDatePicker');
+  const prepareStatus = document.getElementById('prepareStatus');
+  
+  if (prepareDatePicker.value) {
+    prepareStatus.textContent = `Checking analysis status for ${prepareDatePicker.value}...`;
+    prepareStatus.className = 'prepare-status info';
     
     // Check if analysis already exists
     try {
-      const analysisStatus = await checkAnalysisExists(adminDatePicker.value);
-      updateAnalysisStatus(analysisStatus);
+      const analysisStatus = await checkAnalysisExists(prepareDatePicker.value);
+      updatePrepareStatus(analysisStatus);
     } catch (error) {
       console.error("Error checking analysis status:", error);
-      adminCalendarStatus.textContent = `Error checking status: ${error.message}`;
-      adminCalendarStatus.className = 'admin-calendar__status error';
+      prepareStatus.textContent = `Error checking status: ${error.message}`;
+      prepareStatus.className = 'prepare-status error';
     }
   } else {
-    adminCalendarStatus.textContent = '';
-    adminCalendarStatus.className = 'admin-calendar__status';
+    prepareStatus.textContent = '';
+    prepareStatus.className = 'prepare-status';
   }
 }
 
@@ -1317,64 +1349,69 @@ async function checkAnalysisExists(dateStr) {
   return await response.json();
 }
 
-// Update analysis status display
-function updateAnalysisStatus(status) {
-  const adminCalendarStatus = document.getElementById('adminCalendarStatus');
-  const prepareSelectedDayBtn = document.getElementById('prepareSelectedDay');
+// Update prepare status display
+function updatePrepareStatus(status) {
+  const prepareStatus = document.getElementById('prepareStatus');
+  const confirmPrepareBtn = document.getElementById('confirmPrepare');
   
   if (status.analysis_complete) {
-    adminCalendarStatus.textContent = `✅ Analysis complete for ${status.date} (${status.fixtures_count} fixtures, ${status.model_outputs_count} outputs)`;
-    adminCalendarStatus.className = 'admin-calendar__status success';
-    prepareSelectedDayBtn.textContent = 'Re-prepare Selected Day';
-    prepareSelectedDayBtn.disabled = false;
+    prepareStatus.textContent = `✅ Analysis complete for ${status.date} (${status.fixtures_count} fixtures, ${status.model_outputs_count} outputs)`;
+    prepareStatus.className = 'prepare-status success';
+    confirmPrepareBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 4h-4l-2-2H5a1 1 0 0 0-1 1v16h16V5a1 1 0 0 0-1-1z"/></svg><span>Re-prepare Selected Day</span>';
+    confirmPrepareBtn.disabled = false;
   } else if (status.analysis_exists) {
-    adminCalendarStatus.textContent = `⚠️ Partial analysis exists for ${status.date} (${status.fixtures_count} fixtures, ${status.model_outputs_count} outputs) - needs completion`;
-    adminCalendarStatus.className = 'admin-calendar__status error';
-    prepareSelectedDayBtn.textContent = 'Complete Analysis';
-    prepareSelectedDayBtn.disabled = false;
+    prepareStatus.textContent = `⚠️ Partial analysis exists for ${status.date} (${status.fixtures_count} fixtures, ${status.model_outputs_count} outputs) - needs completion`;
+    prepareStatus.className = 'prepare-status error';
+    confirmPrepareBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 4h-4l-2-2H5a1 1 0 0 0-1 1v16h16V5a1 1 0 0 0-1-1z"/></svg><span>Complete Analysis</span>';
+    confirmPrepareBtn.disabled = false;
   } else {
-    adminCalendarStatus.textContent = `❌ No analysis found for ${status.date} (${status.fixtures_count} fixtures) - needs preparation`;
-    adminCalendarStatus.className = 'admin-calendar__status error';
-    prepareSelectedDayBtn.textContent = 'Prepare Selected Day';
-    prepareSelectedDayBtn.disabled = false;
+    prepareStatus.textContent = `❌ No analysis found for ${status.date} (${status.fixtures_count} fixtures) - needs preparation`;
+    prepareStatus.className = 'prepare-status error';
+    confirmPrepareBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 4h-4l-2-2H5a1 1 0 0 0-1 1v16h16V5a1 1 0 0 0-1-1z"/></svg><span>Prepare Selected Day</span>';
+    confirmPrepareBtn.disabled = false;
   }
 }
 
-// Handle prepare selected day
-async function handlePrepareSelectedDay() {
-  const adminDatePicker = document.getElementById('adminDatePicker');
-  const prepareSelectedDayBtn = document.getElementById('prepareSelectedDay');
-  const adminCalendarStatus = document.getElementById('adminCalendarStatus');
+// Handle confirm prepare
+async function handleConfirmPrepare() {
+  const prepareDatePicker = document.getElementById('prepareDatePicker');
+  const confirmPrepareBtn = document.getElementById('confirmPrepare');
+  const prepareStatus = document.getElementById('prepareStatus');
   
-  if (!adminDatePicker.value) {
-    adminCalendarStatus.textContent = 'Please select a date first';
-    adminCalendarStatus.className = 'admin-calendar__status error';
+  if (!prepareDatePicker.value) {
+    prepareStatus.textContent = 'Please select a date first';
+    prepareStatus.className = 'prepare-status error';
     return;
   }
   
-  const selectedDate = adminDatePicker.value;
+  const selectedDate = prepareDatePicker.value;
   console.log("🔍 [DEBUG] Preparing selected day:", selectedDate);
   
   // Disable button and show status
-  prepareSelectedDayBtn.disabled = true;
-  prepareSelectedDayBtn.textContent = 'Preparing...';
-  adminCalendarStatus.textContent = `Preparing analysis for ${selectedDate}...`;
-  adminCalendarStatus.className = 'admin-calendar__status info';
+  confirmPrepareBtn.disabled = true;
+  confirmPrepareBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 4h-4l-2-2H5a1 1 0 0 0-1 1v16h16V5a1 1 0 0 0-1-1z"/></svg><span>Preparing...</span>';
+  prepareStatus.textContent = `Preparing analysis for ${selectedDate}...`;
+  prepareStatus.className = 'prepare-status info';
   
   try {
     // Call prepare day for selected date
     await prepareDayForDate(selectedDate);
     
-    adminCalendarStatus.textContent = `Successfully prepared analysis for ${selectedDate}`;
-    adminCalendarStatus.className = 'admin-calendar__status success';
+    prepareStatus.textContent = `Successfully prepared analysis for ${selectedDate}`;
+    prepareStatus.className = 'prepare-status success';
+    
+    // Close modal after successful preparation
+    setTimeout(() => {
+      closeModal();
+    }, 2000);
   } catch (error) {
     console.error("Error preparing selected day:", error);
-    adminCalendarStatus.textContent = `Error: ${error.message}`;
-    adminCalendarStatus.className = 'admin-calendar__status error';
+    prepareStatus.textContent = `Error: ${error.message}`;
+    prepareStatus.className = 'prepare-status error';
   } finally {
     // Re-enable button
-    prepareSelectedDayBtn.disabled = false;
-    prepareSelectedDayBtn.textContent = 'Prepare Selected Day';
+    confirmPrepareBtn.disabled = false;
+    confirmPrepareBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 4h-4l-2-2H5a1 1 0 0 0-1 1v16h16V5a1 1 0 0 0-1-1z"/></svg><span>Prepare Selected Day</span>';
   }
 }
 

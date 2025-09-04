@@ -1765,38 +1765,82 @@ input:focus-visible {
   }
 }
 
-/* ===== Admin Calendar Styles ===== */
-.admin-calendar {
+/* ===== Prepare Day Modal Styles ===== */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.modal-content {
+  background: var(--color-bg);
+  border-radius: 12px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  max-width: 500px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+}
+
+.prepare-modal {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   border: 2px solid #5a67d8;
-  border-radius: 12px;
-  margin-bottom: var(--spacing-lg);
 }
 
-.admin-calendar__header {
-  text-align: center;
-  margin-bottom: var(--spacing-lg);
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-lg);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-.admin-calendar__header h3 {
+.modal-header h3 {
   color: white;
-  margin: 0 0 var(--spacing-sm) 0;
+  margin: 0;
   font-size: var(--font-size-lg);
   font-weight: 600;
 }
 
-.admin-calendar__description {
-  color: rgba(255, 255, 255, 0.9);
-  margin: 0;
-  font-size: var(--font-size-sm);
+.modal-close {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background-color 0.2s;
 }
 
-.admin-calendar__content {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-md);
-  align-items: center;
+.modal-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.modal-body {
+  padding: var(--spacing-lg);
+}
+
+.modal-description {
+  color: rgba(255, 255, 255, 0.9);
+  margin: 0 0 var(--spacing-lg) 0;
+  font-size: var(--font-size-sm);
+  text-align: center;
 }
 
 .date-picker {
@@ -1804,6 +1848,7 @@ input:focus-visible {
   flex-direction: column;
   align-items: center;
   gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-lg);
 }
 
 .date-picker label {
@@ -1834,49 +1879,49 @@ input:focus-visible {
   cursor: pointer;
 }
 
-.admin-calendar__actions {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--spacing-sm);
-}
-
-.admin-calendar__status {
+.prepare-status {
   min-height: 20px;
   font-size: var(--font-size-sm);
   text-align: center;
   color: rgba(255, 255, 255, 0.8);
+  margin-bottom: var(--spacing-md);
 }
 
-.admin-calendar__status.success {
+.prepare-status.success {
   color: #4ade80;
 }
 
-.admin-calendar__status.error {
+.prepare-status.error {
   color: #f87171;
 }
 
-.admin-calendar__status.info {
+.prepare-status.info {
   color: #60a5fa;
 }
 
-/* Admin-only elements visibility */
-.admin-only {
-  display: none;
+.modal-footer {
+  display: flex;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-lg);
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  justify-content: flex-end;
 }
 
-.user-is-admin .admin-only {
-  display: inline-flex;
+.modal-footer .btn {
+  min-width: 120px;
 }
 
-.user-is-admin #adminCalendar {
-  display: block;
-}
-
-/* Responsive admin calendar */
+/* Responsive modal */
 @media (max-width: 768px) {
-  .admin-calendar__content {
-    gap: var(--spacing-sm);
+  .modal-content {
+    width: 95%;
+    margin: var(--spacing-sm);
+  }
+  
+  .modal-header,
+  .modal-body,
+  .modal-footer {
+    padding: var(--spacing-md);
   }
   
   .date-input {
@@ -1884,7 +1929,11 @@ input:focus-visible {
     font-size: var(--font-size-sm);
   }
   
-  .admin-calendar__header h3 {
-    font-size: var(--font-size-base);
+  .modal-footer {
+    flex-direction: column;
+  }
+  
+  .modal-footer .btn {
+    width: 100%;
   }
 }

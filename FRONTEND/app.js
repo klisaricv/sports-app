@@ -54,7 +54,6 @@ function ensureLoaderUI() {
   document.body.appendChild(overlay);
 }
 function showLoader(title = "🚀 Preparing Analysis...") {
-  console.log("🔍 [DEBUG] showLoader called with title:", title);
   ensureLoaderUI();
   
   const overlay = document.getElementById("loaderOverlay");
@@ -178,7 +177,6 @@ function updateLoader(detail) {
   }
 }
 function hideLoader() {
-  console.log("🔍 [DEBUG] hideLoader called");
   const el = document.getElementById("loaderOverlay");
   if (el) {
     el.style.display = "none";
@@ -886,9 +884,6 @@ async function fetchAnalysis(type) {
     const toEl = document.getElementById("toDate");
 
     if (!fromEl || !toEl || !fromEl.value || !toEl.value) {
-      console.log("🔍 [DEBUG] Date validation failed - missing dates");
-      console.log("🔍 [DEBUG] fromEl:", fromEl, "toEl:", toEl);
-      console.log("🔍 [DEBUG] fromEl.value:", fromEl?.value, "toEl.value:", toEl?.value);
       showError("Date Selection Required", "Please select both From and To dates.");
       hideLoader();
       return;
@@ -897,13 +892,11 @@ async function fetchAnalysis(type) {
     const fromDate = new Date(fromEl.value);
     const toDate = new Date(toEl.value);
     if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
-      console.log("🔍 [DEBUG] Date validation failed - invalid dates");
       showError("Invalid Dates", "Invalid date values.");
       hideLoader();
       return;
     }
     if (toDate < fromDate) {
-      console.log("🔍 [DEBUG] Date validation failed - invalid range");
       showError("Invalid Date Range", "End date/time must be after start date/time.");
       hideLoader();
       return;
@@ -931,8 +924,6 @@ async function fetchAnalysis(type) {
       `&market=${encodeURIComponent(market)}&no_api=1`;
 
     console.log("👉 calling:", url);
-    console.log("🔍 [DEBUG] About to start API call loop");
-    console.log("🔍 [DEBUG] showLoader should be visible now");
 
     setBusyUI(true);
 

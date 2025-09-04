@@ -82,6 +82,7 @@ function showLoader(title = "🚀 Preparing Analysis...") {
   }
   
   // Make loader visible with high z-index
+  console.log("🔍 [DEBUG] Setting loader styles");
   overlay.style.zIndex = "99999";
   overlay.style.display = "flex";
   overlay.style.visibility = "visible";
@@ -94,6 +95,7 @@ function showLoader(title = "🚀 Preparing Analysis...") {
   
   // Force a reflow to ensure styles are applied
   overlay.offsetHeight;
+  console.log("🔍 [DEBUG] Loader styles applied, display:", overlay.style.display, "visibility:", overlay.style.visibility);
   
   // Disable all buttons during loading
   disableAllButtons(true);
@@ -187,7 +189,11 @@ function hideLoader() {
   console.log("🔍 [DEBUG] hideLoader called");
   const el = document.getElementById("loaderOverlay");
   if (el) {
+    console.log("🔍 [DEBUG] Hiding loader, current display:", el.style.display);
     el.style.display = "none";
+    console.log("🔍 [DEBUG] Loader hidden, new display:", el.style.display);
+  } else {
+    console.log("🔍 [DEBUG] loaderOverlay not found in hideLoader");
   }
   
   // Re-enable all buttons after loading

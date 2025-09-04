@@ -1,12 +1,19 @@
 // ====== CONFIG ======
+console.log("🔍 [DEBUG] app.js script loaded!");
 const BACKEND_URL = window.location.origin;
 // ako backend nije isti origin/port, otkomentariši sledeće:
 // const BACKEND_URL = "http://127.0.0.1:8000";
 
+// Global loader state
+let globalLoaderActive = false;
+let loaderCheckInterval = null;
+let globalLoaderCheckCount = 0;
+const MAX_GLOBAL_LOADER_CHECKS = 100; // Maksimalno 100 provera (10 sekundi sa 100ms intervalom)
+
 // ====== SMALL UTILS ======
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const fmt = (v, suffix = "") =>
-  v === null || v === undefined || Number.isNaN(v) ? "—" : `${v}${suffix}`;
+  v === null || v === undefined || Number.isNaN(v) ? "No Data" : `${v}${suffix}`;
 
 async function parseJsonSafe(resp) {
   const ct = resp.headers.get("content-type") || "";
@@ -18,39 +25,360 @@ async function parseJsonSafe(resp) {
 // === Loader helpers ===
 window.sleep = window.sleep || (ms => new Promise(r => setTimeout(r, ms)));
 
+function disableAllButtons(disable) {
+  const buttons = document.querySelectorAll('button, .btn, #savePdf, .primary-ghost');
+  buttons.forEach(btn => {
+    if (disable) {
+      btn.disabled = true;
+      btn.style.pointerEvents = 'none';
+      btn.style.opacity = '0.5';
+    } else {
+      btn.disabled = false;
+      btn.style.pointerEvents = 'auto';
+      btn.style.opacity = '1';
+    }
+  });
+}
+
 function ensureLoaderUI() {
-  if (document.getElementById("loaderOverlay")) return;
+  console.log("🔍 [DEBUG] ensureLoaderUI called");
+  if (document.getElementById("loaderOverlay")) {
+    console.log("🔍 [DEBUG] loaderOverlay already exists");
+    return;
+  }
+  
+  console.log("🔍 [DEBUG] creating loaderOverlay");
   const overlay = document.createElement("div");
   overlay.id = "loaderOverlay";
   overlay.innerHTML = `
     <div id="loaderBox" role="dialog" aria-live="polite" aria-label="Preparing">
-      <div id="loaderTitle">Preparing…</div>
-      <div id="loaderPct">0%</div>
-      <div id="loaderBar"><div></div></div>
-      <div id="loaderDetail"></div>
+      <div id="loaderTitle">🚀 Preparing Analysis...</div>
+      <div id="loaderSpinner"></div>
+      <div id="loaderDetail">Initializing system...</div>
+    </div>`;
+  
+  document.body.appendChild(overlay);
+  console.log("🔍 [DEBUG] loaderOverlay created and appended to body");
+}
+function showLoader(title = "🚀 Preparing Analysis...") {
+  console.log("🔍 [DEBUG] showLoader called with title:", title);
+  ensureLoaderUI();
+  
+  const overlay = document.getElementById("loaderOverlay");
+  if (!overlay) {
+    console.error("❌ [ERROR] loaderOverlay not found!");
+    return;
+  }
+  
+  // Set content
+  const titleEl = document.getElementById("loaderTitle");
+  const detailEl = document.getElementById("loaderDetail");
+  
+  if (titleEl) {
+    titleEl.textContent = title;
+  }
+  
+  if (detailEl) {
+    detailEl.textContent = "Initializing system...";
+  }
+  
+  // Make loader visible with high z-index
+  console.log("🔍 [DEBUG] Setting loader styles");
+  overlay.style.zIndex = "99999";
+  overlay.style.display = "flex";
+  overlay.style.visibility = "visible";
+  overlay.style.opacity = "1";
+  overlay.style.position = "fixed";
+  overlay.style.top = "0";
+  overlay.style.left = "0";
+  overlay.style.width = "100vw";
+  overlay.style.height = "100vh";
+  
+  // Force a reflow to ensure styles are applied
+  overlay.offsetHeight;
+  console.log("🔍 [DEBUG] Loader styles applied, display:", overlay.style.display, "visibility:", overlay.style.visibility);
+  
+  // Disable all buttons during loading
+  disableAllButtons(true);
+}
+
+// Custom Modal System
+function ensureCustomModalUI() {
+  if (document.getElementById("customModalOverlay")) return;
+  const overlay = document.createElement("div");
+  overlay.id = "customModalOverlay";
+  overlay.innerHTML = `
+    <div id="customModal">
+      <div id="customModalTitle">Title</div>
+      <div id="customModalMessage">Message</div>
+      <div id="customModalButtons"></div>
     </div>`;
   document.body.appendChild(overlay);
 }
-function showLoader(title = "Preparing…") {
-  ensureLoaderUI();
-  document.getElementById("loaderTitle").textContent = title;
-  document.getElementById("loaderPct").textContent = "0%";
-  document.querySelector("#loaderBar > div").style.width = "0%";
-  document.getElementById("loaderDetail").textContent = "";
-  document.getElementById("loaderOverlay").style.display = "flex";
+
+function showCustomModal(title, message, buttons = []) {
+  ensureCustomModalUI();
+  
+  const overlay = document.getElementById("customModalOverlay");
+  const modalTitle = document.getElementById("customModalTitle");
+  const modalMessage = document.getElementById("customModalMessage");
+  const modalButtons = document.getElementById("customModalButtons");
+  
+  modalTitle.textContent = title;
+  modalMessage.textContent = message;
+  
+  // Clear existing buttons
+  modalButtons.innerHTML = '';
+  
+  // Add buttons
+  buttons.forEach(button => {
+    const btn = document.createElement("button");
+    btn.className = `customModalBtn ${button.type || 'primary'}`;
+    btn.textContent = button.text;
+    btn.onclick = () => {
+      if (button.onClick) button.onClick();
+      hideCustomModal();
+    };
+    modalButtons.appendChild(btn);
+  });
+  
+  // Show modal
+  overlay.style.display = "flex";
+  overlay.style.zIndex = "100000";
+  
+  // Close on overlay click
+  overlay.onclick = (e) => {
+    if (e.target === overlay) {
+      hideCustomModal();
+    }
+  };
 }
-function updateLoader(pct, detail) {
+
+function hideCustomModal() {
+  const overlay = document.getElementById("customModalOverlay");
+  if (overlay) {
+    overlay.style.display = "none";
+  }
+}
+
+// Replace browser alerts with custom modals
+function showNotification(title, message) {
+  showCustomModal(title, message, [
+    { text: "OK", type: "primary", onClick: () => {} }
+  ]);
+}
+
+function showError(title, message) {
+  showCustomModal(title, message, [
+    { text: "OK", type: "danger", onClick: () => {} }
+  ]);
+}
+
+function showSuccess(title, message) {
+  showCustomModal(title, message, [
+    { text: "OK", type: "success", onClick: () => {} }
+  ]);
+}
+
+function showConfirm(title, message, onConfirm, onCancel = null) {
+  showCustomModal(title, message, [
+    { text: "Cancel", type: "secondary", onClick: onCancel },
+    { text: "Confirm", type: "primary", onClick: onConfirm }
+  ]);
+}
+function updateLoader(detail) {
   ensureLoaderUI();
-  const p = Math.max(0, Math.min(100, Number(pct) || 0));
-  document.getElementById("loaderPct").textContent = p + "%";
-  document.querySelector("#loaderBar > div").style.width = p + "%";
   if (detail !== undefined && detail !== null) {
     document.getElementById("loaderDetail").textContent = String(detail);
   }
 }
 function hideLoader() {
+  console.log("🔍 [DEBUG] hideLoader called");
   const el = document.getElementById("loaderOverlay");
-  if (el) el.style.display = "none";
+  if (el) {
+    console.log("🔍 [DEBUG] Hiding loader, current display:", el.style.display);
+    el.style.display = "none";
+    console.log("🔍 [DEBUG] Loader hidden, new display:", el.style.display);
+  } else {
+    console.log("🔍 [DEBUG] loaderOverlay not found in hideLoader");
+  }
+  
+  // Re-enable all buttons after loading
+  disableAllButtons(false);
+  
+  // Stop global loader checking
+  if (loaderCheckInterval) {
+    clearInterval(loaderCheckInterval);
+    loaderCheckInterval = null;
+  }
+  globalLoaderActive = false;
+}
+
+// Global loader functions
+async function checkGlobalLoaderStatus() {
+  try {
+    globalLoaderCheckCount++;
+    
+    // Zaustavi provere ako je prekoračio limit
+    if (globalLoaderCheckCount > MAX_GLOBAL_LOADER_CHECKS) {
+      console.log("🛑 [GLOBAL LOADER] Max checks reached, stopping polling");
+      stopGlobalLoaderPolling();
+      hideGlobalLoader();
+      return;
+    }
+    
+    const response = await fetch('/api/global-loader-status');
+    const data = await response.json();
+    
+    // Proveri da li je job zastareo (stariji od 5 minuta)
+    if (data.active && data.started_at) {
+      const startTime = new Date(data.started_at);
+      const now = new Date();
+      const diffMinutes = (now - startTime) / (1000 * 60);
+      
+      if (diffMinutes > 5) {
+        console.log("⚠️ [GLOBAL LOADER] Job is stale (older than 5 minutes), stopping polling");
+        stopGlobalLoaderPolling();
+        hideGlobalLoader();
+        return;
+      }
+    }
+    
+    if (data.active && !globalLoaderActive) {
+      console.log("🌍 [GLOBAL LOADER] Showing global loader:", data);
+      showGlobalLoader(data.detail || "Preparing analysis...", data.progress || 0);
+    } else if (!data.active && globalLoaderActive) {
+      console.log("🌍 [GLOBAL LOADER] Hiding global loader");
+      hideGlobalLoader();
+      stopGlobalLoaderPolling();
+    } else if (data.active && globalLoaderActive) {
+      // Ažuriraj postojeći loader
+      updateGlobalLoader(data.detail || "Preparing analysis...", data.progress || 0);
+    }
+    
+  } catch (error) {
+    console.error("❌ [GLOBAL LOADER] Error checking status:", error);
+    // Ako ima grešku, zaustavi polling
+    stopGlobalLoaderPolling();
+    hideGlobalLoader();
+  }
+}
+
+// Funkcija za proveru globalnog loader statusa BEZ automatskog prikazivanja
+async function checkGlobalLoaderStatusSilent() {
+  try {
+    const response = await fetch('/api/global-loader-status');
+    const data = await response.json();
+    
+    if (data.active && !globalLoaderActive) {
+      console.log("🌍 [GLOBAL LOADER] Found active job, starting polling:", data);
+      // Pokreni polling samo ako postoji aktivan job
+      startGlobalLoaderPolling();
+    }
+    
+    return data;
+  } catch (error) {
+    console.error("❌ [GLOBAL LOADER] Error checking status silently:", error);
+    return { active: false };
+  }
+}
+
+// Funkcija za proveru da li se radi Prepare Day
+async function isPrepareDayRunning() {
+  try {
+    const response = await fetch('/api/global-loader-status');
+    const data = await response.json();
+    console.log("🔍 [PREPARE CHECK] API Response:", data);
+    console.log("🔍 [PREPARE CHECK] Is active:", data.active);
+    console.log("🔍 [PREPARE CHECK] Status:", data.status);
+    
+    // Ako je job stariji od 5 minuta, smatraj ga "zastarelim" i ne čekaj ga
+    if (data.active && data.started_at) {
+      const startTime = new Date(data.started_at);
+      const now = new Date();
+      const diffMinutes = (now - startTime) / (1000 * 60);
+      
+      if (diffMinutes > 5) {
+        console.log("⚠️ [PREPARE CHECK] Job is older than 5 minutes, considering it stale");
+        return false;
+      }
+    }
+    
+    return data.active === true;
+  } catch (error) {
+    console.error("❌ [PREPARE CHECK] Error checking prepare status:", error);
+    return false;
+  }
+}
+
+// Funkcija za čekanje da se Prepare Day završi
+async function waitForPrepareDayToComplete() {
+  console.log("⏳ [PREPARE WAIT] Waiting for Prepare Day to complete...");
+  
+  while (true) {
+    const isRunning = await isPrepareDayRunning();
+    
+    if (!isRunning) {
+      console.log("✅ [PREPARE WAIT] Prepare Day completed, proceeding with analysis");
+      return true;
+    }
+    
+    console.log("⏳ [PREPARE WAIT] Prepare Day still running, waiting...");
+    await sleep(2000); // Čekaj 2 sekunde pre sledeće provere
+  }
+}
+
+function showGlobalLoader(title, progress = 0, detail = "Please wait...") {
+  globalLoaderActive = true;
+  showLoader(title);
+  updateLoader(detail);
+  
+  // Pokreni polling ako nije već pokrenut
+  if (!loaderCheckInterval) {
+    startGlobalLoaderPolling();
+  }
+}
+
+function updateGlobalLoader(detail, progress = 0) {
+  updateLoader(detail);
+}
+
+function hideGlobalLoader() {
+  globalLoaderActive = false;
+  hideLoader();
+  stopGlobalLoaderPolling();
+}
+
+function startGlobalLoaderPolling() {
+  if (loaderCheckInterval) {
+    clearInterval(loaderCheckInterval);
+  }
+  
+  // Resetuj brojač
+  globalLoaderCheckCount = 0;
+  
+  // Pokreni polling svakih 100ms
+  loaderCheckInterval = setInterval(checkGlobalLoaderStatus, 100);
+  
+  // Dodaj timeout kao sigurnosnu mrežu - uvek sakrij loader nakon 30 sekundi
+  setTimeout(() => {
+    if (globalLoaderActive) {
+      console.log("⏰ [GLOBAL LOADER] Timeout reached, force hiding loader");
+      stopGlobalLoaderPolling();
+      hideGlobalLoader();
+    }
+  }, 30000); // 30 sekundi
+  
+  console.log("🌍 [GLOBAL LOADER] Started polling");
+}
+
+function stopGlobalLoaderPolling() {
+  if (loaderCheckInterval) {
+    clearInterval(loaderCheckInterval);
+    loaderCheckInterval = null;
+  }
+  
+  console.log("🌍 [GLOBAL LOADER] Stopped polling");
 }
 
 // (ako nemaš već) bezbedno JSON parsiranje
@@ -93,6 +421,9 @@ function ensureToastHost() {
   }
 }
 function showToast(msg, kind = "info") {
+  // Notifikacije su isključene
+  return;
+  
   ensureToastHost();
   const t = document.createElement("div");
   t.textContent = msg;
@@ -174,11 +505,36 @@ function ensureModernShell() {
           </div>
         </div>
         <div class="actions">
-          <button id="analyze1p" class="btn primary">Analyze 1+ 1H</button>
-          <button id="analyzeGG" class="btn subtle">Analyze GG 1H</button>
-          <button id="analyze2plus" class="btn subtle">Analyze 2+ 1H</button>
-          <button id="analyzeFT2plus" class="btn btn-ft">Analyze 2+ FT</button>
-          <button id="prepareDay" class="btn">Prepare day</button>
+          <button id="analyze1p" class="btn primary">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+            </svg>
+            <span>Analyze 1+ 1H</span>
+          </button>
+          <button id="analyzeGG" class="btn subtle">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.94-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+            </svg>
+            <span>Analyze GG 1H</span>
+          </button>
+          <button id="analyze2plus" class="btn subtle">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11H7v-2h10v2z"/>
+            </svg>
+            <span>Analyze 2+ 1H</span>
+          </button>
+          <button id="analyzeFT2plus" class="btn btn-ft">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.94-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+            </svg>
+            <span>Analyze 2+ FT</span>
+          </button>
+          <button id="prepareDay" class="btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M19 4h-4l-2-2H5a1 1 0 0 0-1 1v16h16V5a1 1 0 0 0-1-1z"/>
+            </svg>
+            <span>Prepare day</span>
+          </button>
         </div>
       </div>
     `;
@@ -229,8 +585,14 @@ function ensureModernShell() {
       const s2 = document.createElement("div");
       s2.className = "section";
       // Uvijek stavi title sa count bedgom
-      s1.innerHTML = `<h3>TOP 5 <span class="count" id="countTop">(0)</span></h3>`;
-      s2.innerHTML = `<h3>OTHER <span class="count" id="countOther">(0)</span></h3>`;
+      s1.innerHTML = `
+        <h3>TOP 5 <span class="count" id="countTop">(0)</span></h3>
+        <p class="section-description">These are the top 5 pairs for the selected period according to our analysis</p>
+      `;
+      s2.innerHTML = `
+        <h3>OTHER <span class="count" id="countOther">(0)</span></h3>
+        <p class="section-description">Other pairs for the selected period according to our analysis</p>
+      `;
       s1.appendChild(top);
       s2.appendChild(other);
       grid.appendChild(s1);
@@ -241,15 +603,7 @@ function ensureModernShell() {
     }
   }
 
-  // FAB za mobile – klik radi isto što i #savePdf (ako postoji CSS .fab)
-  if (!document.getElementById("savePdfFab")) {
-    const fab = document.createElement("button");
-    fab.id = "savePdfFab";
-    fab.className = "fab";
-    fab.title = "Save PDF";
-    fab.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24"><path fill="currentColor" d="M5 22q-.825 0-1.413-.588T3 20V4q0-.825.588-1.413T5 2h8l6 6v12q0 .825-.588 1.413T17 22H5Zm7-13V3H5v17h12V9h-5Z"/></svg>`;
-    document.body.appendChild(fab);
-  }
+
 }
 
 // ====== UI HELPERS ======
@@ -258,8 +612,6 @@ const ANALYZE_BUTTON_IDS = [
   "analyzeGG",
   "analyze2plus",
   "analyzeFT2plus",
-  "savePdf",
-  "savePdfFab",
   "prepareDay",
 ];
 
@@ -272,39 +624,11 @@ async function parseJsonSafe(resp) {
 
 
 function setBusyUI(busy, note = "") {
-  ANALYZE_BUTTON_IDS.forEach((id) => {
-    const el = document.getElementById(id);
-    if (el) {
-      el.disabled = busy;
-      if (busy) {
-        el.dataset._origText = el.dataset._origText || el.textContent;
-        if (el.id !== "savePdf" && el.id !== "savePdfFab") {
-          el.textContent = note || "Analiziram…";
-        }
-        el.style.opacity = "0.6";
-        el.style.cursor = "not-allowed";
-      } else {
-        if (el.dataset._origText) el.textContent = el.dataset._origText;
-        el.style.opacity = "";
-        el.style.cursor = "";
-      }
-    }
-  });
+  // Don't change button text anymore - the loader handles the UI feedback
   document.body.style.cursor = busy ? "progress" : "";
 }
 
-function showLoader() {
-  const top5 = document.getElementById("top5");
-  const other = document.getElementById("other");
-  const loaderHTML =
-    '<div class="loader" style="padding:12px;color:var(--muted)">Loading...</div>';
-  if (top5) top5.innerHTML = loaderHTML;
-  if (other) other.innerHTML = loaderHTML;
-  const ct = document.getElementById("countTop");
-  const co = document.getElementById("countOther");
-  if (ct) ct.textContent = "(0)";
-  if (co) co.textContent = "(0)";
-}
+// OLD showLoader function removed - was overriding the new one
 
 // ====== NARATIV ======
 function buildNarrative(m, marketHint) {
@@ -351,6 +675,16 @@ function buildNarrative(m, marketHint) {
 }
 
 // ====== RENDER ======
+function getAnalysisTitle(market) {
+  const titles = {
+    '1h_over05': '🎯 Preko 0.5 golova - 1. poluvreme',
+    'gg1h': '⚽ Oba tima da postignu gol - 1. poluvreme', 
+    '1h_over15': '🎯 Preko 1.5 golova - 1. poluvreme',
+    'ft_over15': '🎯 Preko 1.5 golova - ceo meč'
+  };
+  return titles[market] || '📊 Rezultati analize';
+}
+
 function renderResults(data, market) {
   const currentMarket = market || "1h_over05";
   window.currentAnalysisResults = data;
@@ -360,13 +694,30 @@ function renderResults(data, market) {
 
   const total = Array.isArray(data) ? data.length : 0;
 
-  // naslovi sa count badge
-  const countTop = document.getElementById("countTop");
-  const countOther = document.getElementById("countOther");
-  if (countTop) countTop.textContent = `(${total})`;
-  if (top5Container)
-    top5Container.innerHTML = `<div class="placeholder">Rendering top picks…</div>`;
-  if (otherContainer) otherContainer.innerHTML = "";
+  // Dodaj naslov analize iznad rezultata
+  const analysisTitle = getAnalysisTitle(currentMarket);
+  const resultsSection = document.querySelector('.results');
+  if (resultsSection && !document.getElementById('analysis-title')) {
+    const titleElement = document.createElement('div');
+    titleElement.id = 'analysis-title';
+    titleElement.className = 'analysis-title';
+    titleElement.innerHTML = `
+      <h2>${analysisTitle}</h2>
+      <div class="analysis-subtitle">Analiza završena • ${total} mečeva pronađeno</div>
+    `;
+    resultsSection.insertBefore(titleElement, resultsSection.firstChild);
+  } else if (document.getElementById('analysis-title')) {
+    const titleEl = document.getElementById('analysis-title');
+    titleEl.querySelector('h2').textContent = analysisTitle;
+    titleEl.querySelector('.analysis-subtitle').textContent = `Analiza završena • ${total} mečeva pronađeno`;
+  }
+
+  // Clear content areas, preserve section titles and descriptions
+  const top5ContentArea = top5Container?.querySelector('.section-content');
+  const otherContentArea = otherContainer?.querySelector('.section-content');
+  
+  if (top5ContentArea) top5ContentArea.innerHTML = '';
+  if (otherContentArea) otherContentArea.innerHTML = '';
 
   const cardHTML = (m) => {
     const t1Sample = m.team1_total > 0 ? ` (${m.team1_hits}/${m.team1_total})` : "";
@@ -386,43 +737,87 @@ function renderResults(data, market) {
 
     return `
       <div class="match">
-        <div style="font-weight:700;margin-bottom:6px">${fmt(m.league)}: ${fmt(m.team1)} vs ${fmt(m.team2)}</div>
-
-        <div style="margin:6px 0">
-          <div>${fmt(m.team1)} – Last ${fmt(m.team1_total)}: <strong>${fmt(m.team1_percent, '%')}</strong>${t1Sample}</div>
-          <div>${fmt(m.team2)} – Last ${fmt(m.team2_total)}: <strong>${fmt(m.team2_percent, '%')}</strong>${t2Sample}</div>
-          <div>H2H: <strong>${fmt(m.h2h_percent, '%')}</strong>${h2hSample}</div>
+        <div class="match-header">
+          <div class="match-league">${fmt(m.league)}</div>
+          <div class="match-teams">${fmt(m.team1)} vs ${fmt(m.team2)}</div>
         </div>
 
-        <div style="margin:6px 0">
-          <div><em>1H mikro signali (po timu):</em></div>
-          <div>Shots on Target (1H): Home ${shotHome} (used ${fmt(m.home_shots_used)}), Away ${shotAway} (used ${fmt(m.away_shots_used)})</div>
-          <div>Dangerous Attacks (1H): Home ${attHome} (used ${fmt(m.home_attacks_used)}), Away ${attAway} (used ${fmt(m.away_attacks_used)})</div>
-          <div>Form (sredina dostupnih signala): <strong>${fmt(m.form_percent, '%')}</strong></div>
+        <div class="match-stats">
+          <div class="stat-row">
+            <span class="stat-label">${fmt(m.team1)}</span>
+            <span class="stat-value">${fmt(m.team1_percent, '%')}</span>
+            <span class="stat-sample">(${fmt(m.team1_hits)}/${fmt(m.team1_total)})</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">${fmt(m.team2)}</span>
+            <span class="stat-value">${fmt(m.team2_percent, '%')}</span>
+            <span class="stat-sample">(${fmt(m.team2_hits)}/${fmt(m.team2_total)})</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">H2H</span>
+            <span class="stat-value">${fmt(m.h2h_percent, '%')}</span>
+            <span class="stat-sample">(${fmt(m.h2h_hits)}/${fmt(m.h2h_total)})</span>
+          </div>
         </div>
 
-        <div style="margin:6px 0;padding:8px;background:var(--surface-2);border-radius:10px;border:1px solid var(--border)">
-          <div style="font-weight:600;margin-bottom:4px">Model breakdown</div>
-          <div>Prior (recent form + H2H): <strong>${fmt(d.prior_percent, '%')}</strong></div>
-          <div>Micro (league-normalized): <strong>${fmt(d.micro_percent, '%')}</strong>
-            <span style="color:var(--muted)">[exp SOT total: ${fmt(d.exp_sot1h_total)}, exp DA total: ${fmt(d.exp_da1h_total)}, pos-edge: ${fmt(d.pos_edge_percent, '%')}]</span>
+        <div class="micro-signals">
+          <div class="micro-title">1H Micro Signals</div>
+          <div class="micro-grid">
+            <div class="micro-item">
+              <span class="micro-label">Shots on Target</span>
+              <span class="micro-values">H: ${shotHome} | A: ${shotAway}</span>
+            </div>
+            <div class="micro-item">
+              <span class="micro-label">Dangerous Attacks</span>
+              <span class="micro-values">H: ${attHome} | A: ${attAway}</span>
+            </div>
+            <div class="micro-item">
+              <span class="micro-label">Form Average</span>
+              <span class="micro-values">${fmt(m.form_percent, '%')}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="model-breakdown">
+          <div class="breakdown-title">Model Analysis</div>
+          <div class="breakdown-grid">
+            <div class="breakdown-item">
+              <span class="breakdown-label">Prior (Form + H2H)</span>
+              <span class="breakdown-value">${fmt(d.prior_percent, '%')}</span>
+            </div>
+            <div class="breakdown-item">
+              <span class="breakdown-label">Micro (League-normalized)</span>
+              <span class="breakdown-value">${fmt(d.micro_percent, '%')}</span>
+            </div>
+            <div class="breakdown-item">
+              <span class="breakdown-label">Micro Share</span>
+              <span class="breakdown-value">${fmt(d.merge_weight_micro)}</span>
+            </div>
           </div>
           ${isGG ? `
-            <div>Team 1 scores 1H: <strong>${fmt(d.p_home_scores_1h, '%')}</strong>,
-                 Team 2: <strong>${fmt(d.p_away_scores_1h, '%')}</strong>
-                 <span style="color:var(--muted)">${d.rho!=null?`(ρ=${fmt(d.rho)})`:''}</span>
-            </div>` : ``}
+            <div class="breakdown-item">
+              <span class="breakdown-label">Team 1 scores 1H</span>
+              <span class="breakdown-value">${fmt(d.p_home_scores_1h, '%')}</span>
+            </div>
+            <div class="breakdown-item">
+              <span class="breakdown-label">Team 2 scores 1H</span>
+              <span class="breakdown-value">${fmt(d.p_away_scores_1h, '%')}</span>
+            </div>
+          ` : ``}
             ${isO15 ? `
-            <div>${o15Label}: total <strong>${fmt(d.lambda_total)}</strong>
-                <span style="color:var(--muted)">(home ${fmt(d.lambda_home)}, away ${fmt(d.lambda_away)})</span>
-            </div>` : ``}
-          <div>Merged (precision-weighted): <span style="color:var(--text)">micro share ≈ ${fmt(d.merge_weight_micro)}</span></div>
-          <div style="color:var(--muted)">effN prior: ${fmt(d.effn_prior)}, effN micro: ${fmt(d.effn_micro)}, ligaški baseline: ${fmt(d.m_league, '%')}</div>
+            <div class="breakdown-item">
+              <span class="breakdown-label">${o15Label}</span>
+              <span class="breakdown-value">${fmt(d.lambda_total)}</span>
+            </div>
+          ` : ``}
         </div>
 
-        <div style="margin-top:8px">
-          <div><strong>Final Probability: ${fmt(m.final_percent, '%')}</strong></div>
-          <div style="margin-top:6px; font-size:0.92em; line-height:1.35; color:var(--text);">
+        <div class="final-result">
+          <div class="final-probability">
+            <span class="final-label">Final Probability</span>
+            <span class="final-value">${fmt(m.final_percent, '%')}</span>
+          </div>
+          <div class="narrative">
             ${buildNarrative(m, currentMarket)}
           </div>
         </div>
@@ -432,14 +827,12 @@ function renderResults(data, market) {
 
   (data || []).forEach((match, index) => {
     const html = cardHTML(match);
-    if (index < 5) top5Container.innerHTML = (top5Container.innerHTML || "") + html;
-    else otherContainer.innerHTML = (otherContainer.innerHTML || "") + html;
+    if (index < 5) {
+      top5ContentArea.innerHTML = (top5ContentArea.innerHTML || "") + html;
+    } else {
+      otherContentArea.innerHTML = (otherContentArea.innerHTML || "") + html;
+    }
   });
-
-  if (countOther) {
-    const otherCount = Math.max(total - 5, 0);
-    countOther.textContent = `(${otherCount})`;
-  }
 }
 
 // ====== HELPERS ======
@@ -456,15 +849,25 @@ function setDefaultDatesIfEmpty() {
   const fromEl = document.getElementById("fromDate");
   const toEl = document.getElementById("toDate");
   if (!fromEl || !toEl) return;
-  const now = new Date();
-  const plus4h = new Date(now.getTime() + 4 * 3600 * 1000);
+  
+  const today = new Date();
   const pad = (n) => String(n).padStart(2, "0");
+  
+  // Set to 8AM today
+  const fromDate = new Date(today);
+  fromDate.setHours(8, 0, 0, 0);
+  
+  // Set to 22PM (10PM) today
+  const toDate = new Date(today);
+  toDate.setHours(22, 0, 0, 0);
+  
   const toLocal = (d) =>
     `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
       d.getHours()
     )}:${pad(d.getMinutes())}`;
-  if (!fromEl.value) fromEl.value = toLocal(now);
-  if (!toEl.value) toEl.value = toLocal(plus4h);
+    
+  if (!fromEl.value) fromEl.value = toLocal(fromDate);
+  if (!toEl.value) toEl.value = toLocal(toDate);
 }
 
 function localYMD(d) {
@@ -474,58 +877,120 @@ function localYMD(d) {
   return `${y}-${m}-${day}`;
 }
 
+// ====== AUTHENTICATION CHECK ======
+function isUserLoggedIn() {
+  const user = localStorage.getItem('user');
+  return user !== null && user !== undefined;
+}
+
+function showAuthRequiredModal() {
+  showCustomModal(
+    "🔐 Potrebna je autentifikacija",
+    "Možete videti analizu mečeva samo kao ulogovani korisnik. Molim vas prijavite se da nastavite.\n\nAko nemate nalog, molim vas registrujte se da vidite analizu.",
+    [
+      { 
+        text: "Prijavi se", 
+        type: "primary", 
+        onClick: () => {
+          window.location.href = '/login';
+        }
+      },
+      { 
+        text: "Registruj se", 
+        type: "secondary", 
+        onClick: () => {
+          window.location.href = '/register';
+        }
+      }
+    ]
+  );
+}
+
 // ====== MAIN ACTION ======
 async function fetchAnalysis(type) {
-  showLoader();
-
-  const fromEl = document.getElementById("fromDate");
-  const toEl = document.getElementById("toDate");
-
-  if (!fromEl || !toEl || !fromEl.value || !toEl.value) {
-    alert("Please select both From and To dates.");
+  // Check if user is logged in first
+  if (!isUserLoggedIn()) {
+    showAuthRequiredModal();
     return;
   }
 
-  const fromDate = new Date(fromEl.value);
-  const toDate = new Date(toEl.value);
-  if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
-    alert("Invalid date values.");
-    return;
+  const analysisTitles = {
+    '1p': '🎯 Analiziram 1+ gol...',
+    'GG': '⚽ Analiziram oba tima da postignu gol...',
+    'O15': '🔥 Analiziram preko 1.5 golova...',
+    'FT_O15': '🚀 Analiziram preko 1.5 golova ceo meč...'
+  };
+
+  // 1) Proveri da li se radi Prepare Day
+  const isPrepareRunning = await isPrepareDayRunning();
+  if (isPrepareRunning) {
+    console.log("⏳ [ANALYSIS] Prepare Day is running, waiting for completion...");
+    showLoader("⏳ Čekam da se završi priprema dana...");
+    setBusyUI(true, "Čekam pripremu dana...");
+    
+    // Čekaj da se Prepare Day završi
+    await waitForPrepareDayToComplete();
   }
-  if (toDate < fromDate) {
-    alert("End date/time must be after start date/time.");
-    return;
+
+  // 2) Pokreni analizu
+  showLoader(analysisTitles[type] || '🔍 Analiziram...');
+  
+  // Prikaži sekciju sa rezultatima
+  const resultsSection = document.getElementById('resultsSection');
+  if (resultsSection) {
+    resultsSection.style.display = 'block';
   }
-
-  const fromIso = fromDate.toISOString();
-  const toIso = toDate.toISOString();
-
-  const fh = fromDate.getHours();
-  const th = toDate.getHours() + ((toDate.getMinutes() || toDate.getSeconds()) ? 1 : 0);
-
-  // market
-  let market;
-  if (type === "GG") market = "gg1h";
-  else if (type === "O15") market = "1h_over15";
-  else if (type === "FT_O15") market = "ft_over15";
-  else market = "1h_over05";
-
-  const url =
-    `${BACKEND_URL}/api/analyze` +
-    `?from_date=${encodeURIComponent(fromIso)}` +
-    `&to_date=${encodeURIComponent(toIso)}` +
-    `&from_hour=${fh}` +
-    `&to_hour=${th}` +
-    `&market=${encodeURIComponent(market)}&no_api=1`;
-
-  console.log("👉 calling:", url);
-
-  setBusyUI(true);
-
-  const MAX_RETRIES = 6;
-  let attempt = 0;
 
   try {
+    const fromEl = document.getElementById("fromDate");
+    const toEl = document.getElementById("toDate");
+
+    if (!fromEl || !toEl || !fromEl.value || !toEl.value) {
+      showError("Potrebno je odabrati datume", "Molim vas odaberite i početni i završni datum.");
+      hideLoader();
+      return;
+    }
+
+    const fromDate = new Date(fromEl.value);
+    const toDate = new Date(toEl.value);
+    if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+      showError("Neispravni datumi", "Neispravne vrednosti datuma.");
+      hideLoader();
+      return;
+    }
+    if (toDate < fromDate) {
+      showError("Neispravan opseg datuma", "Završni datum/vreme mora biti posle početnog datuma/vremena.");
+      hideLoader();
+      return;
+    }
+
+    const fromIso = fromDate.toISOString();
+    const toIso = toDate.toISOString();
+
+    const fh = fromDate.getHours();
+    const th = toDate.getHours() + ((toDate.getMinutes() || toDate.getSeconds()) ? 1 : 0);
+
+    // market
+    let market;
+    if (type === "GG") market = "gg1h";
+    else if (type === "O15") market = "1h_over15";
+    else if (type === "FT_O15") market = "ft_over15";
+    else market = "1h_over05";
+
+    const url =
+      `${BACKEND_URL}/api/analyze` +
+      `?from_date=${encodeURIComponent(fromIso)}` +
+      `&to_date=${encodeURIComponent(toIso)}` +
+      `&from_hour=${fh}` +
+      `&to_hour=${th}` +
+      `&market=${encodeURIComponent(market)}&no_api=1`;
+
+    console.log("👉 calling:", url);
+
+    setBusyUI(true);
+
+    const MAX_RETRIES = 6;
+    let attempt = 0;
     while (true) {
       const res = await fetch(url, { headers: { Accept: "application/json" } });
       const raw = await res.text();
@@ -535,7 +1000,8 @@ async function fetchAnalysis(type) {
         json = JSON.parse(raw);
       } catch {
         console.error("Non-JSON response:", raw);
-        alert(`Server vratio nevalidan odgovor (nije JSON):\n${raw.slice(0, 300)}...`);
+        showError("Greška servera", `Server je vratio neispravan odgovor (nije JSON):\n${raw.slice(0, 300)}...`);
+        hideLoader();
         break;
       }
 
@@ -543,7 +1009,8 @@ async function fetchAnalysis(type) {
         attempt += 1;
         if (attempt > MAX_RETRIES) {
           const msg = json?.detail || "Server je trenutno zauzet. Pokušaj ponovo.";
-          alert(msg);
+          showError("Greška servera", msg);
+          hideLoader();
           break;
         }
         const wait = Math.min(1000 * Math.pow(1.6, attempt), 5000);
@@ -557,7 +1024,8 @@ async function fetchAnalysis(type) {
       if (!res.ok) {
         const msg = json?.detail || json?.error || JSON.stringify(json).slice(0, 300);
         console.error("Server error:", msg);
-        alert(`Greška sa servera: ${msg}`);
+        showError("Greška servera", `Greška servera: ${msg}`);
+        hideLoader();
         break;
       }
 
@@ -567,18 +1035,21 @@ async function fetchAnalysis(type) {
 
       data.sort((a, b) => (b.final_percent ?? 0) - (a.final_percent ?? 0));
       renderResults(data, market);
-      showToast(`Gotovo • ${data.length} utakmica`, "ok");
+      showToast(`Završeno • ${data.length} mečeva`, "ok");
+      hideLoader();
       break;
     }
   } catch (err) {
     console.error("Fetch/parse error:", err);
-    alert(`Došlo je do greške pri analizi: ${err}`);
+    showError("Greška analize", `Greška tokom analize: ${err}`);
+    hideLoader();
   } finally {
     setBusyUI(false);
   }
 }
 
 async function prepareDay() {
+  console.log("🔍 [DEBUG] prepareDay function called!");
   try {
     // izaberi datum (From -> ili To -> ili danas)
     const fromEl = document.getElementById("fromDate");
@@ -588,22 +1059,45 @@ async function prepareDay() {
     else if (toEl && toEl.value) base = new Date(toEl.value);
     const dayStr = localYMD(base); // tvoja postojeća util funkcija
 
+    console.log("🔍 [DEBUG] prepareDay - about to show loader");
     setBusyUI(true, `Pripremam ${dayStr}…`);
-    showLoader(`Pripremam ${dayStr}…`);
+    showLoader(`🚀 Preparing ${dayStr}...`);
+    console.log("🔍 [DEBUG] prepareDay - loader should be visible now");
 
     // 1) enqueue
+    const user = localStorage.getItem('user');
+    const userData = user ? JSON.parse(user) : null;
+    const sessionId = userData ? userData.session_id : null;
+    
     const resp = await fetch(`/api/prepare-day`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Accept": "application/json" },
-      body: JSON.stringify({ date: dayStr, prewarm: true })
+      headers: { 
+        "Content-Type": "application/json", 
+        "Accept": "application/json",
+        "Authorization": `Bearer ${sessionId}`
+      },
+      body: JSON.stringify({ date: dayStr, prewarm: true, session_id: sessionId })
     });
     const data = await parseJsonSafe(resp);
+    
+    // Check for admin access error
+    if (resp.status === 403) {
+      throw new Error("Access denied. Admin privileges required.");
+    }
+    if (resp.status === 401) {
+      throw new Error("Authentication required. Please log in.");
+    }
+    
     if (!data.ok || !data.job_id) throw new Error("Neuspešno pokretanje prepare posla");
 
     const jobId = data.job_id;
-    updateLoader(1, "queued");
+    updateLoader("queued");
 
-    // 2) poll status
+    // 2) Pokreni globalni loader polling
+    console.log("🌍 [GLOBAL LOADER] Starting global loader for prepare day");
+    // startGlobalLoaderPolling(); // DISABLED - was hiding our loader
+
+    // 3) poll status
     let lastProgress = -1;
     while (true) {
       await sleep(3000);
@@ -615,13 +1109,14 @@ async function prepareDay() {
       if (sData.status === "queued" || sData.status === "running") {
         if (sData.progress !== lastProgress) {
           lastProgress = sData.progress;
-          updateLoader(sData.progress, sData.detail || "");
+          updateLoader(sData.detail || "");
         }
         continue;
       }
 
       if (sData.status === "done") {
-        updateLoader(100, "finished");
+        console.log("🔍 [DEBUG] prepareDay - status done, hiding loader");
+        updateLoader("finished");
         const r = sData.result || {};
         const s = [
           `Dan: ${r.day}`,
@@ -632,7 +1127,8 @@ async function prepareDay() {
           `Stats missing prije: ${r.stats_missing_before}`,
           r.computed ? `Computed: ${Object.entries(r.computed).map(([k,v]) => `${k}: ${v}`).join(", ")}` : ""
         ].filter(Boolean).join("\n");
-        alert(`Done.\n\n${s}`);
+        showNotification("Prepare Day Complete", s);
+        hideLoader();
         break;
       }
 
@@ -643,71 +1139,454 @@ async function prepareDay() {
       await sleep(1500);
     }
   } catch (err) {
+    console.log("🔍 [DEBUG] prepareDay - error occurred, hiding loader");
     console.error(err);
-    alert(`Prepare-day greška: ${err}`);
+    showError("Prepare Day Error", `Prepare day error: ${err}`);
     showToast("Prepare-day greška", "error");
-  } finally {
     hideLoader();
+  } finally {
+    console.log("🔍 [DEBUG] prepareDay - finally block, stopping global loader");
     setBusyUI(false);
+    // Zaustavi globalni loader polling
+    stopGlobalLoaderPolling();
+  }
+}
+
+// ====== AUTHENTICATION FUNCTIONS ======
+function checkAuthStatus() {
+  const user = localStorage.getItem('user');
+  const authButtons = document.getElementById('authButtons');
+  const userMenu = document.getElementById('userMenu');
+  const userName = document.getElementById('userName');
+  const userEmail = document.getElementById('userEmail');
+  const prepareDayBtn = document.getElementById('prepareDay');
+  
+  if (user) {
+    // User is logged in
+    const userData = JSON.parse(user);
+    if (authButtons) authButtons.style.display = 'none';
+    if (userMenu) userMenu.style.display = 'flex';
+    if (userName) userName.textContent = userData.name || 'User';
+    if (userEmail) userEmail.textContent = userData.email || 'user@example.com';
+    
+    // Show Prepare Day button only for admin user
+    if (prepareDayBtn) {
+      const isAdmin = userData.email === 'klisaricf@gmail.com';
+      if (isAdmin) {
+        prepareDayBtn.classList.add('show');
+      } else {
+        prepareDayBtn.classList.remove('show');
+      }
+    }
+  } else {
+    // User is not logged in
+    if (authButtons) authButtons.style.display = 'flex';
+    if (userMenu) userMenu.style.display = 'none';
+    if (prepareDayBtn) prepareDayBtn.classList.remove('show');
+  }
+}
+
+async function logout() {
+  try {
+    const user = localStorage.getItem('user');
+    if (user) {
+      const userData = JSON.parse(user);
+      if (userData.session_id) {
+        // Call backend logout
+        await fetch(`${BACKEND_URL}/api/auth/logout`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            session_id: userData.session_id
+          })
+        });
+      }
+    }
+  } catch (error) {
+    console.error('Logout error:', error);
+  } finally {
+    // Always clear local storage and update UI
+    localStorage.removeItem('user');
+    checkAuthStatus();
+    showToast('Logged out successfully!', 'success');
   }
 }
 
 // ====== WIRE EVENTS once DOM is ready ======
 document.addEventListener("DOMContentLoaded", () => {
+  // NE proveravaj globalni loader status automatski - samo kada je potrebno
   // 1) Kreiraj moderni shell (radi i sa starim HTML-om)
   ensureModernShell();
 
   // 2) Tema
   initTheme();
 
-  // 3) Podrazumijevani datumi (ako su prazni)
-  setDefaultDatesIfEmpty();
+  // 3) Authentication
+  checkAuthStatus();
+  
+  // 4) Initialize logout button
+  const logoutBtn = document.getElementById('logoutBtn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', logout);
+  }
 
-  // 4) Dugmad
+  // 5) Podrazumijevani datumi (ako su prazni)
+  setDefaultDatesIfEmpty();
+  
+  // 4) Start checking for global loader status
+  // checkGlobalLoaderStatus(); // DISABLED - was causing too many requests
+  // setInterval(checkGlobalLoaderStatus, 3000); // DISABLED
+
+  // 4) Initialize prepare day modal
+  initPrepareDayModal();
+  
+  // 5) Dugmad
+  console.log("🔍 [DEBUG] Looking for buttons...");
   const btn1p = document.getElementById("analyze1p");
   const btnGG = document.getElementById("analyzeGG");
   const btn1pls = document.getElementById("analyze2plus");
   const btnFT2pl = document.getElementById("analyzeFT2plus");
-  const btnPDF = document.getElementById("savePdf");
-  const btnPDFFab = document.getElementById("savePdfFab");
   const btnPrep = document.getElementById("prepareDay");
+  console.log("🔍 [DEBUG] prepareDay button found:", btnPrep);
 
   if (btn1p) btn1p.addEventListener("click", () => fetchAnalysis("1p"));
   if (btnGG) btnGG.addEventListener("click", () => fetchAnalysis("GG"));
   if (btn1pls) btn1pls.addEventListener("click", () => fetchAnalysis("O15"));
   if (btnFT2pl) btnFT2pl.addEventListener("click", () => fetchAnalysis("FT_O15"));
-  if (btnPrep) btnPrep.addEventListener("click", prepareDay);
-
-  function doSavePdf() {
-    if (!window.currentAnalysisResults || !window.currentAnalysisResults.length) {
-      showToast("Nema rezultata za PDF", "error");
-      return;
-    }
-    fetch(`${BACKEND_URL}/api/save-pdf`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ matches: window.currentAnalysisResults }),
-    })
-      .then((r) => r.blob())
-      .then((blob) => {
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "analysis_results.pdf";
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        showToast("PDF sačuvan");
-      })
-      .catch((e) => {
-        console.error(e);
-        showToast("Greška pri PDF exportu", "error");
-      });
+  if (btnPrep) {
+    console.log("🔍 [DEBUG] Adding click listener to prepareDay button");
+    btnPrep.addEventListener("click", () => {
+      console.log("🔍 [DEBUG] Prepare Day button clicked!");
+      showPrepareDayModal();
+    });
   }
-
-  if (btnPDF) btnPDF.addEventListener("click", doSavePdf);
-  if (btnPDFFab) btnPDFFab.addEventListener("click", doSavePdf);
 });
+
+// ===== PREPARE DAY MODAL FUNCTIONS =====
+
+// Check if user is admin
+function isAdmin() {
+  const user = localStorage.getItem('user');
+  if (!user) return false;
+  
+  try {
+    const userData = JSON.parse(user);
+    return userData.email === 'klisaricf@gmail.com';
+  } catch (e) {
+    return false;
+  }
+}
+
+// Initialize prepare day modal
+function initPrepareDayModal() {
+  const prepareDayModal = document.getElementById('prepareDayModal');
+  const prepareDatePicker = document.getElementById('prepareDatePicker');
+  const confirmPrepareBtn = document.getElementById('confirmPrepare');
+  const cancelPrepareBtn = document.getElementById('cancelPrepare');
+  const closePrepareModal = document.getElementById('closePrepareModal');
+  const prepareStatus = document.getElementById('prepareStatus');
+  
+  if (!prepareDayModal || !prepareDatePicker || !confirmPrepareBtn) {
+    console.log("🔍 [DEBUG] Prepare day modal elements not found");
+    return;
+  }
+  
+  // Set date picker constraints (next 3 days)
+  const today = new Date();
+  const maxDate = new Date(today);
+  maxDate.setDate(today.getDate() + 3);
+  
+  prepareDatePicker.min = today.toISOString().split('T')[0];
+  prepareDatePicker.max = maxDate.toISOString().split('T')[0];
+  
+  // Set default to today
+  prepareDatePicker.value = today.toISOString().split('T')[0];
+  
+  // Add event listeners
+  confirmPrepareBtn.addEventListener('click', handleConfirmPrepare);
+  cancelPrepareBtn.addEventListener('click', closeModal);
+  closePrepareModal.addEventListener('click', closeModal);
+  prepareDatePicker.addEventListener('change', handlePrepareDateChange);
+  
+  // Close modal when clicking outside
+  prepareDayModal.addEventListener('click', (e) => {
+    if (e.target === prepareDayModal) {
+      closeModal();
+    }
+  });
+  
+  console.log("🔍 [DEBUG] Prepare day modal initialized");
+}
+
+// Show prepare day modal
+function showPrepareDayModal() {
+  const modal = document.getElementById('prepareDayModal');
+  const prepareDatePicker = document.getElementById('prepareDatePicker');
+  const prepareStatus = document.getElementById('prepareStatus');
+  
+  if (!isAdmin()) {
+    showError("Access Denied", "Admin privileges required to prepare days.");
+    return;
+  }
+  
+  // Reset modal state
+  prepareDatePicker.value = new Date().toISOString().split('T')[0];
+  prepareStatus.textContent = '';
+  prepareStatus.className = 'prepare-status';
+  
+  // Show modal
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  
+  // Check initial date status
+  handlePrepareDateChange();
+}
+
+// Close modal
+function closeModal() {
+  const modal = document.getElementById('prepareDayModal');
+  const prepareStatus = document.getElementById('prepareStatus');
+  
+  // Clear status message
+  prepareStatus.textContent = '';
+  prepareStatus.className = 'prepare-status';
+  
+  modal.style.display = 'none';
+  document.body.style.overflow = 'auto';
+}
+
+// Handle prepare date picker change
+async function handlePrepareDateChange() {
+  const prepareDatePicker = document.getElementById('prepareDatePicker');
+  const prepareStatus = document.getElementById('prepareStatus');
+  
+  if (prepareDatePicker.value) {
+    prepareStatus.textContent = `Checking analysis status for ${prepareDatePicker.value}...`;
+    prepareStatus.className = 'prepare-status info';
+    
+    // Check if analysis already exists
+    try {
+      const analysisStatus = await checkAnalysisExists(prepareDatePicker.value);
+      updatePrepareStatus(analysisStatus);
+    } catch (error) {
+      console.error("Error checking analysis status:", error);
+      prepareStatus.textContent = `Error checking status: ${error.message}`;
+      prepareStatus.className = 'prepare-status error';
+    }
+  } else {
+    prepareStatus.textContent = '';
+    prepareStatus.className = 'prepare-status';
+  }
+}
+
+// Check if analysis exists for a specific date
+async function checkAnalysisExists(dateStr) {
+  const user = localStorage.getItem('user');
+  const userData = user ? JSON.parse(user) : null;
+  const sessionId = userData ? userData.session_id : null;
+  
+  const response = await fetch(`/api/check-analysis-exists?date=${dateStr}`, {
+    method: "GET",
+    headers: {
+      "Authorization": `Bearer ${sessionId}`
+    }
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || 'Failed to check analysis status');
+  }
+  
+  return await response.json();
+}
+
+// Update prepare status display
+function updatePrepareStatus(status) {
+  const prepareStatus = document.getElementById('prepareStatus');
+  const confirmPrepareBtn = document.getElementById('confirmPrepare');
+  
+  // Safely get values with fallbacks
+  const date = status.date || 'selected date';
+  const fixturesCount = status.fixtures_count || 0;
+  const outputsCount = status.model_outputs_count || 0;
+  
+  if (status.analysis_complete) {
+    prepareStatus.textContent = `✅ Analysis complete for ${date} (${fixturesCount} fixtures, ${outputsCount} outputs)`;
+    prepareStatus.className = 'prepare-status success';
+    confirmPrepareBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 4h-4l-2-2H5a1 1 0 0 0-1 1v16h16V5a1 1 0 0 0-1-1z"/></svg><span>Re-prepare Selected Day</span>';
+    confirmPrepareBtn.disabled = false;
+  } else if (status.analysis_exists) {
+    prepareStatus.textContent = `⚠️ Partial analysis exists for ${date} (${fixturesCount} fixtures, ${outputsCount} outputs) - needs completion`;
+    prepareStatus.className = 'prepare-status error';
+    confirmPrepareBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 4h-4l-2-2H5a1 1 0 0 0-1 1v16h16V5a1 1 0 0 0-1-1z"/></svg><span>Complete Analysis</span>';
+    confirmPrepareBtn.disabled = false;
+  } else {
+    prepareStatus.textContent = `❌ No analysis found for ${date} (${fixturesCount} fixtures) - needs preparation`;
+    prepareStatus.className = 'prepare-status error';
+    confirmPrepareBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 4h-4l-2-2H5a1 1 0 0 0-1 1v16h16V5a1 1 0 0 0-1-1z"/></svg><span>Prepare Selected Day</span>';
+    confirmPrepareBtn.disabled = false;
+  }
+}
+
+// Handle confirm prepare
+async function handleConfirmPrepare() {
+  const prepareDatePicker = document.getElementById('prepareDatePicker');
+  const confirmPrepareBtn = document.getElementById('confirmPrepare');
+  const prepareStatus = document.getElementById('prepareStatus');
+  
+  if (!prepareDatePicker.value) {
+    prepareStatus.textContent = 'Please select a date first';
+    prepareStatus.className = 'prepare-status error';
+    return;
+  }
+  
+  const selectedDate = prepareDatePicker.value;
+  console.log("🔍 [DEBUG] Preparing selected day:", selectedDate);
+  
+  // Disable button and show loading
+  confirmPrepareBtn.disabled = true;
+  confirmPrepareBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 4h-4l-2-2H5a1 1 0 0 0-1 1v16h16V5a1 1 0 0 0-1-1z"/></svg><span>Preparing...</span>';
+  prepareStatus.textContent = `Starting preparation for ${selectedDate}...`;
+  prepareStatus.className = 'prepare-status info';
+  
+  try {
+    // Call prepare day for selected date
+    await prepareDayForDate(selectedDate);
+    
+    // Show success and close modal
+    prepareStatus.textContent = `Successfully started preparation for ${selectedDate}`;
+    prepareStatus.className = 'prepare-status success';
+    
+    // Close modal after a short delay
+    setTimeout(() => {
+      closeModal();
+    }, 1500);
+    
+  } catch (error) {
+    console.error("Error preparing selected day:", error);
+    prepareStatus.textContent = `Error: ${error.message}`;
+    prepareStatus.className = 'prepare-status error';
+  } finally {
+    // Re-enable button
+    confirmPrepareBtn.disabled = false;
+    confirmPrepareBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 4h-4l-2-2H5a1 1 0 0 0-1 1v16h16V5a1 1 0 0 0-1-1z"/></svg><span>Prepare Selected Day</span>';
+  }
+}
+
+// Prepare day for specific date
+async function prepareDayForDate(dateStr) {
+  console.log("🔍 [DEBUG] prepareDayForDate called with date:", dateStr);
+  
+  try {
+    // Show loader
+    showLoader(`🚀 Preparing ${dateStr}...`);
+    
+    // Get user session
+    const user = localStorage.getItem('user');
+    const userData = user ? JSON.parse(user) : null;
+    const sessionId = userData ? userData.session_id : null;
+    
+    console.log("🔍 [DEBUG] Session ID:", sessionId);
+    console.log("🔍 [DEBUG] User data:", userData);
+    
+    // Call prepare day API
+    const requestBody = { date: dateStr, prewarm: true, session_id: sessionId };
+    console.log("🔍 [DEBUG] Request body:", requestBody);
+    
+    const resp = await fetch(`/api/prepare-day`, {
+      method: "POST",
+      headers: { 
+        "Content-Type": "application/json", 
+        "Accept": "application/json",
+        "Authorization": `Bearer ${sessionId}`
+      },
+      body: JSON.stringify(requestBody)
+    });
+    
+    console.log("🔍 [DEBUG] Response status:", resp.status);
+    console.log("🔍 [DEBUG] Response headers:", Object.fromEntries(resp.headers.entries()));
+    
+    const data = await parseJsonSafe(resp);
+    console.log("🔍 [DEBUG] Response data:", data);
+    
+    // Check for errors
+    if (resp.status === 403) {
+      throw new Error("Access denied. Admin privileges required.");
+    }
+    if (resp.status === 401) {
+      throw new Error("Authentication required. Please log in.");
+    }
+    
+    if (!data || !data.ok || !data.job_id) {
+      throw new Error(`Failed to start prepare job: ${data?.error || 'Unknown error'}`);
+    }
+    
+    const jobId = data.job_id;
+    updateLoader("queued");
+    
+    // Poll for completion
+    let lastProgress = -1;
+    while (true) {
+      await sleep(3000);
+      
+      const statusResp = await fetch(`/api/prepare-day/status?job_id=${jobId}`);
+      const sData = await parseJsonSafe(statusResp);
+      
+      if (sData.status === "done") {
+        console.log("🔍 [DEBUG] prepareDayForDate - status done, hiding loader");
+        console.log("🔍 [DEBUG] sData.result:", sData.result);
+        
+        const result = sData.result || {};
+        const fixturesCount = result.fixtures_in_db || result.fixtures || 0;
+        const pairsCount = result.pairs || 0;
+        const teamsCount = result.teams || 0;
+        const duration = result.duration || 'unknown time';
+        
+        showSuccess("Prepare Day Complete", `Analysis preparation completed successfully for ${dateStr}!\n\n📊 Processed ${fixturesCount} fixtures\n👥 ${teamsCount} teams analyzed\n🔗 ${pairsCount} pairs created\n⏱️ Completed in ${duration}`);
+        hideLoader();
+        break;
+      }
+      
+      if (sData.status === "error") {
+        const errorDetail = sData.detail || "unknown";
+        if (errorDetail.includes("pool exhausted") || errorDetail.includes("connection")) {
+          throw new Error(`Database connection error. Please try again in a few moments. Server is busy.`);
+        } else if (errorDetail.includes("HTTP 500") || errorDetail.includes("Internal Server Error")) {
+          throw new Error(`Server error occurred. Please try again in a few moments.`);
+        } else {
+          throw new Error(`Prepare-day error: ${errorDetail}`);
+        }
+      }
+      
+      // Update progress
+      if (sData.progress !== lastProgress) {
+        lastProgress = sData.progress;
+        updateLoader(sData.detail || "Processing...");
+      }
+    }
+    
+  } catch (err) {
+    console.log("🔍 [DEBUG] prepareDayForDate - error occurred, hiding loader");
+    console.error(err);
+    
+    // Check if it's a database connection error
+    if (err.message.includes("Database connection error") || err.message.includes("pool exhausted")) {
+      showError("Server Busy", `The server is currently busy with other requests. Please wait a moment and try again.\n\nError: ${err.message}`);
+    } else if (err.message.includes("Server error occurred") || err.message.includes("HTTP 500")) {
+      showError("Server Error", `A server error occurred. Please wait a moment and try again.\n\nError: ${err.message}`);
+    } else {
+      showError("Prepare Day Error", `Prepare day error: ${err.message}`);
+    }
+    
+    showToast("Prepare-day greška", "error");
+    hideLoader();
+    throw err;
+  } finally {
+    setBusyUI(false);
+  }
+}
 
 // Safety net: ako je DOM već gotov (npr. skripta učitana kasnije), pozovi ručno
 if (document.readyState === "interactive" || document.readyState === "complete") {

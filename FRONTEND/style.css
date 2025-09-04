@@ -562,6 +562,13 @@ button[disabled],
   color: var(--text-primary);
 }
 
+.match-kickoff {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  font-weight: var(--font-weight-medium);
+  margin-top: var(--spacing-xs);
+}
+
 /* Match Stats */
 .match-stats {
   margin-bottom: var(--spacing-md);
@@ -689,38 +696,39 @@ button[disabled],
 
 /* Final Result */
 .final-result {
-  padding-top: var(--spacing-md);
-  border-top: 2px solid var(--border);
+  padding: var(--spacing-lg);
+  background: var(--surface-3);
+  border-radius: var(--radius-lg);
+  border: 2px solid var(--primary);
+  margin-top: var(--spacing-md);
 }
 
 .final-probability {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: var(--spacing-sm);
-  padding: var(--spacing-sm);
-  background: var(--surface);
-  border-radius: var(--radius);
-  border: 1px solid var(--primary);
+  margin-bottom: var(--spacing-md);
+  padding-bottom: var(--spacing-sm);
+  border-bottom: 1px solid var(--border);
 }
 
 .final-label {
   color: var(--text-primary);
   font-weight: var(--font-weight-bold);
-  font-size: var(--font-size-lg);
+  font-size: var(--font-size-xl);
 }
 
 .final-value {
   color: var(--primary);
   font-weight: var(--font-weight-bold);
-  font-size: var(--font-size-xl);
+  font-size: var(--font-size-3xl);
 }
 
 .narrative {
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-  line-height: 1.4;
-  font-style: italic;
+  color: var(--text-primary);
+  font-size: var(--font-size-base);
+  line-height: 1.6;
+  font-weight: var(--font-weight-medium);
 }
 
 /* No Data Styling */

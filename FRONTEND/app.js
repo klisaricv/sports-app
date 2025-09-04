@@ -64,7 +64,7 @@ function ensureLoaderUI() {
   document.body.appendChild(overlay);
   console.log("🔍 [DEBUG] loaderOverlay created and appended to body");
 }
-function showLoader(title = "🚀 Preparing Analysis...") {
+function showLoader(title = "🚀 Preparing Analysis...", showAbortButton = false, abortCallback = null) {
   console.log("🔍 [DEBUG] showLoader called with title:", title);
   ensureLoaderUI();
   
@@ -84,6 +84,30 @@ function showLoader(title = "🚀 Preparing Analysis...") {
   
   if (detailEl) {
     detailEl.textContent = "Initializing system...";
+  }
+  
+  // Add abort button if needed
+  if (showAbortButton && abortCallback) {
+    const loaderBox = document.getElementById("loaderBox");
+    if (loaderBox) {
+      // Remove existing abort button if any
+      const existingAbortBtn = document.getElementById("loaderAbortBtn");
+      if (existingAbortBtn) {
+        existingAbortBtn.remove();
+      }
+      
+      // Add abort button
+      const abortBtn = document.createElement("button");
+      abortBtn.id = "loaderAbortBtn";
+      abortBtn.className = "btn danger";
+      abortBtn.innerHTML = `
+        <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6L18 18M6 18L18 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <span>Abort</span>
+      `;
+      abortBtn.style.marginTop = "16px";
+      abortBtn.onclick = abortCallback;
+      loaderBox.appendChild(abortBtn);
+    }
   }
   
   // Make loader visible with high z-index
@@ -1323,15 +1347,6 @@ async function abortPrepareDay() {
     currentPrepareJobId = null;
     prepareAbortController = null;
     
-    // Hide abort button and show normal buttons
-    const abortBtn = document.getElementById('abortPrepare');
-    const confirmBtn = document.getElementById('confirmPrepare');
-    const cancelBtn = document.getElementById('cancelPrepare');
-    
-    if (abortBtn) abortBtn.style.display = 'none';
-    if (confirmBtn) confirmBtn.style.display = 'inline-flex';
-    if (cancelBtn) cancelBtn.style.display = 'inline-flex';
-    
     // Hide loader
     hideLoader();
   }
@@ -1343,7 +1358,6 @@ function initPrepareDayModal() {
   const prepareDatePicker = document.getElementById('prepareDatePicker');
   const confirmPrepareBtn = document.getElementById('confirmPrepare');
   const cancelPrepareBtn = document.getElementById('cancelPrepare');
-  const abortPrepareBtn = document.getElementById('abortPrepare');
   const closePrepareModal = document.getElementById('closePrepareModal');
   const prepareStatus = document.getElementById('prepareStatus');
   
@@ -1366,7 +1380,6 @@ function initPrepareDayModal() {
   // Add event listeners
   confirmPrepareBtn.addEventListener('click', handleConfirmPrepare);
   cancelPrepareBtn.addEventListener('click', closeModal);
-  if (abortPrepareBtn) abortPrepareBtn.addEventListener('click', abortPrepareDay);
   closePrepareModal.addEventListener('click', closeModal);
   prepareDatePicker.addEventListener('change', handlePrepareDateChange);
   
@@ -1505,14 +1518,9 @@ async function handleConfirmPrepare() {
   const selectedDate = prepareDatePicker.value;
   console.log("🔍 [DEBUG] Preparing selected day:", selectedDate);
   
-  // Show abort button and hide other buttons
-  const abortBtn = document.getElementById('abortPrepare');
-  const cancelBtn = document.getElementById('cancelPrepare');
-  
-  if (abortBtn) abortBtn.style.display = 'inline-flex';
-  if (confirmBtn) confirmBtn.style.display = 'none';
-  if (cancelBtn) cancelBtn.style.display = 'none';
-  
+  // Disable button and show loading
+  confirmPrepareBtn.disabled = true;
+  confirmPrepareBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 4h-4l-2-2H5a1 1 0 0 0-1 1v16h16V5a1 1 0 0 0-1-1z"/></svg><span>Preparing...</span>';
   prepareStatus.textContent = `Starting preparation for ${selectedDate}...`;
   prepareStatus.className = 'prepare-status info';
   
@@ -1545,8 +1553,8 @@ async function prepareDayForDate(dateStr) {
   console.log("🔍 [DEBUG] prepareDayForDate called with date:", dateStr);
   
   try {
-    // Show loader
-    showLoader(`🚀 Preparing ${dateStr}...`);
+    // Show loader with abort button
+    showLoader(`🚀 Preparing ${dateStr}...`, true, abortPrepareDay);
     
     // Get user session
     const user = localStorage.getItem('user');
@@ -1616,19 +1624,6 @@ async function prepareDayForDate(dateStr) {
         
         showSuccess("Prepare Day Complete", `Analysis preparation completed successfully for ${dateStr}!\n\n📊 Processed ${fixturesCount} fixtures\n👥 ${teamsCount} teams analyzed\n🔗 ${pairsCount} pairs created\n⏱️ Completed in ${duration}`);
         hideLoader();
-        
-        // Reset buttons
-        const abortBtn = document.getElementById('abortPrepare');
-        const confirmBtn = document.getElementById('confirmPrepare');
-        const cancelBtn = document.getElementById('cancelPrepare');
-        
-        if (abortBtn) abortBtn.style.display = 'none';
-        if (confirmBtn) confirmBtn.style.display = 'inline-flex';
-        if (cancelBtn) cancelBtn.style.display = 'inline-flex';
-        
-        // Reset state
-        currentPrepareJobId = null;
-        prepareAbortController = null;
         break;
       }
       

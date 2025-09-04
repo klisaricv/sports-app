@@ -1495,10 +1495,15 @@ async function prepareDayForDate(dateStr) {
       
       if (sData.status === "done") {
         console.log("🔍 [DEBUG] prepareDayForDate - status done, hiding loader");
-        const fixturesCount = sData.fixtures || 0;
-        const duration = sData.duration || 'unknown time';
+        console.log("🔍 [DEBUG] sData.result:", sData.result);
         
-        showSuccess("Prepare Day Complete", `Analysis preparation completed successfully for ${dateStr}!\n\n📊 Processed ${fixturesCount} fixtures\n⏱️ Completed in ${duration}`);
+        const result = sData.result || {};
+        const fixturesCount = result.fixtures_in_db || result.fixtures || 0;
+        const pairsCount = result.pairs || 0;
+        const teamsCount = result.teams || 0;
+        const duration = result.duration || 'unknown time';
+        
+        showSuccess("Prepare Day Complete", `Analysis preparation completed successfully for ${dateStr}!\n\n📊 Processed ${fixturesCount} fixtures\n👥 ${teamsCount} teams analyzed\n🔗 ${pairsCount} pairs created\n⏱️ Completed in ${duration}`);
         hideLoader();
         break;
       }

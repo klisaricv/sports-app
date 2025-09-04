@@ -887,6 +887,8 @@ async function fetchAnalysis(type) {
 
     if (!fromEl || !toEl || !fromEl.value || !toEl.value) {
       console.log("🔍 [DEBUG] Date validation failed - missing dates");
+      console.log("🔍 [DEBUG] fromEl:", fromEl, "toEl:", toEl);
+      console.log("🔍 [DEBUG] fromEl.value:", fromEl?.value, "toEl.value:", toEl?.value);
       showError("Date Selection Required", "Please select both From and To dates.");
       hideLoader();
       return;
@@ -930,6 +932,7 @@ async function fetchAnalysis(type) {
 
     console.log("👉 calling:", url);
     console.log("🔍 [DEBUG] About to start API call loop");
+    console.log("🔍 [DEBUG] showLoader should be visible now");
 
     setBusyUI(true);
 

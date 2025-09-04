@@ -1300,6 +1300,12 @@ function showPrepareDayModal() {
 // Close modal
 function closeModal() {
   const modal = document.getElementById('prepareDayModal');
+  const prepareStatus = document.getElementById('prepareStatus');
+  
+  // Clear status message
+  prepareStatus.textContent = '';
+  prepareStatus.className = 'prepare-status';
+  
   modal.style.display = 'none';
   document.body.style.overflow = 'auto';
 }
@@ -1392,15 +1398,33 @@ async function handleConfirmPrepare() {
   const selectedDate = prepareDatePicker.value;
   console.log("🔍 [DEBUG] Preparing selected day:", selectedDate);
   
-  // Close modal immediately before starting prepare
-  closeModal();
+  // Disable button and show loading
+  confirmPrepareBtn.disabled = true;
+  confirmPrepareBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 4h-4l-2-2H5a1 1 0 0 0-1 1v16h16V5a1 1 0 0 0-1-1z"/></svg><span>Preparing...</span>';
+  prepareStatus.textContent = `Starting preparation for ${selectedDate}...`;
+  prepareStatus.className = 'prepare-status info';
   
   try {
     // Call prepare day for selected date
     await prepareDayForDate(selectedDate);
+    
+    // Show success and close modal
+    prepareStatus.textContent = `Successfully started preparation for ${selectedDate}`;
+    prepareStatus.className = 'prepare-status success';
+    
+    // Close modal after a short delay
+    setTimeout(() => {
+      closeModal();
+    }, 1500);
+    
   } catch (error) {
     console.error("Error preparing selected day:", error);
-    showError("Prepare Day Error", `Failed to prepare analysis for ${selectedDate}: ${error.message}`);
+    prepareStatus.textContent = `Error: ${error.message}`;
+    prepareStatus.className = 'prepare-status error';
+  } finally {
+    // Re-enable button
+    confirmPrepareBtn.disabled = false;
+    confirmPrepareBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 4h-4l-2-2H5a1 1 0 0 0-1 1v16h16V5a1 1 0 0 0-1-1z"/></svg><span>Prepare Selected Day</span>';
   }
 }
 
@@ -1417,7 +1441,13 @@ async function prepareDayForDate(dateStr) {
     const userData = user ? JSON.parse(user) : null;
     const sessionId = userData ? userData.session_id : null;
     
+    console.log("🔍 [DEBUG] Session ID:", sessionId);
+    console.log("🔍 [DEBUG] User data:", userData);
+    
     // Call prepare day API
+    const requestBody = { date: dateStr, prewarm: true, session_id: sessionId };
+    console.log("🔍 [DEBUG] Request body:", requestBody);
+    
     const resp = await fetch(`/api/prepare-day`, {
       method: "POST",
       headers: { 
@@ -1425,10 +1455,14 @@ async function prepareDayForDate(dateStr) {
         "Accept": "application/json",
         "Authorization": `Bearer ${sessionId}`
       },
-      body: JSON.stringify({ date: dateStr, prewarm: true, session_id: sessionId })
+      body: JSON.stringify(requestBody)
     });
     
+    console.log("🔍 [DEBUG] Response status:", resp.status);
+    console.log("🔍 [DEBUG] Response headers:", Object.fromEntries(resp.headers.entries()));
+    
     const data = await parseJsonSafe(resp);
+    console.log("🔍 [DEBUG] Response data:", data);
     
     // Check for errors
     if (resp.status === 403) {
@@ -1438,8 +1472,8 @@ async function prepareDayForDate(dateStr) {
       throw new Error("Authentication required. Please log in.");
     }
     
-    if (!data.ok || !data.job_id) {
-      throw new Error("Failed to start prepare job");
+    if (!data || !data.ok || !data.job_id) {
+      throw new Error(`Failed to start prepare job: ${data?.error || 'Unknown error'}`);
     }
     
     const jobId = data.job_id;

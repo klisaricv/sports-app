@@ -1062,6 +1062,7 @@ async function prepareDay() {
           r.computed ? `Computed: ${Object.entries(r.computed).map(([k,v]) => `${k}: ${v}`).join(", ")}` : ""
         ].filter(Boolean).join("\n");
         showNotification("Prepare Day Complete", s);
+        hideLoader();
         break;
       }
 
@@ -1075,6 +1076,7 @@ async function prepareDay() {
     console.error(err);
     showError("Prepare Day Error", `Prepare day error: ${err}`);
     showToast("Prepare-day greška", "error");
+    hideLoader();
   } finally {
     setBusyUI(false);
     // Zaustavi globalni loader polling

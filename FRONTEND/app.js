@@ -1001,6 +1001,7 @@ async function fetchAnalysis(type) {
 }
 
 async function prepareDay() {
+  console.log("🔍 [DEBUG] prepareDay function called!");
   try {
     // izaberi datum (From -> ili To -> ili danas)
     const fromEl = document.getElementById("fromDate");
@@ -1201,7 +1202,13 @@ document.addEventListener("DOMContentLoaded", () => {
   if (btnGG) btnGG.addEventListener("click", () => fetchAnalysis("GG"));
   if (btn1pls) btn1pls.addEventListener("click", () => fetchAnalysis("O15"));
   if (btnFT2pl) btnFT2pl.addEventListener("click", () => fetchAnalysis("FT_O15"));
-  if (btnPrep) btnPrep.addEventListener("click", prepareDay);
+  if (btnPrep) {
+    console.log("🔍 [DEBUG] Adding click listener to prepareDay button");
+    btnPrep.addEventListener("click", () => {
+      console.log("🔍 [DEBUG] Prepare Day button clicked!");
+      prepareDay();
+    });
+  }
 });
 
 // Safety net: ako je DOM već gotov (npr. skripta učitana kasnije), pozovi ručno

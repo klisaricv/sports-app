@@ -700,12 +700,12 @@ function buildSimplifiedNarrative(m, marketHint) {
 // ====== RENDER ======
 function getAnalysisTitle(market) {
   const titles = {
-    '1h_over05': '🎯 Preko 0.5 golova - 1. poluvreme',
-    'gg1h': '⚽ Oba tima da postignu gol - 1. poluvreme', 
-    '1h_over15': '🎯 Preko 1.5 golova - 1. poluvreme',
-    'ft_over15': '🎯 Preko 1.5 golova - ceo meč'
+    '1h_over05': '⚽ Preko 0.5 golova - 1. poluvreme',
+    'gg1h': '🥅 Oba tima da postignu gol - 1. poluvreme', 
+    '1h_over15': '⚽ Preko 1.5 golova - 1. poluvreme',
+    'ft_over15': '⚽ Preko 1.5 golova - ceo meč'
   };
-  return titles[market] || '📊 Rezultati analize';
+  return titles[market] || '📈 Rezultati analize';
 }
 
 function renderResults(data, market) {
@@ -1117,6 +1117,7 @@ function checkAuthStatus() {
   const userName = document.getElementById('userName');
   const userEmail = document.getElementById('userEmail');
   const prepareDayBtn = document.getElementById('prepareDay');
+  const usersBtn = document.getElementById('usersBtn');
   
   if (user) {
     // User is logged in
@@ -1126,20 +1127,33 @@ function checkAuthStatus() {
     if (userName) userName.textContent = userData.name || 'User';
     if (userEmail) userEmail.textContent = userData.email || 'user@example.com';
     
-    // Show Prepare Day button only for admin user
+    // Show admin buttons only for admin user
+    const isAdmin = userData.email === 'klisaricf@gmail.com';
+    
     if (prepareDayBtn) {
-      const isAdmin = userData.email === 'klisaricf@gmail.com';
       if (isAdmin) {
-        prepareDayBtn.classList.add('show');
+        prepareDayBtn.style.display = 'flex';
       } else {
-        prepareDayBtn.classList.remove('show');
+        prepareDayBtn.style.display = 'none';
       }
     }
+      if (usersBtn) {
+    if (isAdmin) {
+      usersBtn.style.display = 'flex';
+      console.log('✅ Users button shown for admin');
+    } else {
+      usersBtn.style.display = 'none';
+      console.log('❌ Users button hidden for non-admin');
+    }
+  } else {
+    console.log('❌ Users button element not found');
+  }
   } else {
     // User is not logged in
     if (authButtons) authButtons.style.display = 'flex';
     if (userMenu) userMenu.style.display = 'none';
-    if (prepareDayBtn) prepareDayBtn.classList.remove('show');
+    if (prepareDayBtn) prepareDayBtn.style.display = 'none';
+    if (usersBtn) usersBtn.style.display = 'none';
   }
 }
 
@@ -1183,6 +1197,15 @@ document.addEventListener("DOMContentLoaded", () => {
   // 3) Authentication
   checkAuthStatus();
   
+  // 3.1) Check if we're on users page
+  console.log("🔍 [DEBUG] Current pathname:", window.location.pathname);
+  if (window.location.pathname === '/users') {
+    console.log("🔍 [DEBUG] On users page, initializing users functionality");
+    initUsersPage();
+  } else {
+    console.log("🔍 [DEBUG] Not on users page, skipping users initialization");
+  }
+  
   // 4) Initialize logout button
   const logoutBtn = document.getElementById('logoutBtn');
   if (logoutBtn) {
@@ -1219,7 +1242,120 @@ document.addEventListener("DOMContentLoaded", () => {
       showPrepareDayModal();
     });
   }
+  
+  // Users button is now a direct link - no JavaScript needed
 });
+
+// ===== USERS PAGE FUNCTIONS =====
+
+async function initUsersPage() {
+  console.log("🔍 [DEBUG] Initializing users page");
+  console.log("🔍 [DEBUG] Current URL:", window.location.href);
+  console.log("🔍 [DEBUG] Current pathname:", window.location.pathname);
+  
+  try {
+    // Check if user is admin
+    const user = localStorage.getItem('user');
+    const userData = user ? JSON.parse(user) : null;
+    console.log("🔍 [DEBUG] User data:", userData);
+    
+    if (!userData || userData.email !== 'klisaricf@gmail.com') {
+      console.log("❌ [DEBUG] User is not admin, redirecting to home");
+      window.location.href = '/';
+      return;
+    }
+    
+    console.log("✅ [DEBUG] User is admin, loading users");
+    
+    // Show admin info
+    const adminInfo = document.getElementById('adminInfo');
+    const adminEmail = document.getElementById('adminEmail');
+    if (adminInfo) adminInfo.style.display = 'flex';
+    if (adminEmail) adminEmail.textContent = userData.email;
+    
+    // Load users from API
+    const sessionId = userData.session_id;
+    const response = await fetch('/api/users', {
+      headers: {
+        'Authorization': `Bearer ${sessionId}`
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to load users: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log("✅ [DEBUG] Users loaded:", data.users.length);
+    
+    // Render users table
+    renderUsersTable(data.users);
+    
+  } catch (error) {
+    console.error("❌ [ERROR] Failed to initialize users page:", error);
+    showError("Failed to load users page. Please try again.");
+  }
+}
+
+function renderUsersTable(users) {
+  console.log("🔍 [DEBUG] Rendering users table with", users.length, "users");
+  
+  const loading = document.getElementById('tableLoading');
+  const error = document.getElementById('tableError');
+  const table = document.getElementById('usersTable');
+  const noUsers = document.getElementById('noUsers');
+  
+  if (loading) loading.style.display = 'none';
+  if (error) error.style.display = 'none';
+  
+  if (!users || users.length === 0) {
+    if (noUsers) {
+      noUsers.style.display = 'flex';
+      noUsers.textContent = 'No users found in database';
+    }
+    if (table) table.style.display = 'none';
+    return;
+  }
+  
+  if (noUsers) noUsers.style.display = 'none';
+  if (table) table.style.display = 'table';
+  
+  // Update stats
+  const totalUsers = document.getElementById('totalUsers');
+  const showingUsers = document.getElementById('showingUsers');
+  if (totalUsers) totalUsers.textContent = users.length;
+  if (showingUsers) showingUsers.textContent = users.length;
+  
+  // Render table
+  const tbody = document.getElementById('usersTableBody');
+  if (tbody) {
+    tbody.innerHTML = users.map((user, index) => {
+      const registeredDate = new Date(user.created_at).toLocaleDateString('sr-RS');
+      return `
+        <tr>
+          <td>${index + 1}</td>
+          <td>${user.first_name}</td>
+          <td>${user.last_name}</td>
+          <td>${user.email}</td>
+          <td>${registeredDate}</td>
+        </tr>
+      `;
+    }).join('');
+  }
+  
+  console.log("✅ [DEBUG] Users table rendered successfully");
+}
+
+function showError(message) {
+  const error = document.getElementById('tableError');
+  const errorMessage = document.getElementById('errorMessage');
+  if (error) error.style.display = 'flex';
+  if (errorMessage) errorMessage.textContent = message;
+}
+
+// hideMainContent function removed - not needed for separate /users route
+
+// All old users page functions removed - now using separate /users route
 
 // ===== PREPARE DAY MODAL FUNCTIONS =====
 

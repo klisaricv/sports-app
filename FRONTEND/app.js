@@ -1203,7 +1203,14 @@ document.addEventListener("DOMContentLoaded", () => {
     console.log("🔍 [DEBUG] On users page, initializing users functionality");
     initUsersPage();
   } else {
-    console.log("🔍 [DEBUG] Not on users page, skipping users initialization");
+    console.log("🔍 [DEBUG] Not on users page, ensuring controls are visible");
+    // Ensure controls are visible on non-users pages
+    document.body.removeAttribute('data-page');
+    const controlsPanel = document.querySelector('.panel.controls');
+    if (controlsPanel) {
+      controlsPanel.style.display = '';
+      controlsPanel.classList.remove('hidden-on-users');
+    }
   }
   
   // 4) Initialize logout button
@@ -1254,15 +1261,15 @@ async function initUsersPage() {
   console.log("🔍 [DEBUG] Current pathname:", window.location.pathname);
   
   try {
+    // Set page attribute for CSS targeting (this will hide controls via CSS)
+    document.body.setAttribute('data-page', 'users');
+    
     // Hide controls panel on users page
     const controlsPanel = document.querySelector('.panel.controls');
     if (controlsPanel) {
       controlsPanel.style.display = 'none';
       controlsPanel.classList.add('hidden-on-users');
     }
-    
-    // Set page attribute for CSS targeting
-    document.body.setAttribute('data-page', 'users');
     
     // Check if user is admin
     const user = localStorage.getItem('user');

@@ -2808,6 +2808,11 @@ def serve_admin_users():
     print("✅ [DEBUG] Serving users.html from /admin/users")
     return FileResponse(str(users_path))
 
+@app.get("/test-users")
+def test_users():
+    print("🔍 [DEBUG] /test-users route called - this is a test!")
+    return {"message": "Test route works!", "timestamp": "2024-01-01"}
+
 ALLOWED_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o.strip()]
 # CORS – da frontend može da pristupi backendu
 app.add_middleware(

@@ -80,9 +80,9 @@ function setupEventListeners() {
   document.getElementById('logoutBtn').addEventListener('click', logout);
 }
 
-// Load users from API
-async function loadUsers() {
-  console.log('🔄 Starting to load users...');
+// Load users from API with pagination
+async function loadUsers(page = 1, searchQuery = '') {
+  console.log('🔄 Starting to load users...', { page, searchQuery });
   const loading = document.getElementById('tableLoading');
   const error = document.getElementById('tableError');
   const table = document.getElementById('usersTable');
@@ -103,8 +103,16 @@ async function loadUsers() {
     const sessionId = userData?.session_id;
     console.log('🔑 Session ID found:', !!sessionId);
     
-    console.log('🌐 Making API request to /api/users...');
-    const response = await fetch('/api/users', {
+    // Build API URL with pagination and search parameters
+    const apiUrl = new URL('/api/users', window.location.origin);
+    apiUrl.searchParams.set('page', page);
+    apiUrl.searchParams.set('limit', usersPerPage);
+    if (searchQuery) {
+      apiUrl.searchParams.set('search', searchQuery);
+    }
+    
+    console.log('🌐 Making API request to:', apiUrl.toString());
+    const response = await fetch(apiUrl.toString(), {
       headers: {
         'Authorization': `Bearer ${sessionId}`
       }
@@ -121,10 +129,16 @@ async function loadUsers() {
     const data = await response.json();
     console.log('📊 Users data received:', data);
     
+    // Update global state
     allUsers = data.users || [];
     filteredUsers = [...allUsers];
+    currentPage = page;
+    
+    // Update total count for pagination
+    window.totalUsersCount = data.total || allUsers.length;
     
     console.log('👥 Users loaded:', allUsers.length);
+    console.log('📊 Total users in database:', window.totalUsersCount);
     console.log('🔍 All users array:', allUsers);
     
     console.log('📊 Updating stats...');
@@ -150,49 +164,57 @@ async function loadUsers() {
   }
 }
 
-// Handle search
+// Handle search with debouncing
+let searchTimeout;
 function handleSearch(e) {
-  const query = e.target.value.toLowerCase().trim();
+  const query = e.target.value.trim();
   const clearBtn = document.getElementById('clearSearch');
   
   console.log('🔍 Search query:', query);
-  console.log('📊 All users count:', allUsers.length);
   
-  if (query) {
-    clearBtn.style.display = 'flex';
-    filteredUsers = allUsers.filter(user => 
-      user.first_name.toLowerCase().includes(query) ||
-      user.last_name.toLowerCase().includes(query) ||
-      user.email.toLowerCase().includes(query)
-    );
-    console.log('✅ Filtered users count:', filteredUsers.length);
-  } else {
-    clearBtn.style.display = 'none';
-    filteredUsers = [...allUsers];
-    console.log('🔄 Reset to all users');
+  // Clear previous timeout
+  if (searchTimeout) {
+    clearTimeout(searchTimeout);
   }
   
-  currentPage = 1;
-  updateStats();
-  renderUsers();
-  renderPagination();
+  // Show clear button if there's a query
+  if (query) {
+    clearBtn.style.display = 'flex';
+  } else {
+    clearBtn.style.display = 'none';
+  }
+  
+  // Debounce search - wait 300ms after user stops typing
+  searchTimeout = setTimeout(() => {
+    currentPage = 1;
+    loadUsers(1, query);
+  }, 300);
 }
 
 // Clear search
 function clearSearchInput() {
   document.getElementById('userSearch').value = '';
   document.getElementById('clearSearch').style.display = 'none';
-  filteredUsers = [...allUsers];
+  
+  // Clear timeout
+  if (searchTimeout) {
+    clearTimeout(searchTimeout);
+  }
+  
+  // Reload first page without search
   currentPage = 1;
-  updateStats();
-  renderUsers();
-  renderPagination();
+  loadUsers(1, '');
 }
 
 // Update statistics
 function updateStats() {
-  document.getElementById('totalUsers').textContent = allUsers.length;
-  document.getElementById('showingUsers').textContent = filteredUsers.length;
+  const totalUsers = window.totalUsersCount || allUsers.length;
+  const showingUsers = allUsers.length;
+  
+  document.getElementById('totalUsers').textContent = totalUsers;
+  document.getElementById('showingUsers').textContent = showingUsers;
+  
+  console.log('📊 Stats updated:', { totalUsers, showingUsers });
 }
 
 // Render users table
@@ -253,11 +275,14 @@ function renderUsers() {
 
 // Render pagination
 function renderPagination() {
-  const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
+  const totalUsers = window.totalUsersCount || filteredUsers.length;
+  const totalPages = Math.ceil(totalUsers / usersPerPage);
   const paginationInfo = document.getElementById('paginationInfo');
   const paginationPages = document.getElementById('paginationPages');
   const prevBtn = document.getElementById('prevPage');
   const nextBtn = document.getElementById('nextPage');
+  
+  console.log('📄 Rendering pagination:', { totalUsers, totalPages, currentPage });
   
   if (totalPages <= 1) {
     document.getElementById('paginationContainer').style.display = 'none';
@@ -293,12 +318,17 @@ function renderPagination() {
 
 // Change page
 function changePage(page) {
-  const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
+  const totalPages = Math.ceil((window.totalUsersCount || filteredUsers.length) / usersPerPage);
   console.log('📄 Changing to page:', page, 'of', totalPages);
   if (page >= 1 && page <= totalPages) {
     currentPage = page;
-    renderUsers();
-    renderPagination();
+    
+    // Get current search query
+    const searchInput = document.getElementById('userSearch');
+    const searchQuery = searchInput ? searchInput.value.trim() : '';
+    
+    // Load new page from API
+    loadUsers(page, searchQuery);
     console.log('✅ Page changed successfully');
   } else {
     console.log('❌ Invalid page number');

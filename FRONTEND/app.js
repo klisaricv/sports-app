@@ -717,6 +717,7 @@ let currentResultsPage = 1;
 let resultsPerPage = 10;
 let allResults = [];
 let top5Results = []; // Always store the top 5 results separately
+let totalResultsCount = 0; // Total count from server
 
 async function renderResults(data, market) {
   const currentMarket = market || "1h_over05";
@@ -730,7 +731,9 @@ async function renderResults(data, market) {
   // Always store the top 5 results separately
   top5Results = allResults.slice(0, 5);
 
-  const total = allResults.length;
+  // Set total count - use data.total if available, otherwise use array length
+  totalResultsCount = data?.total || allResults.length;
+  const total = totalResultsCount;
 
   // Dodaj naslov analize iznad rezultata
   const analysisTitle = getAnalysisTitle(currentMarket);
@@ -758,6 +761,7 @@ async function renderResults(data, market) {
 function renderResultsPage() {
   const top5Content = document.getElementById('top5Content');
   const otherContent = document.getElementById('otherContent');
+  const top5Section = document.getElementById('top5');
 
   if (!top5Content || !otherContent) return;
 
@@ -805,26 +809,45 @@ function renderResultsPage() {
     `;
   };
 
-  // Always render TOP 5 (same results always)
-  if (top5Results.length > 0) {
-    top5Results.forEach((match) => {
-      top5Content.innerHTML += cardHTML(match);
-    });
-  } else {
-    top5Content.innerHTML = '<div class="placeholder">Nema top 5 rezultata.</div>';
+  // Show/hide TOP 5 section based on current page
+  if (top5Section) {
+    if (currentResultsPage === 1) {
+      top5Section.style.display = 'block';
+      
+      // Render TOP 5 only on first page
+      if (top5Results.length > 0) {
+        top5Results.forEach((match) => {
+          top5Content.innerHTML += cardHTML(match);
+        });
+      } else {
+        top5Content.innerHTML = '<div class="placeholder">Nema top 5 rezultata.</div>';
+      }
+    } else {
+      top5Section.style.display = 'none';
+    }
   }
 
-  // Render OTHERS with pagination (skip first 5 results)
-  const othersStartIndex = 5 + (currentResultsPage - 1) * resultsPerPage;
-  const othersEndIndex = othersStartIndex + resultsPerPage;
-  const otherResults = allResults.slice(othersStartIndex, othersEndIndex);
+  // Render OTHERS with pagination
+  let othersStartIndex, otherResults;
+  
+  if (currentResultsPage === 1) {
+    // First page: skip first 5 results for OTHERS
+    othersStartIndex = 5;
+    const othersEndIndex = othersStartIndex + resultsPerPage;
+    otherResults = allResults.slice(othersStartIndex, othersEndIndex);
+  } else {
+    // Other pages: show all results for that page
+    othersStartIndex = (currentResultsPage - 1) * resultsPerPage;
+    const othersEndIndex = othersStartIndex + resultsPerPage;
+    otherResults = allResults.slice(othersStartIndex, othersEndIndex);
+  }
 
   if (otherResults.length > 0) {
     otherResults.forEach((match) => {
       otherContent.innerHTML += cardHTML(match);
     });
   } else {
-    otherContent.innerHTML = '<div class="placeholder">Nema ostalih rezultata za ovu stranicu.</div>';
+    otherContent.innerHTML = '<div class="placeholder">Nema rezultata za ovu stranicu.</div>';
   }
 }
 
@@ -841,9 +864,8 @@ function renderResultsPagination() {
   if (!pagination || !prevBtn || !nextBtn || !pageInfo) return;
   if (!paginationTop || !prevBtnTop || !nextBtnTop || !pageInfoTop) return;
 
-  // Calculate pagination only for OTHERS section (skip first 5 results)
-  const othersResultsCount = Math.max(0, allResults.length - 5);
-  const totalPages = Math.ceil(othersResultsCount / resultsPerPage);
+  // Calculate pagination based on total results count
+  const totalPages = Math.ceil(totalResultsCount / resultsPerPage);
 
   if (totalPages <= 1) {
     pagination.style.display = 'none';
@@ -873,9 +895,8 @@ function renderResultsPagination() {
 }
 
 async function changeResultsPage(page) {
-  // Calculate total pages only for OTHERS section
-  const othersResultsCount = Math.max(0, allResults.length - 5);
-  const totalPages = Math.ceil(othersResultsCount / resultsPerPage);
+  // Calculate total pages based on total results count
+  const totalPages = Math.ceil(totalResultsCount / resultsPerPage);
   
   if (page < 1 || page > totalPages) return;
 
@@ -928,6 +949,11 @@ async function loadResultsPage(page) {
 
     const data = await response.json();
     const results = normalizeResults(data);
+    
+    // Update total count from server response
+    if (data.total !== undefined) {
+      totalResultsCount = data.total;
+    }
     
     // Update allResults with new data
     const startIndex = (page - 1) * resultsPerPage;
@@ -1387,6 +1413,7 @@ function clearAnalysisResults() {
   currentResultsPage = 1;
   allResults = [];
   top5Results = [];
+  totalResultsCount = 0;
   
   console.log('🧹 Analysis results cleared');
 }

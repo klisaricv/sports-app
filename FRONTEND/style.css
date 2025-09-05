@@ -3168,3 +3168,125 @@ body:has(.page-title h1:contains("Users Management")) .panel.controls {
     min-height: 44px;
   }
 }
+
+/* ===== USERS PAGE MOBILE FIXES ===== */
+@media (max-width: 768px) {
+  /* Page header mobile layout */
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--spacing-md);
+  }
+  
+  .page-actions {
+    width: 100%;
+  }
+  
+  .page-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  /* Search improvements */
+  .search-input {
+    font-size: 16px;
+    padding: var(--spacing-md);
+    min-height: 48px;
+  }
+  
+  .search-container {
+    margin-bottom: var(--spacing-md);
+  }
+  
+  .users-stats {
+    text-align: center;
+    margin-bottom: var(--spacing-md);
+  }
+  
+  /* Hide table on mobile */
+  .users-table {
+    display: none !important;
+  }
+  
+  .users-table-container {
+    background: transparent;
+    border: none;
+    padding: 0;
+  }
+  
+  /* Mobile cards layout */
+  .users-mobile-cards {
+    display: block;
+  }
+  
+  .user-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-md);
+    margin-bottom: var(--spacing-sm);
+    box-shadow: var(--shadow-sm);
+  }
+  
+  .user-card:hover {
+    background: var(--surface-2);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow);
+  }
+  
+  .user-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-sm);
+    padding-bottom: var(--spacing-sm);
+    border-bottom: 1px solid var(--border);
+  }
+  
+  .user-id {
+    font-weight: var(--font-weight-semibold);
+    color: var(--primary);
+    font-size: var(--font-size-sm);
+  }
+  
+  .user-details {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+  }
+  
+  .user-detail {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .user-detail-label {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    font-weight: var(--font-weight-medium);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+  }
+  
+  .user-detail-value {
+    font-size: var(--font-size-sm);
+    color: var(--text-primary);
+  }
+  
+  /* Pagination mobile */
+  .pagination-container {
+    flex-direction: column;
+    gap: var(--spacing-md);
+  }
+  
+  .pagination-controls {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .pagination-pages {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}

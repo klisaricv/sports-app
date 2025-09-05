@@ -78,6 +78,9 @@ function setupEventListeners() {
   
   // Logout
   document.getElementById('logoutBtn').addEventListener('click', logout);
+  
+  // Handle window resize for mobile layout
+  window.addEventListener('resize', updateMobileLayout);
 }
 
 // Load users from API with pagination
@@ -289,11 +292,13 @@ function renderUsers() {
   console.log('📊 usersPerPage:', usersPerPage);
   
   const tbody = document.getElementById('usersTableBody');
+  const mobileCards = document.getElementById('usersMobileCards');
   const noUsers = document.getElementById('noUsers');
   const pagination = document.getElementById('paginationContainer');
   
   console.log('🔍 DOM elements found:', {
     tbody: !!tbody,
+    mobileCards: !!mobileCards,
     noUsers: !!noUsers,
     pagination: !!pagination
   });
@@ -301,6 +306,7 @@ function renderUsers() {
   if (filteredUsers.length === 0) {
     console.log('❌ No users to display');
     if (tbody) tbody.innerHTML = '';
+    if (mobileCards) mobileCards.innerHTML = '';
     if (noUsers) noUsers.style.display = 'flex';
     if (pagination) pagination.style.display = 'none';
     return;
@@ -316,6 +322,7 @@ function renderUsers() {
   console.log('📊 Page users:', pageUsers.length);
   console.log('🔍 Page users data:', pageUsers);
   
+  // Render desktop table
   if (tbody) {
     tbody.innerHTML = pageUsers.map((user, index) => {
       const globalIndex = startIndex + index + 1;
@@ -334,6 +341,60 @@ function renderUsers() {
     console.log('✅ Table rendered successfully');
   } else {
     console.log('❌ tbody element not found');
+  }
+
+  // Render mobile cards
+  if (mobileCards) {
+    mobileCards.innerHTML = pageUsers.map((user, index) => {
+      const globalIndex = startIndex + index + 1;
+      const registeredDate = new Date(user.created_at).toLocaleDateString('sr-RS');
+      
+      return `
+        <div class="user-card">
+          <div class="user-card-header">
+            <div class="user-id">#${globalIndex}</div>
+          </div>
+          <div class="user-details">
+            <div class="user-detail">
+              <div class="user-detail-label">First Name</div>
+              <div class="user-detail-value">${user.first_name}</div>
+            </div>
+            <div class="user-detail">
+              <div class="user-detail-label">Last Name</div>
+              <div class="user-detail-value">${user.last_name}</div>
+            </div>
+            <div class="user-detail">
+              <div class="user-detail-label">Email</div>
+              <div class="user-detail-value">${user.email}</div>
+            </div>
+            <div class="user-detail">
+              <div class="user-detail-label">Registered</div>
+              <div class="user-detail-value">${registeredDate}</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+    console.log('✅ Mobile cards rendered successfully');
+  }
+
+  // Update mobile layout
+  updateMobileLayout();
+}
+
+// Update mobile layout based on screen size
+function updateMobileLayout() {
+  const table = document.getElementById('usersTable');
+  const mobileCards = document.getElementById('usersMobileCards');
+  
+  if (!table || !mobileCards) return;
+
+  if (window.innerWidth <= 768) {
+    table.style.display = 'none';
+    mobileCards.style.display = 'block';
+  } else {
+    table.style.display = 'table';
+    mobileCards.style.display = 'none';
   }
 }
 

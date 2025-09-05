@@ -1134,18 +1134,20 @@ button[disabled],
 
 /* Header Auth Button Styles */
 .header-actions .auth-btn {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-  padding: var(--spacing-sm) var(--spacing-md);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  text-decoration: none;
-  transition: var(--transition);
-  min-height: 40px; /* Consistent with main auth-btn */
-  height: 40px; /* Fixed height to prevent changes */
+  display: flex !important;
+  align-items: center !important;
+  gap: var(--spacing-xs) !important;
+  padding: var(--spacing-sm) var(--spacing-md) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius) !important;
+  font-size: var(--font-size-sm) !important;
+  font-weight: var(--font-weight-medium) !important;
+  text-decoration: none !important;
+  transition: var(--transition) !important;
+  min-height: 40px !important; /* Consistent with main auth-btn */
+  height: 40px !important; /* Fixed height to prevent changes */
+  width: auto !important; /* Prevent width changes */
+  box-sizing: border-box !important; /* Include padding in height calculation */
 }
 
 .header-actions .auth-btn.primary {
@@ -1161,22 +1163,47 @@ button[disabled],
 }
 
 .header-actions .auth-btn:hover {
-  opacity: 0.9;
+  opacity: 0.9 !important;
+  height: 40px !important; /* Maintain height on hover */
+  min-height: 40px !important;
 }
 
 .header-actions .auth-btn.primary:hover {
-  background: var(--surface-elevated);
-  color: var(--primary);
+  background: var(--surface-elevated) !important;
+  color: var(--primary) !important;
+  height: 40px !important; /* Maintain height on hover */
+  min-height: 40px !important;
 }
 
 .header-actions .auth-btn.secondary:hover {
-  background: var(--surface-elevated);
-  border-color: var(--primary);
-  }
+  background: var(--surface-elevated) !important;
+  border-color: var(--primary) !important;
+  height: 40px !important; /* Maintain height on hover */
+  min-height: 40px !important;
+}
   
   .header-actions .auth-btn svg {
     width: 14px;
     height: 14px;
+}
+
+/* Active state (when clicked) */
+.header-actions .auth-btn:active {
+  height: 40px !important;
+  min-height: 40px !important;
+  transform: none !important; /* Prevent any transform effects */
+}
+
+.header-actions .auth-btn.primary:active {
+  height: 40px !important;
+  min-height: 40px !important;
+  transform: none !important;
+}
+
+.header-actions .auth-btn.secondary:active {
+  height: 40px !important;
+  min-height: 40px !important;
+  transform: none !important;
 }
 
 /* ---------- Placeholders & Loading ---------- */

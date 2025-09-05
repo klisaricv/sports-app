@@ -1206,6 +1206,14 @@ button[disabled],
   transform: none !important;
 }
 
+/* Loading state for header auth buttons */
+.header-actions .auth-btn.loading {
+  height: 40px !important;
+  min-height: 40px !important;
+  position: relative !important;
+  overflow: hidden !important;
+}
+
 /* ---------- Placeholders & Loading ---------- */
 .placeholder {
   color: var(--text-muted);
@@ -1376,6 +1384,8 @@ input:focus-visible {
 .auth-btn.loading {
   position: relative;
   overflow: hidden;
+  height: 40px !important;
+  min-height: 40px !important;
 }
 
 .ripple-effect {

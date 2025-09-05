@@ -167,6 +167,10 @@ function addLoadingAnimation(button) {
   button.style.position = 'relative';
   button.style.overflow = 'hidden';
   
+  // Preserve button dimensions
+  button.style.height = '40px';
+  button.style.minHeight = '40px';
+  
   // Add ripple effect
   const ripple = document.createElement('div');
   ripple.className = 'ripple-effect';
@@ -184,6 +188,10 @@ function removeLoadingAnimation(button) {
   if (ripple) {
     ripple.remove();
   }
+  
+  // Preserve button dimensions
+  button.style.height = '40px';
+  button.style.minHeight = '40px';
 }
 
 function showSuccess(message, title = "Success") {

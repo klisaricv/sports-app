@@ -31,7 +31,10 @@ function disableAllButtons(disable) {
     if (disable) {
       btn.disabled = true;
       btn.style.pointerEvents = 'none';
-      btn.style.opacity = '0.5';
+      // Don't change opacity for auth buttons to prevent height changes
+      if (!btn.classList.contains('auth-btn')) {
+        btn.style.opacity = '0.5';
+      }
     } else {
       btn.disabled = false;
       btn.style.pointerEvents = 'auto';

@@ -402,6 +402,6 @@ function changePage(page) {
 // Logout function
 function logout() {
   localStorage.removeItem('token');
-  localStorage.removeItem('userEmail');
-  window.location.href = '/login';
+  localStorage.removeItem('user');
+  window.location.href = '/';
 }

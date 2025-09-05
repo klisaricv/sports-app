@@ -1181,9 +1181,36 @@ async function logout() {
   } finally {
     // Always clear local storage and update UI
     localStorage.removeItem('user');
+    
+    // Clear analysis results
+    clearAnalysisResults();
+    
     checkAuthStatus();
     showToast('Logged out successfully!', 'success');
   }
+}
+
+// Clear analysis results
+function clearAnalysisResults() {
+  // Hide results section
+  const resultsSection = document.getElementById('resultsSection');
+  if (resultsSection) {
+    resultsSection.style.display = 'none';
+  }
+  
+  // Clear results content
+  const resultsContainer = document.querySelector('.results');
+  if (resultsContainer) {
+    resultsContainer.innerHTML = '';
+  }
+  
+  // Remove analysis title
+  const analysisTitle = document.getElementById('analysis-title');
+  if (analysisTitle) {
+    analysisTitle.remove();
+  }
+  
+  console.log('🧹 Analysis results cleared');
 }
 
 // Function to hide controls on users page

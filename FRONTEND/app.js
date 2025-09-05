@@ -1259,9 +1259,15 @@ async function loadUsersPage() {
     showUsersPage();
     
     // Load users data from API
+    const user = localStorage.getItem('user');
+    const userData = user ? JSON.parse(user) : null;
+    const sessionId = userData ? userData.session_id : null;
+    console.log("🔑 [DEBUG] User from localStorage:", userData);
+    console.log("🔑 [DEBUG] Session ID:", sessionId);
+    
     const response = await fetch('/api/users', {
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
+        'Authorization': `Bearer ${sessionId}`
       }
     });
     

@@ -1250,11 +1250,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
 async function initUsersPage() {
   console.log("🔍 [DEBUG] Initializing users page");
+  console.log("🔍 [DEBUG] Current URL:", window.location.href);
+  console.log("🔍 [DEBUG] Current pathname:", window.location.pathname);
   
   try {
     // Check if user is admin
     const user = localStorage.getItem('user');
     const userData = user ? JSON.parse(user) : null;
+    console.log("🔍 [DEBUG] User data:", userData);
     
     if (!userData || userData.email !== 'klisaricf@gmail.com') {
       console.log("❌ [DEBUG] User is not admin, redirecting to home");

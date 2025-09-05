@@ -2379,3 +2379,15 @@ input:focus-visible {
     font-size: var(--font-size-xs);
   }
 }
+
+/* Admin buttons */
+#prepareDay,
+#usersBtn {
+  transition: var(--transition);
+}
+
+#prepareDay:hover,
+#usersBtn:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow);
+}

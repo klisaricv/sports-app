@@ -2786,6 +2786,13 @@ def serve_register():
         return {"error": f"register.html not found at {register_path}"}
     return FileResponse(str(register_path))
 
+@app.get("/users")
+def serve_users():
+    users_path = FRONTEND_DIR / "users.html"
+    if not users_path.exists():
+        return {"error": f"users.html not found at {users_path}"}
+    return FileResponse(str(users_path))
+
 ALLOWED_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o.strip()]
 # CORS – da frontend može da pristupi backendu
 app.add_middleware(
@@ -6753,6 +6760,50 @@ async def api_check_analysis_exists(request: Request):
         print(f"❌ [ERROR] Check analysis exists failed: {e}")
         return {"error": "Failed to check analysis status"}, 500
 
+@app.get("/api/users")
+async def api_get_users(request: Request):
+    """Get all registered users (admin only)."""
+    try:
+        # Admin check - only klisaricf@gmail.com can access
+        session_id = request.headers.get('Authorization', '').replace('Bearer ', '')
+        if not session_id:
+            return {"error": "Authentication required."}, 401
+        
+        session_data = get_session(session_id)
+        if not session_data:
+            return {"error": "Invalid session. Please log in again."}, 401
+        
+        user_email = session_data.get('email')
+        if user_email != 'klisaricf@gmail.com':
+            return {"error": "Access denied. Admin privileges required."}, 403
+        
+        # Get users from database
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute("""
+            SELECT first_name, last_name, email, created_at
+            FROM users
+            ORDER BY created_at DESC
+        """)
+        
+        users = []
+        for row in cur.fetchall():
+            users.append({
+                "first_name": row[0],
+                "last_name": row[1],
+                "email": row[2],
+                "created_at": row[3]
+            })
+        
+        conn.close()
+        
+        return {"users": users}
+        
+    except Exception as e:
+        print(f"❌ [ERROR] Failed to get users: {e}")
+        return {"error": "Failed to get users"}, 500
+
 @app.get("/api/analyze")
 async def api_analyze(request: Request):
     """
@@ -6796,7 +6847,7 @@ async def api_analyze(request: Request):
         results = read_precomputed_results(from_date, to_date, fh, th, market)
 
         prepared = len(results) > 0
-        # Ako želiš da frontend zna da nije “prepared”, vrati info-flagu
+        # Ako želiš da frontend zna da nije "prepared", vrati info-flagu
         return JSONResponse(status_code=200, content={
             "prepared": prepared,
             "results": results

@@ -1129,11 +1129,12 @@ function checkAuthStatus() {
     
     // Show admin buttons only for admin user
     const isAdmin = userData.email === 'klisaricf@gmail.com';
+    
     if (prepareDayBtn) {
       if (isAdmin) {
-        prepareDayBtn.classList.add('show');
+        prepareDayBtn.style.display = 'flex';
       } else {
-        prepareDayBtn.classList.remove('show');
+        prepareDayBtn.style.display = 'none';
       }
     }
     if (usersBtn) {
@@ -1147,7 +1148,7 @@ function checkAuthStatus() {
     // User is not logged in
     if (authButtons) authButtons.style.display = 'flex';
     if (userMenu) userMenu.style.display = 'none';
-    if (prepareDayBtn) prepareDayBtn.classList.remove('show');
+    if (prepareDayBtn) prepareDayBtn.style.display = 'none';
     if (usersBtn) usersBtn.style.display = 'none';
   }
 }

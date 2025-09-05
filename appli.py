@@ -2767,9 +2767,11 @@ app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR), check_dir=False), 
 
 @app.get("/")
 def serve_home():
+    print("🔍 [DEBUG] / route called - serving home page")
     index_path = FRONTEND_DIR / "index.html"
     if not index_path.exists():
         return {"error": f"index.html not found at {index_path}"}
+    print("✅ [DEBUG] Serving index.html")
     return FileResponse(str(index_path))
 
 @app.get("/login")
@@ -6829,7 +6831,10 @@ async def api_get_users(request: Request):
         """)
 
         users = []
-        for row in cur.fetchall():
+        rows = cur.fetchall()
+        print(f"🔍 [DEBUG] Raw rows from database: {rows}")
+        
+        for row in rows:
             print(f"🔍 [DEBUG] User row: {row}")
             users.append({
                 "first_name": row[0],

@@ -1185,6 +1185,24 @@ async function logout() {
   }
 }
 
+// Function to hide controls on users page
+function hideControlsOnUsersPage() {
+  if (window.location.pathname === '/users' || window.location.href.includes('/users')) {
+    console.log("🔍 [DEBUG] Hiding controls panel on users page - direct check");
+    const controlsPanel = document.querySelector('.panel.controls');
+    if (controlsPanel) {
+      controlsPanel.style.display = 'none !important';
+      controlsPanel.style.visibility = 'hidden';
+      controlsPanel.style.opacity = '0';
+      controlsPanel.style.height = '0';
+      controlsPanel.style.overflow = 'hidden';
+      controlsPanel.style.margin = '0';
+      controlsPanel.style.padding = '0';
+      controlsPanel.style.border = 'none';
+    }
+  }
+}
+
 // ====== WIRE EVENTS once DOM is ready ======
 document.addEventListener("DOMContentLoaded", () => {
   // NE proveravaj globalni loader status automatski - samo kada je potrebno
@@ -1210,6 +1228,21 @@ document.addEventListener("DOMContentLoaded", () => {
     if (controlsPanel) {
       controlsPanel.style.display = '';
       controlsPanel.classList.remove('hidden-on-users');
+    }
+  }
+  
+  // 3.2) Direct URL check to hide controls on users page
+  if (window.location.pathname === '/users' || window.location.href.includes('/users')) {
+    console.log("🔍 [DEBUG] Hiding controls panel on users page");
+    const controlsPanel = document.querySelector('.panel.controls');
+    if (controlsPanel) {
+      controlsPanel.style.display = 'none !important';
+      controlsPanel.style.visibility = 'hidden';
+      controlsPanel.style.opacity = '0';
+      controlsPanel.style.height = '0';
+      controlsPanel.style.overflow = 'hidden';
+      controlsPanel.style.margin = '0';
+      controlsPanel.style.padding = '0';
     }
   }
   
@@ -1251,6 +1284,25 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   
   // Users button is now a direct link - no JavaScript needed
+  
+  // Final check to hide controls on users page
+  setTimeout(() => {
+    hideControlsOnUsersPage();
+  }, 100);
+});
+
+// Listen for URL changes (for SPA navigation)
+window.addEventListener('popstate', () => {
+  setTimeout(() => {
+    hideControlsOnUsersPage();
+  }, 50);
+});
+
+// Listen for hash changes
+window.addEventListener('hashchange', () => {
+  setTimeout(() => {
+    hideControlsOnUsersPage();
+  }, 50);
 });
 
 // ===== USERS PAGE FUNCTIONS =====

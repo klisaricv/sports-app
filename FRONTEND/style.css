@@ -2043,6 +2043,16 @@ body:has(.page-title h1:contains("👥 Users Management")) .panel.controls {
   display: none !important;
 }
 
+/* Direct CSS rule for /users page */
+.panel.controls {
+  display: block;
+}
+
+/* Hide on users page specifically */
+body:has(.page-title h1:contains("👥 Users Management")) .panel.controls {
+  display: none !important;
+}
+
 .users-page {
   max-width: 1200px;
   margin: 0 auto;

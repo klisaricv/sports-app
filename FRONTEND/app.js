@@ -1223,12 +1223,17 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
   
-  // 3.2) Hide controls on users page
+  // 3.2) Hide controls on users page - wait for DOM to be ready
   if (window.location.pathname === '/users') {
-    const controlsPanel = document.querySelector('.panel.controls');
-    if (controlsPanel) {
-      controlsPanel.style.display = 'none';
-    }
+    setTimeout(() => {
+      const controlsPanel = document.querySelector('.panel.controls');
+      if (controlsPanel) {
+        controlsPanel.style.display = 'none';
+        console.log('✅ Controls panel hidden on users page');
+      } else {
+        console.log('❌ Controls panel not found');
+      }
+    }, 500);
   }
   
   // 4) Initialize logout button

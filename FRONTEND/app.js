@@ -1187,18 +1187,10 @@ async function logout() {
 
 // Function to hide controls on users page
 function hideControlsOnUsersPage() {
-  if (window.location.pathname === '/users' || window.location.href.includes('/users')) {
-    console.log("🔍 [DEBUG] Hiding controls panel on users page - direct check");
+  if (window.location.pathname === '/users') {
     const controlsPanel = document.querySelector('.panel.controls');
     if (controlsPanel) {
-      controlsPanel.style.display = 'none !important';
-      controlsPanel.style.visibility = 'hidden';
-      controlsPanel.style.opacity = '0';
-      controlsPanel.style.height = '0';
-      controlsPanel.style.overflow = 'hidden';
-      controlsPanel.style.margin = '0';
-      controlsPanel.style.padding = '0';
-      controlsPanel.style.border = 'none';
+      controlsPanel.style.display = 'none';
     }
   }
 }
@@ -1231,18 +1223,11 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
   
-  // 3.2) Direct URL check to hide controls on users page
-  if (window.location.pathname === '/users' || window.location.href.includes('/users')) {
-    console.log("🔍 [DEBUG] Hiding controls panel on users page");
+  // 3.2) Hide controls on users page
+  if (window.location.pathname === '/users') {
     const controlsPanel = document.querySelector('.panel.controls');
     if (controlsPanel) {
-      controlsPanel.style.display = 'none !important';
-      controlsPanel.style.visibility = 'hidden';
-      controlsPanel.style.opacity = '0';
-      controlsPanel.style.height = '0';
-      controlsPanel.style.overflow = 'hidden';
-      controlsPanel.style.margin = '0';
-      controlsPanel.style.padding = '0';
+      controlsPanel.style.display = 'none';
     }
   }
   

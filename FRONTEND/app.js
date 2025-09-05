@@ -1431,6 +1431,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnPrep = document.getElementById("prepareDay");
   console.log("🔍 [DEBUG] prepareDay button found:", btnPrep);
 
+  // Teams Stats Button
+  const teamsStatsBtn = document.getElementById("teamsStatsBtn");
+  if (teamsStatsBtn) {
+    teamsStatsBtn.addEventListener("click", toggleTeamsStats);
+  }
+
+  // Original Analyze buttons (now in hidden group)
   if (btn1p) btn1p.addEventListener("click", () => fetchAnalysis("1p"));
   if (btnGG) btnGG.addEventListener("click", () => fetchAnalysis("GG"));
   if (btn1pls) btn1pls.addEventListener("click", () => fetchAnalysis("O15"));
@@ -1442,6 +1449,29 @@ document.addEventListener("DOMContentLoaded", () => {
       showPrepareDayModal();
     });
   }
+
+  // Teams Stats buttons
+  const teamGGHT = document.getElementById("teamGGHT");
+  const team1plusHT = document.getElementById("team1plusHT");
+  const team2plusHT = document.getElementById("team2plusHT");
+  const team3plusFT = document.getElementById("team3plusFT");
+  const team4plusFT = document.getElementById("team4plusFT");
+  const teamAvgMostScored = document.getElementById("teamAvgMostScored");
+  const teamAvgMostConceded = document.getElementById("teamAvgMostConceded");
+  const teamGGFT = document.getElementById("teamGGFT");
+  const teamGG3plusFT = document.getElementById("teamGG3plusFT");
+  const teamXHT = document.getElementById("teamXHT");
+
+  if (teamGGHT) teamGGHT.addEventListener("click", () => handleTeamStats("GG", "HT"));
+  if (team1plusHT) team1plusHT.addEventListener("click", () => handleTeamStats("1+", "HT"));
+  if (team2plusHT) team2plusHT.addEventListener("click", () => handleTeamStats("2+", "HT"));
+  if (team3plusFT) team3plusFT.addEventListener("click", () => handleTeamStats("3+", "FT"));
+  if (team4plusFT) team4plusFT.addEventListener("click", () => handleTeamStats("4+", "FT"));
+  if (teamAvgMostScored) teamAvgMostScored.addEventListener("click", () => handleTeamStats("AVG_MOST_SCORED", "FT"));
+  if (teamAvgMostConceded) teamAvgMostConceded.addEventListener("click", () => handleTeamStats("AVG_MOST_CONCEDED", "FT"));
+  if (teamGGFT) teamGGFT.addEventListener("click", () => handleTeamStats("GG", "FT"));
+  if (teamGG3plusFT) teamGG3plusFT.addEventListener("click", () => handleTeamStats("GG3+", "FT"));
+  if (teamXHT) teamXHT.addEventListener("click", () => handleTeamStats("X", "HT"));
   
   // Users button is now a direct link - no JavaScript needed
   
@@ -1464,6 +1494,59 @@ window.addEventListener('hashchange', () => {
     hideControlsOnUsersPage();
   }, 50);
 });
+
+// ===== TEAMS STATS FUNCTIONS =====
+
+// Toggle between analyze buttons and teams stats buttons
+function toggleTeamsStats() {
+  const teamsStatsBtn = document.getElementById('teamsStatsBtn');
+  const analyzeButtonsGroup = document.getElementById('analyzeButtonsGroup');
+  const teamsStatsButtonsGroup = document.getElementById('teamsStatsButtonsGroup');
+  
+  if (!teamsStatsBtn || !analyzeButtonsGroup || !teamsStatsButtonsGroup) return;
+  
+  const isTeamsStatsVisible = teamsStatsButtonsGroup.style.display !== 'none';
+  
+  if (isTeamsStatsVisible) {
+    // Show analyze buttons, hide teams stats
+    teamsStatsBtn.innerHTML = `
+      <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+        <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" stroke="currentColor" stroke-width="2" fill="none"/>
+        <rect x="8" y="2" width="8" height="4" rx="1" ry="1" stroke="currentColor" stroke-width="2" fill="none"/>
+        <path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span>TEAMS STATS</span>
+    `;
+    teamsStatsBtn.className = 'btn primary';
+    analyzeButtonsGroup.style.display = 'flex';
+    teamsStatsButtonsGroup.style.display = 'none';
+  } else {
+    // Show teams stats buttons, hide analyze buttons
+    teamsStatsBtn.innerHTML = `
+      <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+        <path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span>BACK TO ANALYZE</span>
+    `;
+    teamsStatsBtn.className = 'btn secondary';
+    analyzeButtonsGroup.style.display = 'none';
+    teamsStatsButtonsGroup.style.display = 'flex';
+  }
+}
+
+// Handle team stats button clicks
+function handleTeamStats(market, period) {
+  console.log('🏆 Team Stats clicked:', { market, period });
+  
+  // Show loading state
+  showToast('Loading team stats...', 'info');
+  
+  // TODO: Implement team stats API call
+  // For now, just show a placeholder message
+  setTimeout(() => {
+    showToast(`Team Stats: ${market} ${period} - Coming soon!`, 'success');
+  }, 1000);
+}
 
 // ===== USERS PAGE FUNCTIONS =====
 

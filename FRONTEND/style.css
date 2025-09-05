@@ -2906,6 +2906,43 @@ body:has(.page-title h1:contains("Users Management")) .panel.controls {
   }
 }
 
+/* ===== TEAMS STATS BUTTONS ===== */
+#teamsStatsButtonsGroup {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
+}
+
+#teamsStatsButtonsGroup .btn {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+  min-height: 48px;
+}
+
+#teamsStatsButtonsGroup .btn span {
+  flex: 1;
+  text-align: left;
+}
+
+/* Mobile responsive for teams stats */
+@media (max-width: 768px) {
+  #teamsStatsButtonsGroup {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-xs);
+  }
+  
+  #teamsStatsButtonsGroup .btn {
+    padding: var(--spacing-sm);
+    font-size: var(--font-size-xs);
+    min-height: 44px;
+  }
+}
+
 /* Mobile devices */
 @media (max-width: 640px) {
   .users-page {
@@ -3288,5 +3325,42 @@ body:has(.page-title h1:contains("Users Management")) .panel.controls {
   .pagination-pages {
     flex-wrap: wrap;
     justify-content: center;
+  }
+}
+
+/* ===== TEAMS STATS BUTTONS ===== */
+#teamsStatsButtonsGroup {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
+}
+
+#teamsStatsButtonsGroup .btn {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+  min-height: 48px;
+}
+
+#teamsStatsButtonsGroup .btn span {
+  flex: 1;
+  text-align: left;
+}
+
+/* Mobile responsive for teams stats */
+@media (max-width: 768px) {
+  #teamsStatsButtonsGroup {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-xs);
+  }
+  
+  #teamsStatsButtonsGroup .btn {
+    padding: var(--spacing-sm);
+    font-size: var(--font-size-xs);
+    min-height: 44px;
   }
 }

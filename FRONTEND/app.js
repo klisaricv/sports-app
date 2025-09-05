@@ -716,6 +716,7 @@ function getAnalysisTitle(market) {
 let currentResultsPage = 1;
 let resultsPerPage = 10;
 let allResults = [];
+let top5Results = []; // Always store the top 5 results separately
 
 async function renderResults(data, market) {
   const currentMarket = market || "1h_over05";
@@ -725,6 +726,9 @@ async function renderResults(data, market) {
   // Initialize with first page data
   allResults = Array.isArray(data) ? data : [];
   currentResultsPage = 1;
+
+  // Always store the top 5 results separately
+  top5Results = allResults.slice(0, 5);
 
   const total = allResults.length;
 
@@ -754,24 +758,12 @@ async function renderResults(data, market) {
 function renderResultsPage() {
   const top5Content = document.getElementById('top5Content');
   const otherContent = document.getElementById('otherContent');
-  const countTop = document.getElementById('countTop');
-  const countOther = document.getElementById('countOther');
 
   if (!top5Content || !otherContent) return;
-
-  const startIndex = (currentResultsPage - 1) * resultsPerPage;
-  const endIndex = startIndex + resultsPerPage;
-  const pageResults = allResults.slice(startIndex, endIndex);
 
   // Clear content areas
   top5Content.innerHTML = '';
   otherContent.innerHTML = '';
-
-  if (pageResults.length === 0) {
-    top5Content.innerHTML = '<div class="placeholder">Nema rezultata za ovu stranicu.</div>';
-    otherContent.innerHTML = '<div class="placeholder">Nema rezultata za ovu stranicu.</div>';
-    return;
-  }
 
   const cardHTML = (m) => {
     // Format kickoff time
@@ -813,20 +805,20 @@ function renderResultsPage() {
     `;
   };
 
-  // Split results into TOP 5 and OTHERS
-  const top5Results = pageResults.slice(0, 5);
-  const otherResults = pageResults.slice(5);
-
-  // Render TOP 5
+  // Always render TOP 5 (same results always)
   if (top5Results.length > 0) {
     top5Results.forEach((match) => {
       top5Content.innerHTML += cardHTML(match);
     });
   } else {
-    top5Content.innerHTML = '<div class="placeholder">Nema top 5 rezultata za ovu stranicu.</div>';
+    top5Content.innerHTML = '<div class="placeholder">Nema top 5 rezultata.</div>';
   }
 
-  // Render OTHERS
+  // Render OTHERS with pagination (skip first 5 results)
+  const othersStartIndex = 5 + (currentResultsPage - 1) * resultsPerPage;
+  const othersEndIndex = othersStartIndex + resultsPerPage;
+  const otherResults = allResults.slice(othersStartIndex, othersEndIndex);
+
   if (otherResults.length > 0) {
     otherResults.forEach((match) => {
       otherContent.innerHTML += cardHTML(match);
@@ -834,10 +826,6 @@ function renderResultsPage() {
   } else {
     otherContent.innerHTML = '<div class="placeholder">Nema ostalih rezultata za ovu stranicu.</div>';
   }
-
-  // Update counts
-  if (countTop) countTop.textContent = `(${top5Results.length})`;
-  if (countOther) countOther.textContent = `(${otherResults.length})`;
 }
 
 function renderResultsPagination() {
@@ -853,7 +841,9 @@ function renderResultsPagination() {
   if (!pagination || !prevBtn || !nextBtn || !pageInfo) return;
   if (!paginationTop || !prevBtnTop || !nextBtnTop || !pageInfoTop) return;
 
-  const totalPages = Math.ceil(allResults.length / resultsPerPage);
+  // Calculate pagination only for OTHERS section (skip first 5 results)
+  const othersResultsCount = Math.max(0, allResults.length - 5);
+  const totalPages = Math.ceil(othersResultsCount / resultsPerPage);
 
   if (totalPages <= 1) {
     pagination.style.display = 'none';
@@ -883,7 +873,9 @@ function renderResultsPagination() {
 }
 
 async function changeResultsPage(page) {
-  const totalPages = Math.ceil(allResults.length / resultsPerPage);
+  // Calculate total pages only for OTHERS section
+  const othersResultsCount = Math.max(0, allResults.length - 5);
+  const totalPages = Math.ceil(othersResultsCount / resultsPerPage);
   
   if (page < 1 || page > totalPages) return;
 
@@ -1394,6 +1386,7 @@ function clearAnalysisResults() {
   // Reset pagination variables
   currentResultsPage = 1;
   allResults = [];
+  top5Results = [];
   
   console.log('🧹 Analysis results cleared');
 }

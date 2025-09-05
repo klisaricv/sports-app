@@ -717,9 +717,12 @@ let currentResultsPage = 1;
 let resultsPerPage = 10;
 let allResults = [];
 
-function renderResults(data, market) {
+async function renderResults(data, market) {
   const currentMarket = market || "1h_over05";
   window.currentAnalysisResults = data;
+  window.currentAnalysisMarket = currentMarket;
+  
+  // Initialize with first page data
   allResults = Array.isArray(data) ? data : [];
   currentResultsPage = 1;
 
@@ -743,23 +746,30 @@ function renderResults(data, market) {
     titleEl.querySelector('.analysis-subtitle').textContent = `Analiza završena • ${total} mečeva pronađeno`;
   }
 
-  // Render paginated results
+  // Render first page
   renderResultsPage();
   renderResultsPagination();
 }
 
 function renderResultsPage() {
-  const resultsContent = document.getElementById('resultsContent');
-  if (!resultsContent) return;
+  const top5Content = document.getElementById('top5Content');
+  const otherContent = document.getElementById('otherContent');
+  const countTop = document.getElementById('countTop');
+  const countOther = document.getElementById('countOther');
+
+  if (!top5Content || !otherContent) return;
 
   const startIndex = (currentResultsPage - 1) * resultsPerPage;
   const endIndex = startIndex + resultsPerPage;
   const pageResults = allResults.slice(startIndex, endIndex);
 
-  resultsContent.innerHTML = '';
+  // Clear content areas
+  top5Content.innerHTML = '';
+  otherContent.innerHTML = '';
 
   if (pageResults.length === 0) {
-    resultsContent.innerHTML = '<div class="placeholder">Nema rezultata za ovu stranicu.</div>';
+    top5Content.innerHTML = '<div class="placeholder">Nema rezultata za ovu stranicu.</div>';
+    otherContent.innerHTML = '<div class="placeholder">Nema rezultata za ovu stranicu.</div>';
     return;
   }
 
@@ -796,55 +806,152 @@ function renderResultsPage() {
             <span class="final-value">${fmt(m.final_percent, '%')}</span>
           </div>
           <div class="narrative">
-            ${buildSimplifiedNarrative(m, window.currentAnalysisResults ? "1h_over05" : "1h_over05")}
+            ${buildSimplifiedNarrative(m, window.currentAnalysisMarket || "1h_over05")}
           </div>
         </div>
       </div>
     `;
   };
 
-  pageResults.forEach((match) => {
-    resultsContent.innerHTML += cardHTML(match);
-  });
+  // Split results into TOP 5 and OTHERS
+  const top5Results = pageResults.slice(0, 5);
+  const otherResults = pageResults.slice(5);
+
+  // Render TOP 5
+  if (top5Results.length > 0) {
+    top5Results.forEach((match) => {
+      top5Content.innerHTML += cardHTML(match);
+    });
+  } else {
+    top5Content.innerHTML = '<div class="placeholder">Nema top 5 rezultata za ovu stranicu.</div>';
+  }
+
+  // Render OTHERS
+  if (otherResults.length > 0) {
+    otherResults.forEach((match) => {
+      otherContent.innerHTML += cardHTML(match);
+    });
+  } else {
+    otherContent.innerHTML = '<div class="placeholder">Nema ostalih rezultata za ovu stranicu.</div>';
+  }
+
+  // Update counts
+  if (countTop) countTop.textContent = `(${top5Results.length})`;
+  if (countOther) countOther.textContent = `(${otherResults.length})`;
 }
 
 function renderResultsPagination() {
   const pagination = document.getElementById('resultsPagination');
+  const paginationTop = document.getElementById('resultsPaginationTop');
   const prevBtn = document.getElementById('prevPage');
   const nextBtn = document.getElementById('nextPage');
   const pageInfo = document.getElementById('pageInfo');
+  const prevBtnTop = document.getElementById('prevPageTop');
+  const nextBtnTop = document.getElementById('nextPageTop');
+  const pageInfoTop = document.getElementById('pageInfoTop');
 
   if (!pagination || !prevBtn || !nextBtn || !pageInfo) return;
+  if (!paginationTop || !prevBtnTop || !nextBtnTop || !pageInfoTop) return;
 
   const totalPages = Math.ceil(allResults.length / resultsPerPage);
 
   if (totalPages <= 1) {
     pagination.style.display = 'none';
+    paginationTop.style.display = 'none';
     return;
   }
 
   pagination.style.display = 'flex';
+  paginationTop.style.display = 'flex';
 
   // Update button states
   prevBtn.disabled = currentResultsPage <= 1;
   nextBtn.disabled = currentResultsPage >= totalPages;
+  prevBtnTop.disabled = currentResultsPage <= 1;
+  nextBtnTop.disabled = currentResultsPage >= totalPages;
 
   // Update page info
-  pageInfo.textContent = `Strana ${currentResultsPage} od ${totalPages}`;
+  const pageText = `Strana ${currentResultsPage} od ${totalPages}`;
+  pageInfo.textContent = pageText;
+  pageInfoTop.textContent = pageText;
 
   // Add event listeners
   prevBtn.onclick = () => changeResultsPage(currentResultsPage - 1);
   nextBtn.onclick = () => changeResultsPage(currentResultsPage + 1);
+  prevBtnTop.onclick = () => changeResultsPage(currentResultsPage - 1);
+  nextBtnTop.onclick = () => changeResultsPage(currentResultsPage + 1);
 }
 
-function changeResultsPage(page) {
+async function changeResultsPage(page) {
   const totalPages = Math.ceil(allResults.length / resultsPerPage);
   
   if (page < 1 || page > totalPages) return;
 
   currentResultsPage = page;
-  renderResultsPage();
+  
+  // Load results from server for this page
+  await loadResultsPage(page);
   renderResultsPagination();
+}
+
+async function loadResultsPage(page) {
+  try {
+    showLoader(`Učitavam stranicu ${page}...`);
+    
+    const user = localStorage.getItem('user');
+    const userData = user ? JSON.parse(user) : null;
+    const sessionId = userData?.session_id;
+    
+    if (!sessionId) {
+      throw new Error('Niste prijavljeni');
+    }
+
+    // Get current analysis parameters
+    const fromDate = document.getElementById('fromDate')?.value;
+    const toDate = document.getElementById('toDate')?.value;
+    const market = window.currentAnalysisMarket || '1h_over05';
+    
+    if (!fromDate || !toDate) {
+      throw new Error('Nedostaju datumi za analizu');
+    }
+
+    // Build API URL with pagination
+    const apiUrl = new URL(`${BACKEND_URL}/api/analyze`, window.location.origin);
+    apiUrl.searchParams.set('from_date', fromDate);
+    apiUrl.searchParams.set('to_date', toDate);
+    apiUrl.searchParams.set('market', market);
+    apiUrl.searchParams.set('page', page);
+    apiUrl.searchParams.set('limit', resultsPerPage);
+
+    const response = await fetch(apiUrl.toString(), {
+      headers: {
+        'Authorization': `Bearer ${sessionId}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    const results = normalizeResults(data);
+    
+    // Update allResults with new data
+    const startIndex = (page - 1) * resultsPerPage;
+    results.forEach((result, index) => {
+      allResults[startIndex + index] = result;
+    });
+    
+    // Render the page
+    renderResultsPage();
+    
+  } catch (error) {
+    console.error('Error loading results page:', error);
+    showError('Greška pri učitavanju stranice', error.message);
+  } finally {
+    hideLoader();
+  }
 }
 
 // ====== HELPERS ======
@@ -1253,15 +1360,29 @@ function clearAnalysisResults() {
   }
   
   // Clear results content
-  const resultsContent = document.getElementById('resultsContent');
-  if (resultsContent) {
-    resultsContent.innerHTML = '<div class="placeholder">Nema rezultata analize još.</div>';
+  const top5Content = document.getElementById('top5Content');
+  const otherContent = document.getElementById('otherContent');
+  if (top5Content) {
+    top5Content.innerHTML = '<div class="placeholder">Nema rezultata analize još.</div>';
   }
+  if (otherContent) {
+    otherContent.innerHTML = '<div class="placeholder">Nema rezultata analize još.</div>';
+  }
+  
+  // Reset counts
+  const countTop = document.getElementById('countTop');
+  const countOther = document.getElementById('countOther');
+  if (countTop) countTop.textContent = '(0)';
+  if (countOther) countOther.textContent = '(0)';
   
   // Hide pagination
   const pagination = document.getElementById('resultsPagination');
+  const paginationTop = document.getElementById('resultsPaginationTop');
   if (pagination) {
     pagination.style.display = 'none';
+  }
+  if (paginationTop) {
+    paginationTop.style.display = 'none';
   }
   
   // Remove analysis title

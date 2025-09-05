@@ -2035,22 +2035,21 @@ input:focus-visible {
   color: var(--text-primary);
 }
 
-/* Hide controls section only on users page */
-body[data-page="users"] .panel.controls,
-.users-page .panel.controls,
-body:has(.page-title h1:contains("Users Management")) .panel.controls,
-body:has(.page-title h1:contains("👥 Users Management")) .panel.controls {
-  display: none !important;
-}
-
-/* Direct CSS rule for /users page */
+/* Hide controls panel on users page */
 .panel.controls {
   display: block;
 }
 
-/* Hide on users page specifically */
-body:has(.page-title h1:contains("👥 Users Management")) .panel.controls {
+/* Force hide on users page */
+body:has(.page-title h1:contains("👥 Users Management")) .panel.controls,
+body:has(.page-title h1:contains("Users Management")) .panel.controls {
   display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 .users-page {

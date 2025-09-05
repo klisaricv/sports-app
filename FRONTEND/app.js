@@ -1314,6 +1314,16 @@ async function initUsersPage() {
       controlsPanel.classList.add('hidden-on-users');
     }
     
+    // Load users.js dynamically
+    if (!window.usersPageLoaded) {
+      console.log("🔍 [DEBUG] Loading users.js dynamically");
+      const script = document.createElement('script');
+      script.src = '/static/users.js';
+      script.defer = true;
+      document.head.appendChild(script);
+      window.usersPageLoaded = true;
+    }
+    
     // Check if user is admin
     const user = localStorage.getItem('user');
     const userData = user ? JSON.parse(user) : null;

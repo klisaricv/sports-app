@@ -2797,6 +2797,17 @@ def serve_users():
     print("✅ [DEBUG] Serving users.html")
     return FileResponse(str(users_path))
 
+@app.get("/admin/users")
+def serve_admin_users():
+    print("🔍 [DEBUG] /admin/users route called")
+    users_path = FRONTEND_DIR / "users.html"
+    print(f"🔍 [DEBUG] Looking for users.html at: {users_path}")
+    if not users_path.exists():
+        print(f"❌ [DEBUG] users.html not found at {users_path}")
+        return {"error": f"users.html not found at {users_path}"}
+    print("✅ [DEBUG] Serving users.html from /admin/users")
+    return FileResponse(str(users_path))
+
 ALLOWED_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o.strip()]
 # CORS – da frontend može da pristupi backendu
 app.add_middleware(

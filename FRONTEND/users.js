@@ -204,11 +204,11 @@ function renderUsers() {
     
     return `
       <tr>
-        <td data-label="ID">${globalIndex}</td>
-        <td data-label="First Name">${user.first_name}</td>
-        <td data-label="Last Name">${user.last_name}</td>
-        <td data-label="Email">${user.email}</td>
-        <td data-label="Registered">${registeredDate}</td>
+        <td>${globalIndex}</td>
+        <td>${user.first_name}</td>
+        <td>${user.last_name}</td>
+        <td>${user.email}</td>
+        <td>${registeredDate}</td>
       </tr>
     `;
   }).join('');

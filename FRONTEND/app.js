@@ -1198,9 +1198,12 @@ document.addEventListener("DOMContentLoaded", () => {
   checkAuthStatus();
   
   // 3.1) Check if we're on users page
+  console.log("🔍 [DEBUG] Current pathname:", window.location.pathname);
   if (window.location.pathname === '/users') {
     console.log("🔍 [DEBUG] On users page, initializing users functionality");
     initUsersPage();
+  } else {
+    console.log("🔍 [DEBUG] Not on users page, skipping users initialization");
   }
   
   // 4) Initialize logout button

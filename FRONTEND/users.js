@@ -111,6 +111,8 @@ async function loadUsers(page = 1, searchQuery = '') {
       apiUrl.searchParams.set('search', searchQuery);
     }
     
+    console.log('🌐 API URL with params:', apiUrl.toString());
+    
     console.log('🌐 Making API request to:', apiUrl.toString());
     const response = await fetch(apiUrl.toString(), {
       headers: {
@@ -187,8 +189,70 @@ function handleSearch(e) {
   // Debounce search - wait 300ms after user stops typing
   searchTimeout = setTimeout(() => {
     currentPage = 1;
-    loadUsers(1, query);
+    
+    if (query) {
+      // For now, use client-side search since backend might not support search params
+      console.log('🔍 Using client-side search for:', query);
+      performClientSideSearch(query);
+    } else {
+      // No search query, load first page
+      loadUsers(1, '');
+    }
   }, 300);
+}
+
+// Client-side search
+function performClientSideSearch(query) {
+  console.log('🔍 Performing client-side search for:', query);
+  
+  // Always load all users first to ensure we have complete data
+  loadAllUsers().then(() => {
+    filterUsers(query);
+  }).catch(() => {
+    console.error('❌ Failed to load users for search');
+  });
+}
+
+// Load all users for client-side search
+async function loadAllUsers() {
+  console.log('📥 Loading all users for client-side search...');
+  const user = localStorage.getItem('user');
+  const userData = user ? JSON.parse(user) : null;
+  const sessionId = userData?.session_id;
+  
+  const response = await fetch('/api/users', {
+    headers: {
+      'Authorization': `Bearer ${sessionId}`
+    }
+  });
+  
+  if (response.ok) {
+    const data = await response.json();
+    allUsers = data.users || [];
+    console.log('✅ All users loaded for search:', allUsers.length);
+  } else {
+    console.error('❌ Failed to load all users');
+  }
+}
+
+// Filter users client-side
+function filterUsers(query) {
+  console.log('🔍 Filtering users client-side:', query);
+  
+  filteredUsers = allUsers.filter(user => {
+    const fullName = `${user.first_name} ${user.last_name}`.toLowerCase();
+    return user.first_name.toLowerCase().includes(query.toLowerCase()) ||
+           user.last_name.toLowerCase().includes(query.toLowerCase()) ||
+           fullName.includes(query.toLowerCase()) ||
+           user.email.toLowerCase().includes(query.toLowerCase());
+  });
+  
+  console.log('✅ Filtered users:', filteredUsers.length);
+  
+  currentPage = 1;
+  updateStats();
+  renderUsers();
+  renderPagination();
 }
 
 // Clear search

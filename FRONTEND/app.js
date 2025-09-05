@@ -485,7 +485,8 @@ function ensureModernShell() {
   }
 
   // Kontrole: probaj prebaciti stare inpute/dugmad u modern panel
-  if (!document.querySelector(".controls__row")) {
+  // Skip creating controls panel on users page
+  if (!document.querySelector(".controls__row") && window.location.pathname !== '/users') {
     const panel = document.createElement("section");
     panel.className = "panel";
     panel.innerHTML = `

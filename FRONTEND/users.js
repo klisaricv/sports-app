@@ -50,9 +50,6 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('❌ Logout button not found');
   }
   
-  // Hide controls section
-  hideControlsSection();
-  
   // Load users
   console.log('📊 Loading users...');
   loadUsers();
@@ -60,9 +57,6 @@ document.addEventListener('DOMContentLoaded', function() {
   // Setup event listeners
   console.log('🎯 Setting up event listeners...');
   setupEventListeners();
-  
-  // Setup responsive table
-  setupResponsiveTable();
 });
 
 // Setup event listeners
@@ -275,125 +269,4 @@ function logout() {
   localStorage.removeItem('token');
   localStorage.removeItem('userEmail');
   window.location.href = '/login';
-}
-
-// Hide controls section
-function hideControlsSection() {
-  console.log('🚫 Hiding controls section...');
-  
-  // Function to hide controls panel
-  const hideControls = () => {
-    const controlsPanel = document.querySelector('.panel:has(.controls__row)');
-    if (controlsPanel) {
-      controlsPanel.style.display = 'none';
-      console.log('✅ Controls panel hidden');
-    }
-  };
-  
-  // Hide immediately if already exists
-  hideControls();
-  
-  // Watch for dynamically added controls panel
-  const observer = new MutationObserver((mutations) => {
-    mutations.forEach((mutation) => {
-      if (mutation.type === 'childList') {
-        mutation.addedNodes.forEach((node) => {
-          if (node.nodeType === Node.ELEMENT_NODE) {
-            if (node.classList && node.classList.contains('panel')) {
-              const controlsRow = node.querySelector('.controls__row');
-              if (controlsRow) {
-                node.style.display = 'none';
-                console.log('✅ Dynamically added controls panel hidden');
-              }
-            }
-          }
-        });
-      }
-    });
-  });
-  
-  // Start observing
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true
-  });
-  
-  console.log('👀 Started watching for controls panel');
-}
-
-// Setup responsive table
-function setupResponsiveTable() {
-  console.log('📱 Setting up responsive table...');
-  
-  const table = document.getElementById('usersTable');
-  if (!table) return;
-  
-  // Add responsive wrapper
-  const wrapper = document.createElement('div');
-  wrapper.className = 'table-responsive-wrapper';
-  wrapper.style.overflowX = 'auto';
-  wrapper.style.width = '100%';
-  
-  // Wrap the table
-  table.parentNode.insertBefore(wrapper, table);
-  wrapper.appendChild(table);
-  
-  // Add responsive styles
-  const style = document.createElement('style');
-  style.textContent = `
-    .table-responsive-wrapper {
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-    }
-    
-    @media (max-width: 768px) {
-      .users-table {
-        min-width: 600px;
-        font-size: 0.875rem;
-      }
-      
-      .users-table th,
-      .users-table td {
-        padding: 0.5rem 0.25rem;
-        white-space: nowrap;
-      }
-      
-      .users-table th:first-child,
-      .users-table td:first-child {
-        position: sticky;
-        left: 0;
-        background: var(--surface);
-        z-index: 1;
-        border-right: 1px solid var(--border);
-      }
-    }
-    
-    @media (max-width: 640px) {
-      .users-table {
-        min-width: 500px;
-        font-size: 0.75rem;
-      }
-      
-      .users-table th,
-      .users-table td {
-        padding: 0.25rem 0.125rem;
-      }
-    }
-    
-    @media (max-width: 480px) {
-      .users-table {
-        min-width: 400px;
-        font-size: 0.625rem;
-      }
-      
-      .users-table th,
-      .users-table td {
-        padding: 0.125rem 0.0625rem;
-      }
-    }
-  `;
-  
-  document.head.appendChild(style);
-  
-  console.log('✅ Responsive table setup complete');
 }

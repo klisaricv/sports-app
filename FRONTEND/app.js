@@ -1254,6 +1254,16 @@ async function initUsersPage() {
   console.log("🔍 [DEBUG] Current pathname:", window.location.pathname);
   
   try {
+    // Hide controls panel on users page
+    const controlsPanel = document.querySelector('.panel.controls');
+    if (controlsPanel) {
+      controlsPanel.style.display = 'none';
+      controlsPanel.classList.add('hidden-on-users');
+    }
+    
+    // Set page attribute for CSS targeting
+    document.body.setAttribute('data-page', 'users');
+    
     // Check if user is admin
     const user = localStorage.getItem('user');
     const userData = user ? JSON.parse(user) : null;

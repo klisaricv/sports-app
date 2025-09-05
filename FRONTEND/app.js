@@ -1287,15 +1287,32 @@ async function loadUsersPage() {
 }
 
 function hideMainContent() {
+  // Hide all main content sections
   const mainContent = document.querySelector('.main-content');
   const analysisSection = document.querySelector('.analysis-section');
   const resultsSection = document.querySelector('.results-section');
   const headerControls = document.querySelector('.header-controls');
   
+  // Hide date/time controls
+  const dateControls = document.querySelector('.date-controls');
+  const fromDate = document.querySelector('input[name="from"]');
+  const toDate = document.querySelector('input[name="to"]');
+  
+  // Hide analysis buttons
+  const analyzeButtons = document.querySelector('.analysis-buttons');
+  const prepareDayBtn = document.getElementById('prepareDay');
+  const usersBtn = document.getElementById('usersBtn');
+  
   if (mainContent) mainContent.style.display = 'none';
   if (analysisSection) analysisSection.style.display = 'none';
   if (resultsSection) resultsSection.style.display = 'none';
   if (headerControls) headerControls.style.display = 'none';
+  if (dateControls) dateControls.style.display = 'none';
+  if (fromDate) fromDate.style.display = 'none';
+  if (toDate) toDate.style.display = 'none';
+  if (analyzeButtons) analyzeButtons.style.display = 'none';
+  if (prepareDayBtn) prepareDayBtn.style.display = 'none';
+  if (usersBtn) usersBtn.style.display = 'none';
 }
 
 function showUsersPage() {
@@ -1434,15 +1451,32 @@ function renderUsersPage(users) {
 }
 
 function showMainContent() {
+  // Show all main content sections
   const mainContent = document.querySelector('.main-content');
   const analysisSection = document.querySelector('.analysis-section');
   const resultsSection = document.querySelector('.results-section');
   const headerControls = document.querySelector('.header-controls');
   
+  // Show date/time controls
+  const dateControls = document.querySelector('.date-controls');
+  const fromDate = document.querySelector('input[name="from"]');
+  const toDate = document.querySelector('input[name="to"]');
+  
+  // Show analysis buttons
+  const analyzeButtons = document.querySelector('.analysis-buttons');
+  const prepareDayBtn = document.getElementById('prepareDay');
+  const usersBtn = document.getElementById('usersBtn');
+  
   if (mainContent) mainContent.style.display = 'block';
   if (analysisSection) analysisSection.style.display = 'block';
   if (resultsSection) resultsSection.style.display = 'block';
   if (headerControls) headerControls.style.display = 'flex';
+  if (dateControls) dateControls.style.display = 'flex';
+  if (fromDate) fromDate.style.display = 'block';
+  if (toDate) toDate.style.display = 'block';
+  if (analyzeButtons) analyzeButtons.style.display = 'grid';
+  if (prepareDayBtn) prepareDayBtn.style.display = 'flex';
+  if (usersBtn) usersBtn.style.display = 'flex';
 }
 
 function showError(message) {

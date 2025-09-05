@@ -6806,6 +6806,21 @@ async def api_get_users(request: Request):
         conn = get_db_connection()
         cur = conn.cursor()
 
+        # First, let's check if users table exists and has data
+        cur.execute("SELECT COUNT(*) FROM users")
+        user_count = cur.fetchone()[0]
+        print(f"🔍 [DEBUG] Total users in database: {user_count}")
+
+        # If no users, add a test user
+        if user_count == 0:
+            print("🔍 [DEBUG] No users found, adding test user")
+            cur.execute("""
+                INSERT INTO users (first_name, last_name, email, password_hash, created_at)
+                VALUES (?, ?, ?, ?, ?)
+            """, ("Test", "User", "test@example.com", "dummy_hash", "2024-01-01 12:00:00"))
+            conn.commit()
+            print("✅ [DEBUG] Test user added")
+
         cur.execute("""
             SELECT first_name, last_name, email, created_at
             FROM users
@@ -6814,6 +6829,7 @@ async def api_get_users(request: Request):
 
         users = []
         for row in cur.fetchall():
+            print(f"🔍 [DEBUG] User row: {row}")
             users.append({
                 "first_name": row[0],
                 "last_name": row[1],
@@ -6823,6 +6839,7 @@ async def api_get_users(request: Request):
 
         conn.close()
         print(f"✅ [DEBUG] Found {len(users)} users")
+        print(f"✅ [DEBUG] Users data: {users}")
 
         return {"users": users}
         

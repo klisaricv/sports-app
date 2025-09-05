@@ -1254,25 +1254,191 @@ async function loadUsersPage() {
   console.log("🔍 [DEBUG] Loading users page dynamically");
   
   try {
-    // Fetch the users HTML content
-    const response = await fetch('/admin/users');
+    // Hide main content and show loading
+    hideMainContent();
+    showUsersPage();
+    
+    // Load users data from API
+    const response = await fetch('/api/users', {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      }
+    });
+    
     if (!response.ok) {
-      throw new Error(`Failed to load users page: ${response.status}`);
+      throw new Error(`Failed to load users: ${response.status}`);
     }
     
-    const htmlContent = await response.text();
-    console.log("✅ [DEBUG] Users HTML loaded successfully");
+    const data = await response.json();
+    console.log("✅ [DEBUG] Users data loaded:", data);
     
-    // Replace the entire document content
-    document.open();
-    document.write(htmlContent);
-    document.close();
-    
-    console.log("✅ [DEBUG] Users page rendered successfully");
+    // Render users page
+    renderUsersPage(data.users || []);
     
   } catch (error) {
     console.error("❌ [ERROR] Failed to load users page:", error);
-    alert("Failed to load users page. Please try again.");
+    showError("Failed to load users page. Please try again.");
+  }
+}
+
+function hideMainContent() {
+  const mainContent = document.querySelector('.main-content');
+  const analysisSection = document.querySelector('.analysis-section');
+  const resultsSection = document.querySelector('.results-section');
+  
+  if (mainContent) mainContent.style.display = 'none';
+  if (analysisSection) analysisSection.style.display = 'none';
+  if (resultsSection) resultsSection.style.display = 'none';
+}
+
+function showUsersPage() {
+  // Create users page container
+  let usersContainer = document.getElementById('usersPageContainer');
+  if (!usersContainer) {
+    usersContainer = document.createElement('div');
+    usersContainer.id = 'usersPageContainer';
+    usersContainer.innerHTML = `
+      <div class="users-page">
+        <div class="page-header">
+          <div class="page-title">
+            <h1>Users Management</h1>
+            <p>Manage registered users</p>
+          </div>
+          <div class="admin-info" id="adminInfo" style="display: none;">
+            <span>Admin: <span id="adminEmail"></span></span>
+            <button id="backToMain" class="btn subtle">← Back to Main</button>
+          </div>
+        </div>
+        
+        <div class="users-controls">
+          <div class="search-container">
+            <input type="text" id="userSearch" placeholder="Search users by name or email..." />
+            <button id="clearSearch" class="btn subtle" style="display: none;">Clear</button>
+          </div>
+          <div class="users-stats">
+            <span>Total: <span id="totalUsers">0</span></span>
+            <span>Showing: <span id="showingUsers">0</span></span>
+          </div>
+        </div>
+        
+        <div class="users-table-container">
+          <div id="tableLoading" class="loading">Loading users...</div>
+          <div id="tableError" class="error" style="display: none;">
+            <span id="errorMessage">Failed to load users</span>
+          </div>
+          <div id="noUsers" class="no-data" style="display: none;">
+            No users found
+          </div>
+          <table id="usersTable" class="users-table" style="display: none;">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>First Name</th>
+                <th>Last Name</th>
+                <th>Email</th>
+                <th>Registered</th>
+              </tr>
+            </thead>
+            <tbody id="usersTableBody"></tbody>
+          </table>
+        </div>
+        
+        <div id="paginationContainer" class="pagination-container" style="display: none;">
+          <div class="pagination-info">
+            <span id="paginationInfo">Page 1 of 1</span>
+          </div>
+          <div class="pagination-controls">
+            <button id="prevPage" class="btn subtle" disabled>Previous</button>
+            <div id="paginationPages" class="pagination-pages"></div>
+            <button id="nextPage" class="btn subtle" disabled>Next</button>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(usersContainer);
+  }
+  
+  usersContainer.style.display = 'block';
+  
+  // Show admin info
+  const adminInfo = document.getElementById('adminInfo');
+  const adminEmail = document.getElementById('adminEmail');
+  if (adminInfo) adminInfo.style.display = 'flex';
+  if (adminEmail) adminEmail.textContent = localStorage.getItem('userEmail');
+  
+  // Add back button listener
+  const backBtn = document.getElementById('backToMain');
+  if (backBtn) {
+    backBtn.addEventListener('click', () => {
+      usersContainer.style.display = 'none';
+      showMainContent();
+    });
+  }
+}
+
+function renderUsersPage(users) {
+  console.log("🔍 [DEBUG] Rendering users page with", users.length, "users");
+  
+  const loading = document.getElementById('tableLoading');
+  const error = document.getElementById('tableError');
+  const table = document.getElementById('usersTable');
+  const noUsers = document.getElementById('noUsers');
+  
+  if (loading) loading.style.display = 'none';
+  if (error) error.style.display = 'none';
+  
+  if (users.length === 0) {
+    if (noUsers) noUsers.style.display = 'flex';
+    if (table) table.style.display = 'none';
+    return;
+  }
+  
+  if (noUsers) noUsers.style.display = 'none';
+  if (table) table.style.display = 'table';
+  
+  // Update stats
+  const totalUsers = document.getElementById('totalUsers');
+  const showingUsers = document.getElementById('showingUsers');
+  if (totalUsers) totalUsers.textContent = users.length;
+  if (showingUsers) showingUsers.textContent = users.length;
+  
+  // Render table
+  const tbody = document.getElementById('usersTableBody');
+  if (tbody) {
+    tbody.innerHTML = users.map((user, index) => {
+      const registeredDate = new Date(user.created_at).toLocaleDateString('sr-RS');
+      return `
+        <tr>
+          <td>${index + 1}</td>
+          <td>${user.first_name}</td>
+          <td>${user.last_name}</td>
+          <td>${user.email}</td>
+          <td>${registeredDate}</td>
+        </tr>
+      `;
+    }).join('');
+  }
+  
+  console.log("✅ [DEBUG] Users page rendered successfully");
+}
+
+function showMainContent() {
+  const mainContent = document.querySelector('.main-content');
+  const analysisSection = document.querySelector('.analysis-section');
+  const resultsSection = document.querySelector('.results-section');
+  
+  if (mainContent) mainContent.style.display = 'block';
+  if (analysisSection) analysisSection.style.display = 'block';
+  if (resultsSection) resultsSection.style.display = 'block';
+}
+
+function showError(message) {
+  const usersContainer = document.getElementById('usersPageContainer');
+  if (usersContainer) {
+    const error = document.getElementById('tableError');
+    const errorMessage = document.getElementById('errorMessage');
+    if (error) error.style.display = 'flex';
+    if (errorMessage) errorMessage.textContent = message;
   }
 }
 

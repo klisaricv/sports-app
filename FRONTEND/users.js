@@ -98,13 +98,15 @@ async function loadUsers() {
   if (table) table.style.display = 'none';
   
   try {
-    const token = localStorage.getItem('token');
-    console.log('🔑 Token found:', !!token);
+    const user = localStorage.getItem('user');
+    const userData = user ? JSON.parse(user) : null;
+    const sessionId = userData?.session_id;
+    console.log('🔑 Session ID found:', !!sessionId);
     
     console.log('🌐 Making API request to /api/users...');
     const response = await fetch('/api/users', {
       headers: {
-        'Authorization': `Bearer ${token}`
+        'Authorization': `Bearer ${sessionId}`
       }
     });
     
@@ -123,9 +125,15 @@ async function loadUsers() {
     filteredUsers = [...allUsers];
     
     console.log('👥 Users loaded:', allUsers.length);
+    console.log('🔍 All users array:', allUsers);
     
+    console.log('📊 Updating stats...');
     updateStats();
+    
+    console.log('🎨 Rendering users table...');
     renderUsers();
+    
+    console.log('📄 Rendering pagination...');
     renderPagination();
     
     if (loading) loading.style.display = 'none';
@@ -189,38 +197,58 @@ function updateStats() {
 
 // Render users table
 function renderUsers() {
+  console.log('🎨 renderUsers called');
+  console.log('📊 filteredUsers.length:', filteredUsers.length);
+  console.log('📄 currentPage:', currentPage);
+  console.log('📊 usersPerPage:', usersPerPage);
+  
   const tbody = document.getElementById('usersTableBody');
   const noUsers = document.getElementById('noUsers');
   const pagination = document.getElementById('paginationContainer');
   
+  console.log('🔍 DOM elements found:', {
+    tbody: !!tbody,
+    noUsers: !!noUsers,
+    pagination: !!pagination
+  });
+  
   if (filteredUsers.length === 0) {
-    tbody.innerHTML = '';
-    noUsers.style.display = 'flex';
-    pagination.style.display = 'none';
+    console.log('❌ No users to display');
+    if (tbody) tbody.innerHTML = '';
+    if (noUsers) noUsers.style.display = 'flex';
+    if (pagination) pagination.style.display = 'none';
     return;
   }
   
-  noUsers.style.display = 'none';
-  pagination.style.display = 'flex';
+  if (noUsers) noUsers.style.display = 'none';
+  if (pagination) pagination.style.display = 'flex';
   
   const startIndex = (currentPage - 1) * usersPerPage;
   const endIndex = startIndex + usersPerPage;
   const pageUsers = filteredUsers.slice(startIndex, endIndex);
   
-  tbody.innerHTML = pageUsers.map((user, index) => {
-    const globalIndex = startIndex + index + 1;
-    const registeredDate = new Date(user.created_at).toLocaleDateString('sr-RS');
-    
-    return `
-      <tr>
-        <td data-label="ID">${globalIndex}</td>
-        <td data-label="First Name">${user.first_name}</td>
-        <td data-label="Last Name">${user.last_name}</td>
-        <td data-label="Email">${user.email}</td>
-        <td data-label="Registered">${registeredDate}</td>
-      </tr>
-    `;
-  }).join('');
+  console.log('📊 Page users:', pageUsers.length);
+  console.log('🔍 Page users data:', pageUsers);
+  
+  if (tbody) {
+    tbody.innerHTML = pageUsers.map((user, index) => {
+      const globalIndex = startIndex + index + 1;
+      const registeredDate = new Date(user.created_at).toLocaleDateString('sr-RS');
+      
+      return `
+        <tr>
+          <td data-label="ID">${globalIndex}</td>
+          <td data-label="First Name">${user.first_name}</td>
+          <td data-label="Last Name">${user.last_name}</td>
+          <td data-label="Email">${user.email}</td>
+          <td data-label="Registered">${registeredDate}</td>
+        </tr>
+      `;
+    }).join('');
+    console.log('✅ Table rendered successfully');
+  } else {
+    console.log('❌ tbody element not found');
+  }
 }
 
 // Render pagination

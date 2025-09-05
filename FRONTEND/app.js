@@ -836,7 +836,7 @@ function renderResultsPage() {
     const othersEndIndex = othersStartIndex + resultsPerPage;
     otherResults = allResults.slice(othersStartIndex, othersEndIndex);
   } else {
-    // Other pages: show all results for that page
+    // Other pages: show all results for that page (including first 5)
     othersStartIndex = (currentResultsPage - 1) * resultsPerPage;
     const othersEndIndex = othersStartIndex + resultsPerPage;
     otherResults = allResults.slice(othersStartIndex, othersEndIndex);
@@ -894,7 +894,7 @@ function renderResultsPagination() {
   nextBtnTop.onclick = () => changeResultsPage(currentResultsPage + 1);
 }
 
-async function changeResultsPage(page) {
+function changeResultsPage(page) {
   // Calculate total pages based on total results count
   const totalPages = Math.ceil(totalResultsCount / resultsPerPage);
   
@@ -902,75 +902,12 @@ async function changeResultsPage(page) {
 
   currentResultsPage = page;
   
-  // Load results from server for this page
-  await loadResultsPage(page);
+  // Just render the page (no server call)
+  renderResultsPage();
   renderResultsPagination();
 }
 
-async function loadResultsPage(page) {
-  try {
-    showLoader(`Učitavam stranicu ${page}...`);
-    
-    const user = localStorage.getItem('user');
-    const userData = user ? JSON.parse(user) : null;
-    const sessionId = userData?.session_id;
-    
-    if (!sessionId) {
-      throw new Error('Niste prijavljeni');
-    }
-
-    // Get current analysis parameters
-    const fromDate = document.getElementById('fromDate')?.value;
-    const toDate = document.getElementById('toDate')?.value;
-    const market = window.currentAnalysisMarket || '1h_over05';
-    
-    if (!fromDate || !toDate) {
-      throw new Error('Nedostaju datumi za analizu');
-    }
-
-    // Build API URL with pagination
-    const apiUrl = new URL(`${BACKEND_URL}/api/analyze`, window.location.origin);
-    apiUrl.searchParams.set('from_date', fromDate);
-    apiUrl.searchParams.set('to_date', toDate);
-    apiUrl.searchParams.set('market', market);
-    apiUrl.searchParams.set('page', page);
-    apiUrl.searchParams.set('limit', resultsPerPage);
-
-    const response = await fetch(apiUrl.toString(), {
-      headers: {
-        'Authorization': `Bearer ${sessionId}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    const results = normalizeResults(data);
-    
-    // Update total count from server response
-    if (data.total !== undefined) {
-      totalResultsCount = data.total;
-    }
-    
-    // Update allResults with new data
-    const startIndex = (page - 1) * resultsPerPage;
-    results.forEach((result, index) => {
-      allResults[startIndex + index] = result;
-    });
-    
-    // Render the page
-    renderResultsPage();
-    
-  } catch (error) {
-    console.error('Error loading results page:', error);
-    showError('Greška pri učitavanju stranice', error.message);
-  } finally {
-    hideLoader();
-  }
-}
+// Removed loadResultsPage - using client-side pagination only
 
 // ====== HELPERS ======
 function normalizeResults(json) {

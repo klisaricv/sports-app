@@ -7,9 +7,10 @@ const usersPerPage = 10;
 
 // Check if user is admin
 function checkAdminAccess() {
-  const userEmail = localStorage.getItem('userEmail');
-  console.log('🔍 Checking admin access for email:', userEmail);
-  if (userEmail !== 'klisaricf@gmail.com') {
+  const user = localStorage.getItem('user');
+  const userData = user ? JSON.parse(user) : null;
+  console.log('🔍 Checking admin access for email:', userData?.email);
+  if (!userData || userData.email !== 'klisaricf@gmail.com') {
     console.log('❌ Access denied - not admin user');
     window.location.href = '/';
     return false;
@@ -18,9 +19,9 @@ function checkAdminAccess() {
   return true;
 }
 
-// Initialize page
-document.addEventListener('DOMContentLoaded', function() {
-  console.log('📄 DOM Content Loaded - initializing users page');
+// Initialize users page - called from app.js
+function initUsersPage() {
+  console.log('📄 Initializing users page from app.js');
   if (!checkAdminAccess()) return;
   
   console.log('🔧 Setting up admin UI elements');
@@ -57,7 +58,10 @@ document.addEventListener('DOMContentLoaded', function() {
   // Setup event listeners
   console.log('🎯 Setting up event listeners...');
   setupEventListeners();
-});
+}
+
+// Make initUsersPage available globally
+window.initUsersPage = initUsersPage;
 
 // Setup event listeners
 function setupEventListeners() {
@@ -143,6 +147,9 @@ function handleSearch(e) {
   const query = e.target.value.toLowerCase().trim();
   const clearBtn = document.getElementById('clearSearch');
   
+  console.log('🔍 Search query:', query);
+  console.log('📊 All users count:', allUsers.length);
+  
   if (query) {
     clearBtn.style.display = 'flex';
     filteredUsers = allUsers.filter(user => 
@@ -150,9 +157,11 @@ function handleSearch(e) {
       user.last_name.toLowerCase().includes(query) ||
       user.email.toLowerCase().includes(query)
     );
+    console.log('✅ Filtered users count:', filteredUsers.length);
   } else {
     clearBtn.style.display = 'none';
     filteredUsers = [...allUsers];
+    console.log('🔄 Reset to all users');
   }
   
   currentPage = 1;
@@ -204,11 +213,11 @@ function renderUsers() {
     
     return `
       <tr>
-        <td>${globalIndex}</td>
-        <td>${user.first_name}</td>
-        <td>${user.last_name}</td>
-        <td>${user.email}</td>
-        <td>${registeredDate}</td>
+        <td data-label="ID">${globalIndex}</td>
+        <td data-label="First Name">${user.first_name}</td>
+        <td data-label="Last Name">${user.last_name}</td>
+        <td data-label="Email">${user.email}</td>
+        <td data-label="Registered">${registeredDate}</td>
       </tr>
     `;
   }).join('');
@@ -257,10 +266,14 @@ function renderPagination() {
 // Change page
 function changePage(page) {
   const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
+  console.log('📄 Changing to page:', page, 'of', totalPages);
   if (page >= 1 && page <= totalPages) {
     currentPage = page;
     renderUsers();
     renderPagination();
+    console.log('✅ Page changed successfully');
+  } else {
+    console.log('❌ Invalid page number');
   }
 }
 

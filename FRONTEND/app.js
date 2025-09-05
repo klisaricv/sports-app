@@ -1298,6 +1298,25 @@ window.addEventListener('hashchange', () => {
 
 // ===== USERS PAGE FUNCTIONS =====
 
+// Load users.js script dynamically
+function loadUsersScript() {
+  if (!window.usersScriptLoaded) {
+    console.log("🔍 [DEBUG] Loading users.js dynamically");
+    const script = document.createElement('script');
+    script.src = '/static/users.js';
+    script.defer = true;
+    script.onload = function() {
+      console.log("✅ users.js loaded successfully");
+      window.usersScriptLoaded = true;
+    };
+    script.onerror = function() {
+      console.error("❌ Failed to load users.js");
+    };
+    document.head.appendChild(script);
+  }
+}
+
+
 async function initUsersPage() {
   console.log("🔍 [DEBUG] Initializing users page");
   console.log("🔍 [DEBUG] Current URL:", window.location.href);
@@ -1314,15 +1333,22 @@ async function initUsersPage() {
       controlsPanel.classList.add('hidden-on-users');
     }
     
-    // Load users.js dynamically
-    if (!window.usersPageLoaded) {
-      console.log("🔍 [DEBUG] Loading users.js dynamically");
-      const script = document.createElement('script');
-      script.src = '/static/users.js';
-      script.defer = true;
-      document.head.appendChild(script);
-      window.usersPageLoaded = true;
-    }
+    // Load users.js dynamically when needed
+    loadUsersScript();
+    
+    // Wait a bit for script to load, then initialize
+    setTimeout(() => {
+      if (window.initUsersPage) {
+        window.initUsersPage();
+      } else {
+        console.log("❌ initUsersPage not available yet, retrying...");
+        setTimeout(() => {
+          if (window.initUsersPage) {
+            window.initUsersPage();
+          }
+        }, 500);
+      }
+    }, 100);
     
     // Check if user is admin
     const user = localStorage.getItem('user');

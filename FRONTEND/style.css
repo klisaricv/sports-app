@@ -2035,6 +2035,17 @@ input:focus-visible {
   color: var(--text-primary);
 }
 
+/* Hide controls section on users page */
+body:has(.main-content) .panel.controls {
+  display: none !important;
+}
+
+/* Alternative selector for users page */
+.users-page .panel.controls,
+.main-content .panel.controls {
+  display: none !important;
+}
+
 .users-page {
   max-width: 1200px;
   margin: 0 auto;

@@ -1500,10 +1500,13 @@ window.addEventListener('hashchange', () => {
 // Toggle between analyze buttons and teams stats buttons
 function toggleTeamsStats() {
   const teamsStatsBtn = document.getElementById('teamsStatsBtn');
-  const analyzeButtonsGroup = document.getElementById('analyzeButtonsGroup');
+  const analyze1p = document.getElementById('analyze1p');
+  const analyzeGG = document.getElementById('analyzeGG');
+  const analyze2plus = document.getElementById('analyze2plus');
+  const analyzeFT2plus = document.getElementById('analyzeFT2plus');
   const teamsStatsButtonsGroup = document.getElementById('teamsStatsButtonsGroup');
   
-  if (!teamsStatsBtn || !analyzeButtonsGroup || !teamsStatsButtonsGroup) return;
+  if (!teamsStatsBtn || !teamsStatsButtonsGroup) return;
   
   const isTeamsStatsVisible = teamsStatsButtonsGroup.style.display !== 'none';
   
@@ -1517,8 +1520,15 @@ function toggleTeamsStats() {
       </svg>
       <span>TEAMS STATS</span>
     `;
-    teamsStatsBtn.className = 'btn primary';
-    analyzeButtonsGroup.style.display = 'flex';
+    teamsStatsBtn.className = 'btn';
+    
+    // Show original analyze buttons
+    if (analyze1p) analyze1p.style.display = 'flex';
+    if (analyzeGG) analyzeGG.style.display = 'flex';
+    if (analyze2plus) analyze2plus.style.display = 'flex';
+    if (analyzeFT2plus) analyzeFT2plus.style.display = 'flex';
+    
+    // Hide teams stats buttons
     teamsStatsButtonsGroup.style.display = 'none';
   } else {
     // Show teams stats buttons, hide analyze buttons
@@ -1529,7 +1539,14 @@ function toggleTeamsStats() {
       <span>BACK TO ANALYZE</span>
     `;
     teamsStatsBtn.className = 'btn secondary';
-    analyzeButtonsGroup.style.display = 'none';
+    
+    // Hide original analyze buttons
+    if (analyze1p) analyze1p.style.display = 'none';
+    if (analyzeGG) analyzeGG.style.display = 'none';
+    if (analyze2plus) analyze2plus.style.display = 'none';
+    if (analyzeFT2plus) analyzeFT2plus.style.display = 'none';
+    
+    // Show teams stats buttons
     teamsStatsButtonsGroup.style.display = 'flex';
   }
 }

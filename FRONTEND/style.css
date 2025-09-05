@@ -2908,13 +2908,15 @@ body:has(.page-title h1:contains("Users Management")) .panel.controls {
 
 /* ===== TEAMS STATS BUTTONS ===== */
 #teamsStatsButtonsGroup {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--spacing-sm);
   margin-top: var(--spacing-md);
 }
 
 #teamsStatsButtonsGroup .btn {
+  flex: 1;
+  min-width: 200px;
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
@@ -2932,11 +2934,12 @@ body:has(.page-title h1:contains("Users Management")) .panel.controls {
 /* Mobile responsive for teams stats */
 @media (max-width: 768px) {
   #teamsStatsButtonsGroup {
-    grid-template-columns: 1fr;
+    flex-direction: column;
     gap: var(--spacing-xs);
   }
   
   #teamsStatsButtonsGroup .btn {
+    min-width: auto;
     padding: var(--spacing-sm);
     font-size: var(--font-size-xs);
     min-height: 44px;
@@ -3330,13 +3333,15 @@ body:has(.page-title h1:contains("Users Management")) .panel.controls {
 
 /* ===== TEAMS STATS BUTTONS ===== */
 #teamsStatsButtonsGroup {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--spacing-sm);
   margin-top: var(--spacing-md);
 }
 
 #teamsStatsButtonsGroup .btn {
+  flex: 1;
+  min-width: 200px;
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
@@ -3354,11 +3359,12 @@ body:has(.page-title h1:contains("Users Management")) .panel.controls {
 /* Mobile responsive for teams stats */
 @media (max-width: 768px) {
   #teamsStatsButtonsGroup {
-    grid-template-columns: 1fr;
+    flex-direction: column;
     gap: var(--spacing-xs);
   }
   
   #teamsStatsButtonsGroup .btn {
+    min-width: auto;
     padding: var(--spacing-sm);
     font-size: var(--font-size-xs);
     min-height: 44px;

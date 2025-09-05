@@ -712,14 +712,18 @@ function getAnalysisTitle(market) {
   return titles[market] || '📈 Rezultati analize';
 }
 
+// Global variables for results pagination
+let currentResultsPage = 1;
+let resultsPerPage = 10;
+let allResults = [];
+
 function renderResults(data, market) {
   const currentMarket = market || "1h_over05";
   window.currentAnalysisResults = data;
+  allResults = Array.isArray(data) ? data : [];
+  currentResultsPage = 1;
 
-  const top5Container = document.getElementById("top5");
-  const otherContainer = document.getElementById("other");
-
-  const total = Array.isArray(data) ? data.length : 0;
+  const total = allResults.length;
 
   // Dodaj naslov analize iznad rezultata
   const analysisTitle = getAnalysisTitle(currentMarket);
@@ -739,12 +743,25 @@ function renderResults(data, market) {
     titleEl.querySelector('.analysis-subtitle').textContent = `Analiza završena • ${total} mečeva pronađeno`;
   }
 
-  // Clear content areas, preserve section titles and descriptions
-  const top5ContentArea = top5Container?.querySelector('.section-content');
-  const otherContentArea = otherContainer?.querySelector('.section-content');
-  
-  if (top5ContentArea) top5ContentArea.innerHTML = '';
-  if (otherContentArea) otherContentArea.innerHTML = '';
+  // Render paginated results
+  renderResultsPage();
+  renderResultsPagination();
+}
+
+function renderResultsPage() {
+  const resultsContent = document.getElementById('resultsContent');
+  if (!resultsContent) return;
+
+  const startIndex = (currentResultsPage - 1) * resultsPerPage;
+  const endIndex = startIndex + resultsPerPage;
+  const pageResults = allResults.slice(startIndex, endIndex);
+
+  resultsContent.innerHTML = '';
+
+  if (pageResults.length === 0) {
+    resultsContent.innerHTML = '<div class="placeholder">Nema rezultata za ovu stranicu.</div>';
+    return;
+  }
 
   const cardHTML = (m) => {
     // Format kickoff time
@@ -779,21 +796,55 @@ function renderResults(data, market) {
             <span class="final-value">${fmt(m.final_percent, '%')}</span>
           </div>
           <div class="narrative">
-            ${buildSimplifiedNarrative(m, currentMarket)}
+            ${buildSimplifiedNarrative(m, window.currentAnalysisResults ? "1h_over05" : "1h_over05")}
           </div>
         </div>
       </div>
     `;
   };
 
-  (data || []).forEach((match, index) => {
-    const html = cardHTML(match);
-    if (index < 5) {
-      top5ContentArea.innerHTML = (top5ContentArea.innerHTML || "") + html;
-    } else {
-      otherContentArea.innerHTML = (otherContentArea.innerHTML || "") + html;
-    }
+  pageResults.forEach((match) => {
+    resultsContent.innerHTML += cardHTML(match);
   });
+}
+
+function renderResultsPagination() {
+  const pagination = document.getElementById('resultsPagination');
+  const prevBtn = document.getElementById('prevPage');
+  const nextBtn = document.getElementById('nextPage');
+  const pageInfo = document.getElementById('pageInfo');
+
+  if (!pagination || !prevBtn || !nextBtn || !pageInfo) return;
+
+  const totalPages = Math.ceil(allResults.length / resultsPerPage);
+
+  if (totalPages <= 1) {
+    pagination.style.display = 'none';
+    return;
+  }
+
+  pagination.style.display = 'flex';
+
+  // Update button states
+  prevBtn.disabled = currentResultsPage <= 1;
+  nextBtn.disabled = currentResultsPage >= totalPages;
+
+  // Update page info
+  pageInfo.textContent = `Strana ${currentResultsPage} od ${totalPages}`;
+
+  // Add event listeners
+  prevBtn.onclick = () => changeResultsPage(currentResultsPage - 1);
+  nextBtn.onclick = () => changeResultsPage(currentResultsPage + 1);
+}
+
+function changeResultsPage(page) {
+  const totalPages = Math.ceil(allResults.length / resultsPerPage);
+  
+  if (page < 1 || page > totalPages) return;
+
+  currentResultsPage = page;
+  renderResultsPage();
+  renderResultsPagination();
 }
 
 // ====== HELPERS ======
@@ -1202,9 +1253,15 @@ function clearAnalysisResults() {
   }
   
   // Clear results content
-  const resultsContainer = document.querySelector('.results');
-  if (resultsContainer) {
-    resultsContainer.innerHTML = '';
+  const resultsContent = document.getElementById('resultsContent');
+  if (resultsContent) {
+    resultsContent.innerHTML = '<div class="placeholder">Nema rezultata analize još.</div>';
+  }
+  
+  // Hide pagination
+  const pagination = document.getElementById('resultsPagination');
+  if (pagination) {
+    pagination.style.display = 'none';
   }
   
   // Remove analysis title
@@ -1212,6 +1269,10 @@ function clearAnalysisResults() {
   if (analysisTitle) {
     analysisTitle.remove();
   }
+  
+  // Reset pagination variables
+  currentResultsPage = 1;
+  allResults = [];
   
   console.log('🧹 Analysis results cleared');
 }

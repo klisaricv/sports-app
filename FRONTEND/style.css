@@ -468,10 +468,47 @@ button[disabled],
   margin-top: var(--spacing-lg);
 }
 
-@media (min-width: 1024px) {
-  .results__grid {
-    grid-template-columns: 1fr 1fr;
-  }
+/* Always single column for results */
+.results__grid {
+  grid-template-columns: 1fr !important;
+}
+
+/* Results Pagination */
+.results-pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-lg);
+  padding: var(--spacing-md);
+}
+
+.results-pagination button {
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-primary);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: var(--transition);
+  min-width: 40px;
+  height: 40px;
+}
+
+.results-pagination button:hover:not(:disabled) {
+  background: var(--surface-elevated);
+  border-color: var(--primary);
+}
+
+.results-pagination button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.results-pagination .page-info {
+  margin: 0 var(--spacing-md);
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
 }
 
 .section {

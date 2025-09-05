@@ -177,21 +177,20 @@
     <!-- Results -->
     <section class="panel results" id="resultsSection" style="display: none;">
       <div class="results__grid">
-        <article class="section" id="top5">
-          <h3>TOP 5</h3>
-          <p class="section-description">Ovo su top 5 parova za odabrani period prema našoj analizi</p>
-          <div class="section-content">
+        <article class="section" id="resultsContainer">
+          <h3>REZULTATI ANALIZE</h3>
+          <p class="section-description">Svi parovi za odabrani period prema našoj analizi</p>
+          <div class="section-content" id="resultsContent">
             <div class="placeholder">Nema rezultata analize još.</div>
           </div>
         </article>
-
-        <article class="section" id="other">
-          <h3>OSTALO</h3>
-          <p class="section-description">Ostali parovi za odabrani period prema našoj analizi</p>
-          <div class="section-content">
-            <div class="placeholder">Nema rezultata analize još.</div>
-          </div>
-        </article>
+      </div>
+      
+      <!-- Results Pagination -->
+      <div class="results-pagination" id="resultsPagination" style="display: none;">
+        <button id="prevPage" disabled>←</button>
+        <span class="page-info" id="pageInfo">Strana 1 od 1</span>
+        <button id="nextPage" disabled>→</button>
       </div>
     </section>
   </main>

@@ -2797,16 +2797,6 @@ def serve_users():
     print("✅ [DEBUG] Serving users.html")
     return FileResponse(str(users_path))
 
-@app.get("/admin/users")
-def serve_admin_users():
-    print("🔍 [DEBUG] /admin/users route called")
-    users_path = FRONTEND_DIR / "users.html"
-    print(f"🔍 [DEBUG] Looking for users.html at: {users_path}")
-    if not users_path.exists():
-        print(f"❌ [DEBUG] users.html not found at {users_path}")
-        return {"error": f"users.html not found at {users_path}"}
-    print("✅ [DEBUG] Serving users.html from /admin/users")
-    return FileResponse(str(users_path))
 
 
 ALLOWED_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o.strip()]
@@ -6816,10 +6806,20 @@ async def api_get_users(request: Request):
             print("🔍 [DEBUG] No users found, adding test user")
             cur.execute("""
                 INSERT INTO users (first_name, last_name, email, password_hash, created_at)
-                VALUES (?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s)
             """, ("Test", "User", "test@example.com", "dummy_hash", "2024-01-01 12:00:00"))
             conn.commit()
             print("✅ [DEBUG] Test user added")
+
+        # Check what tables exist (MySQL syntax)
+        cur.execute("SHOW TABLES")
+        tables = cur.fetchall()
+        print(f"🔍 [DEBUG] Available tables: {tables}")
+        
+        # Check if users table has the right structure
+        cur.execute("DESCRIBE users")
+        columns = cur.fetchall()
+        print(f"🔍 [DEBUG] Users table columns: {columns}")
 
         cur.execute("""
             SELECT first_name, last_name, email, created_at

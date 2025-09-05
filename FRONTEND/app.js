@@ -1287,7 +1287,7 @@ async function loadUsersPage() {
 }
 
 function hideMainContent() {
-  // Hide all main content sections
+  // Hide ALL main content sections
   const mainContent = document.querySelector('.main-content');
   const analysisSection = document.querySelector('.analysis-section');
   const resultsSection = document.querySelector('.results-section');
@@ -1302,6 +1302,14 @@ function hideMainContent() {
   const analyzeButtons = document.querySelector('.analysis-buttons');
   const prepareDayBtn = document.getElementById('prepareDay');
   const usersBtn = document.getElementById('usersBtn');
+  
+  // Hide ALL buttons in header
+  const allButtons = document.querySelectorAll('.btn');
+  allButtons.forEach(btn => {
+    if (btn.id !== 'backToMain') {
+      btn.style.display = 'none';
+    }
+  });
   
   if (mainContent) mainContent.style.display = 'none';
   if (analysisSection) analysisSection.style.display = 'none';
@@ -1466,6 +1474,12 @@ function showMainContent() {
   const analyzeButtons = document.querySelector('.analysis-buttons');
   const prepareDayBtn = document.getElementById('prepareDay');
   const usersBtn = document.getElementById('usersBtn');
+  
+  // Show ALL buttons in header
+  const allButtons = document.querySelectorAll('.btn');
+  allButtons.forEach(btn => {
+    btn.style.display = 'flex';
+  });
   
   if (mainContent) mainContent.style.display = 'block';
   if (analysisSection) analysisSection.style.display = 'block';

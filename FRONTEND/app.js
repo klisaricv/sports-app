@@ -1293,13 +1293,14 @@ function hideMainContent() {
   const resultsSection = document.querySelector('.results-section');
   const headerControls = document.querySelector('.header-controls');
   
-  // Hide date/time controls
+  // Hide the ENTIRE control panel (date + buttons)
+  const controlPanel = document.querySelector('.control-panel');
   const dateControls = document.querySelector('.date-controls');
+  const analyzeButtons = document.querySelector('.analysis-buttons');
+  
+  // Hide individual elements
   const fromDate = document.querySelector('input[name="from"]');
   const toDate = document.querySelector('input[name="to"]');
-  
-  // Hide analysis buttons
-  const analyzeButtons = document.querySelector('.analysis-buttons');
   const prepareDayBtn = document.getElementById('prepareDay');
   const usersBtn = document.getElementById('usersBtn');
   
@@ -1311,14 +1312,18 @@ function hideMainContent() {
     }
   });
   
+  // Hide main sections
   if (mainContent) mainContent.style.display = 'none';
   if (analysisSection) analysisSection.style.display = 'none';
   if (resultsSection) resultsSection.style.display = 'none';
   if (headerControls) headerControls.style.display = 'none';
+  
+  // Hide the ENTIRE control panel
+  if (controlPanel) controlPanel.style.display = 'none';
   if (dateControls) dateControls.style.display = 'none';
+  if (analyzeButtons) analyzeButtons.style.display = 'none';
   if (fromDate) fromDate.style.display = 'none';
   if (toDate) toDate.style.display = 'none';
-  if (analyzeButtons) analyzeButtons.style.display = 'none';
   if (prepareDayBtn) prepareDayBtn.style.display = 'none';
   if (usersBtn) usersBtn.style.display = 'none';
 }
@@ -1465,13 +1470,14 @@ function showMainContent() {
   const resultsSection = document.querySelector('.results-section');
   const headerControls = document.querySelector('.header-controls');
   
-  // Show date/time controls
+  // Show the ENTIRE control panel (date + buttons)
+  const controlPanel = document.querySelector('.control-panel');
   const dateControls = document.querySelector('.date-controls');
+  const analyzeButtons = document.querySelector('.analysis-buttons');
+  
+  // Show individual elements
   const fromDate = document.querySelector('input[name="from"]');
   const toDate = document.querySelector('input[name="to"]');
-  
-  // Show analysis buttons
-  const analyzeButtons = document.querySelector('.analysis-buttons');
   const prepareDayBtn = document.getElementById('prepareDay');
   const usersBtn = document.getElementById('usersBtn');
   
@@ -1481,14 +1487,18 @@ function showMainContent() {
     btn.style.display = 'flex';
   });
   
+  // Show main sections
   if (mainContent) mainContent.style.display = 'block';
   if (analysisSection) analysisSection.style.display = 'block';
   if (resultsSection) resultsSection.style.display = 'block';
   if (headerControls) headerControls.style.display = 'flex';
+  
+  // Show the ENTIRE control panel
+  if (controlPanel) controlPanel.style.display = 'block';
   if (dateControls) dateControls.style.display = 'flex';
+  if (analyzeButtons) analyzeButtons.style.display = 'grid';
   if (fromDate) fromDate.style.display = 'block';
   if (toDate) toDate.style.display = 'block';
-  if (analyzeButtons) analyzeButtons.style.display = 'grid';
   if (prepareDayBtn) prepareDayBtn.style.display = 'flex';
   if (usersBtn) usersBtn.style.display = 'flex';
 }

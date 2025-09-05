@@ -6821,6 +6821,7 @@ async def api_get_users(request: Request):
         columns = cur.fetchall()
         print(f"🔍 [DEBUG] Users table columns: {columns}")
 
+        # Get all users from the users table
         cur.execute("""
             SELECT first_name, last_name, email, created_at
             FROM users

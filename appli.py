@@ -2788,9 +2788,13 @@ def serve_register():
 
 @app.get("/users")
 def serve_users():
+    print("🔍 [DEBUG] /users route called")
     users_path = FRONTEND_DIR / "users.html"
+    print(f"🔍 [DEBUG] Looking for users.html at: {users_path}")
     if not users_path.exists():
+        print(f"❌ [DEBUG] users.html not found at {users_path}")
         return {"error": f"users.html not found at {users_path}"}
+    print("✅ [DEBUG] Serving users.html")
     return FileResponse(str(users_path))
 
 ALLOWED_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o.strip()]
@@ -6763,30 +6767,39 @@ async def api_check_analysis_exists(request: Request):
 @app.get("/api/users")
 async def api_get_users(request: Request):
     """Get all registered users (admin only)."""
+    print("🔍 [DEBUG] /api/users endpoint called")
     try:
         # Admin check - only klisaricf@gmail.com can access
         session_id = request.headers.get('Authorization', '').replace('Bearer ', '')
-        if not session_id:
-            return {"error": "Authentication required."}, 401
+        print(f"🔍 [DEBUG] Session ID: {session_id[:20]}..." if session_id else "No session ID")
         
+        if not session_id:
+            print("❌ [DEBUG] No session ID provided")
+            return {"error": "Authentication required."}, 401
+
         session_data = get_session(session_id)
         if not session_data:
+            print("❌ [DEBUG] Invalid session data")
             return {"error": "Invalid session. Please log in again."}, 401
-        
+
         user_email = session_data.get('email')
+        print(f"🔍 [DEBUG] User email: {user_email}")
+        
         if user_email != 'klisaricf@gmail.com':
+            print("❌ [DEBUG] Access denied - not admin user")
             return {"error": "Access denied. Admin privileges required."}, 403
         
         # Get users from database
+        print("🔍 [DEBUG] Getting users from database")
         conn = get_db_connection()
         cur = conn.cursor()
-        
+
         cur.execute("""
             SELECT first_name, last_name, email, created_at
             FROM users
             ORDER BY created_at DESC
         """)
-        
+
         users = []
         for row in cur.fetchall():
             users.append({
@@ -6795,9 +6808,10 @@ async def api_get_users(request: Request):
                 "email": row[2],
                 "created_at": row[3]
             })
-        
+
         conn.close()
-        
+        print(f"✅ [DEBUG] Found {len(users)} users")
+
         return {"users": users}
         
     except Exception as e:

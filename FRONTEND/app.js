@@ -1137,13 +1137,17 @@ function checkAuthStatus() {
         prepareDayBtn.style.display = 'none';
       }
     }
-    if (usersBtn) {
-      if (isAdmin) {
-        usersBtn.style.display = 'flex';
-      } else {
-        usersBtn.style.display = 'none';
-      }
+      if (usersBtn) {
+    if (isAdmin) {
+      usersBtn.style.display = 'flex';
+      console.log('✅ Users button shown for admin');
+    } else {
+      usersBtn.style.display = 'none';
+      console.log('❌ Users button hidden for non-admin');
     }
+  } else {
+    console.log('❌ Users button element not found');
+  }
   } else {
     // User is not logged in
     if (authButtons) authButtons.style.display = 'flex';
@@ -1228,6 +1232,19 @@ document.addEventListener("DOMContentLoaded", () => {
       console.log("🔍 [DEBUG] Prepare Day button clicked!");
       showPrepareDayModal();
     });
+  }
+  
+  // Add users button click listener
+  const usersBtn = document.getElementById('usersBtn');
+  if (usersBtn) {
+    console.log("🔍 [DEBUG] Adding click listener to users button");
+    usersBtn.addEventListener("click", (e) => {
+      console.log("🔍 [DEBUG] Users button clicked!");
+      console.log("🔍 [DEBUG] Users button href:", usersBtn.href);
+      // Let the default link behavior handle navigation
+    });
+  } else {
+    console.log("🔍 [DEBUG] Users button not found");
   }
 });
 

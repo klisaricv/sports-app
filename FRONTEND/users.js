@@ -1,4 +1,5 @@
 // Users page specific functionality
+console.log('🚀 users.js loaded successfully!');
 let allUsers = [];
 let filteredUsers = [];
 let currentPage = 1;
@@ -7,30 +8,54 @@ const usersPerPage = 10;
 // Check if user is admin
 function checkAdminAccess() {
   const userEmail = localStorage.getItem('userEmail');
+  console.log('🔍 Checking admin access for email:', userEmail);
   if (userEmail !== 'klisaricf@gmail.com') {
+    console.log('❌ Access denied - not admin user');
     window.location.href = '/';
     return false;
   }
+  console.log('✅ Admin access granted');
   return true;
 }
 
 // Initialize page
 document.addEventListener('DOMContentLoaded', function() {
+  console.log('📄 DOM Content Loaded - initializing users page');
   if (!checkAdminAccess()) return;
   
+  console.log('🔧 Setting up admin UI elements');
   // Show admin info
   const adminInfo = document.getElementById('adminInfo');
   const adminEmail = document.getElementById('adminEmail');
   const logoutBtn = document.getElementById('logoutBtn');
   
-  adminInfo.style.display = 'flex';
-  adminEmail.textContent = localStorage.getItem('userEmail');
-  logoutBtn.style.display = 'flex';
+  if (adminInfo) {
+    adminInfo.style.display = 'flex';
+    console.log('✅ Admin info shown');
+  } else {
+    console.log('❌ Admin info element not found');
+  }
+  
+  if (adminEmail) {
+    adminEmail.textContent = localStorage.getItem('userEmail');
+    console.log('✅ Admin email set');
+  } else {
+    console.log('❌ Admin email element not found');
+  }
+  
+  if (logoutBtn) {
+    logoutBtn.style.display = 'flex';
+    console.log('✅ Logout button shown');
+  } else {
+    console.log('❌ Logout button not found');
+  }
   
   // Load users
+  console.log('📊 Loading users...');
   loadUsers();
   
   // Setup event listeners
+  console.log('🎯 Setting up event listeners...');
   setupEventListeners();
 });
 
@@ -53,41 +78,63 @@ function setupEventListeners() {
 
 // Load users from API
 async function loadUsers() {
+  console.log('🔄 Starting to load users...');
   const loading = document.getElementById('tableLoading');
   const error = document.getElementById('tableError');
   const table = document.getElementById('usersTable');
   
-  loading.style.display = 'flex';
-  error.style.display = 'none';
-  table.style.display = 'none';
+  console.log('📋 UI elements found:', {
+    loading: !!loading,
+    error: !!error,
+    table: !!table
+  });
+  
+  if (loading) loading.style.display = 'flex';
+  if (error) error.style.display = 'none';
+  if (table) table.style.display = 'none';
   
   try {
+    const token = localStorage.getItem('token');
+    console.log('🔑 Token found:', !!token);
+    
+    console.log('🌐 Making API request to /api/users...');
     const response = await fetch('/api/users', {
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
+        'Authorization': `Bearer ${token}`
       }
     });
     
+    console.log('📡 API response status:', response.status);
+    
     if (!response.ok) {
-      throw new Error('Failed to load users');
+      const errorText = await response.text();
+      console.log('❌ API error response:', errorText);
+      throw new Error(`Failed to load users: ${response.status} ${errorText}`);
     }
     
     const data = await response.json();
+    console.log('📊 Users data received:', data);
+    
     allUsers = data.users || [];
     filteredUsers = [...allUsers];
+    
+    console.log('👥 Users loaded:', allUsers.length);
     
     updateStats();
     renderUsers();
     renderPagination();
     
-    loading.style.display = 'none';
-    table.style.display = 'table';
+    if (loading) loading.style.display = 'none';
+    if (table) table.style.display = 'table';
+    
+    console.log('✅ Users page fully loaded');
     
   } catch (err) {
-    console.error('Error loading users:', err);
-    loading.style.display = 'none';
-    error.style.display = 'flex';
-    document.getElementById('errorMessage').textContent = err.message;
+    console.error('❌ Error loading users:', err);
+    if (loading) loading.style.display = 'none';
+    if (error) error.style.display = 'flex';
+    const errorMessage = document.getElementById('errorMessage');
+    if (errorMessage) errorMessage.textContent = err.message;
   }
 }
 

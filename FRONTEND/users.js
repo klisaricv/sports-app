@@ -1,7 +1,5 @@
 // Users page specific functionality
 console.log('🚀 users.js loaded successfully!');
-console.log('🔍 Current URL:', window.location.href);
-console.log('🔍 Current pathname:', window.location.pathname);
 let allUsers = [];
 let filteredUsers = [];
 let currentPage = 1;
@@ -145,9 +143,6 @@ function handleSearch(e) {
   const query = e.target.value.toLowerCase().trim();
   const clearBtn = document.getElementById('clearSearch');
   
-  console.log('🔍 Search query:', query);
-  console.log('📊 All users count:', allUsers.length);
-  
   if (query) {
     clearBtn.style.display = 'flex';
     filteredUsers = allUsers.filter(user => 
@@ -155,11 +150,9 @@ function handleSearch(e) {
       user.last_name.toLowerCase().includes(query) ||
       user.email.toLowerCase().includes(query)
     );
-    console.log('✅ Filtered users count:', filteredUsers.length);
   } else {
     clearBtn.style.display = 'none';
     filteredUsers = [...allUsers];
-    console.log('🔄 Reset to all users');
   }
   
   currentPage = 1;
@@ -211,11 +204,11 @@ function renderUsers() {
     
     return `
       <tr>
-        <td data-label="ID">${globalIndex}</td>
-        <td data-label="First Name">${user.first_name}</td>
-        <td data-label="Last Name">${user.last_name}</td>
-        <td data-label="Email">${user.email}</td>
-        <td data-label="Registered">${registeredDate}</td>
+        <td>${globalIndex}</td>
+        <td>${user.first_name}</td>
+        <td>${user.last_name}</td>
+        <td>${user.email}</td>
+        <td>${registeredDate}</td>
       </tr>
     `;
   }).join('');
@@ -264,14 +257,10 @@ function renderPagination() {
 // Change page
 function changePage(page) {
   const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
-  console.log('📄 Changing to page:', page, 'of', totalPages);
   if (page >= 1 && page <= totalPages) {
     currentPage = page;
     renderUsers();
     renderPagination();
-    console.log('✅ Page changed successfully');
-  } else {
-    console.log('❌ Invalid page number');
   }
 }
 

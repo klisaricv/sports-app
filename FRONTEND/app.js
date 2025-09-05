@@ -1265,12 +1265,17 @@ async function loadUsersPage() {
       }
     });
     
+    console.log("📡 [DEBUG] API response status:", response.status);
+    
     if (!response.ok) {
-      throw new Error(`Failed to load users: ${response.status}`);
+      const errorText = await response.text();
+      console.log("❌ [DEBUG] API error response:", errorText);
+      throw new Error(`Failed to load users: ${response.status} - ${errorText}`);
     }
     
     const data = await response.json();
     console.log("✅ [DEBUG] Users data loaded:", data);
+    console.log("✅ [DEBUG] Number of users:", data.users ? data.users.length : 0);
     
     // Render users page
     renderUsersPage(data.users || []);
@@ -1285,10 +1290,12 @@ function hideMainContent() {
   const mainContent = document.querySelector('.main-content');
   const analysisSection = document.querySelector('.analysis-section');
   const resultsSection = document.querySelector('.results-section');
+  const headerControls = document.querySelector('.header-controls');
   
   if (mainContent) mainContent.style.display = 'none';
   if (analysisSection) analysisSection.style.display = 'none';
   if (resultsSection) resultsSection.style.display = 'none';
+  if (headerControls) headerControls.style.display = 'none';
 }
 
 function showUsersPage() {
@@ -1387,8 +1394,12 @@ function renderUsersPage(users) {
   if (loading) loading.style.display = 'none';
   if (error) error.style.display = 'none';
   
-  if (users.length === 0) {
-    if (noUsers) noUsers.style.display = 'flex';
+  if (!users || users.length === 0) {
+    console.log("⚠️ [DEBUG] No users found or users array is empty");
+    if (noUsers) {
+      noUsers.style.display = 'flex';
+      noUsers.textContent = 'No users found in database';
+    }
     if (table) table.style.display = 'none';
     return;
   }
@@ -1426,10 +1437,12 @@ function showMainContent() {
   const mainContent = document.querySelector('.main-content');
   const analysisSection = document.querySelector('.analysis-section');
   const resultsSection = document.querySelector('.results-section');
+  const headerControls = document.querySelector('.header-controls');
   
   if (mainContent) mainContent.style.display = 'block';
   if (analysisSection) analysisSection.style.display = 'block';
   if (resultsSection) resultsSection.style.display = 'block';
+  if (headerControls) headerControls.style.display = 'flex';
 }
 
 function showError(message) {

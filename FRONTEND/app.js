@@ -1240,13 +1240,41 @@ document.addEventListener("DOMContentLoaded", () => {
     console.log("🔍 [DEBUG] Adding click listener to users button");
     usersBtn.addEventListener("click", (e) => {
       console.log("🔍 [DEBUG] Users button clicked!");
-      console.log("🔍 [DEBUG] Users button href:", usersBtn.href);
-      // Let the default link behavior handle navigation
+      e.preventDefault();
+      loadUsersPage();
     });
   } else {
     console.log("🔍 [DEBUG] Users button not found");
   }
 });
+
+// ===== USERS PAGE FUNCTIONS =====
+
+async function loadUsersPage() {
+  console.log("🔍 [DEBUG] Loading users page dynamically");
+  
+  try {
+    // Fetch the users HTML content
+    const response = await fetch('/admin/users');
+    if (!response.ok) {
+      throw new Error(`Failed to load users page: ${response.status}`);
+    }
+    
+    const htmlContent = await response.text();
+    console.log("✅ [DEBUG] Users HTML loaded successfully");
+    
+    // Replace the entire document content
+    document.open();
+    document.write(htmlContent);
+    document.close();
+    
+    console.log("✅ [DEBUG] Users page rendered successfully");
+    
+  } catch (error) {
+    console.error("❌ [ERROR] Failed to load users page:", error);
+    alert("Failed to load users page. Please try again.");
+  }
+}
 
 // ===== PREPARE DAY MODAL FUNCTIONS =====
 

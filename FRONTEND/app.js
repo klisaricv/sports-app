@@ -1197,6 +1197,12 @@ document.addEventListener("DOMContentLoaded", () => {
   // 3) Authentication
   checkAuthStatus();
   
+  // 3.1) Check if we're on users page
+  if (window.location.pathname === '/users') {
+    console.log("🔍 [DEBUG] On users page, initializing users functionality");
+    initUsersPage();
+  }
+  
   // 4) Initialize logout button
   const logoutBtn = document.getElementById('logoutBtn');
   if (logoutBtn) {
@@ -1234,193 +1240,59 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
   
-  // Add users button click listener
-  const usersBtn = document.getElementById('usersBtn');
-  if (usersBtn) {
-    console.log("🔍 [DEBUG] Adding click listener to users button");
-    usersBtn.addEventListener("click", (e) => {
-      console.log("🔍 [DEBUG] Users button clicked!");
-      e.preventDefault();
-      loadUsersPage();
-    });
-  } else {
-    console.log("🔍 [DEBUG] Users button not found");
-  }
+  // Users button is now a direct link - no JavaScript needed
 });
 
 // ===== USERS PAGE FUNCTIONS =====
 
-async function loadUsersPage() {
-  console.log("🔍 [DEBUG] Loading users page dynamically");
+async function initUsersPage() {
+  console.log("🔍 [DEBUG] Initializing users page");
   
   try {
-    // Hide main content and show loading
-    hideMainContent();
-    showUsersPage();
-    
-    // Load users data from API
+    // Check if user is admin
     const user = localStorage.getItem('user');
     const userData = user ? JSON.parse(user) : null;
-    const sessionId = userData ? userData.session_id : null;
-    console.log("🔑 [DEBUG] User from localStorage:", userData);
-    console.log("🔑 [DEBUG] Session ID:", sessionId);
     
+    if (!userData || userData.email !== 'klisaricf@gmail.com') {
+      console.log("❌ [DEBUG] User is not admin, redirecting to home");
+      window.location.href = '/';
+      return;
+    }
+    
+    console.log("✅ [DEBUG] User is admin, loading users");
+    
+    // Show admin info
+    const adminInfo = document.getElementById('adminInfo');
+    const adminEmail = document.getElementById('adminEmail');
+    if (adminInfo) adminInfo.style.display = 'flex';
+    if (adminEmail) adminEmail.textContent = userData.email;
+    
+    // Load users from API
+    const sessionId = userData.session_id;
     const response = await fetch('/api/users', {
       headers: {
         'Authorization': `Bearer ${sessionId}`
       }
     });
     
-    console.log("📡 [DEBUG] API response status:", response.status);
-    
     if (!response.ok) {
-      const errorText = await response.text();
-      console.log("❌ [DEBUG] API error response:", errorText);
-      throw new Error(`Failed to load users: ${response.status} - ${errorText}`);
+      throw new Error(`Failed to load users: ${response.status}`);
     }
     
     const data = await response.json();
-    console.log("✅ [DEBUG] Users data loaded:", data);
-    console.log("✅ [DEBUG] Number of users:", data.users ? data.users.length : 0);
+    console.log("✅ [DEBUG] Users loaded:", data.users.length);
     
-    // Render users page
-    renderUsersPage(data.users || []);
+    // Render users table
+    renderUsersTable(data.users);
     
   } catch (error) {
-    console.error("❌ [ERROR] Failed to load users page:", error);
+    console.error("❌ [ERROR] Failed to initialize users page:", error);
     showError("Failed to load users page. Please try again.");
   }
 }
 
-function hideMainContent() {
-  // Hide ALL main content sections
-  const mainContent = document.querySelector('.main-content');
-  const analysisSection = document.querySelector('.analysis-section');
-  const resultsSection = document.querySelector('.results-section');
-  const headerControls = document.querySelector('.header-controls');
-  
-  // Hide the ENTIRE control panel (date + buttons)
-  const controlPanel = document.querySelector('.control-panel');
-  const dateControls = document.querySelector('.date-controls');
-  const analyzeButtons = document.querySelector('.analysis-buttons');
-  
-  // Hide individual elements
-  const fromDate = document.querySelector('input[name="from"]');
-  const toDate = document.querySelector('input[name="to"]');
-  const prepareDayBtn = document.getElementById('prepareDay');
-  const usersBtn = document.getElementById('usersBtn');
-  
-  // Hide ALL buttons in header
-  const allButtons = document.querySelectorAll('.btn');
-  allButtons.forEach(btn => {
-    if (btn.id !== 'backToMain') {
-      btn.style.display = 'none';
-    }
-  });
-  
-  // Hide main sections
-  if (mainContent) mainContent.style.display = 'none';
-  if (analysisSection) analysisSection.style.display = 'none';
-  if (resultsSection) resultsSection.style.display = 'none';
-  if (headerControls) headerControls.style.display = 'none';
-  
-  // Hide the ENTIRE control panel
-  if (controlPanel) controlPanel.style.display = 'none';
-  if (dateControls) dateControls.style.display = 'none';
-  if (analyzeButtons) analyzeButtons.style.display = 'none';
-  if (fromDate) fromDate.style.display = 'none';
-  if (toDate) toDate.style.display = 'none';
-  if (prepareDayBtn) prepareDayBtn.style.display = 'none';
-  if (usersBtn) usersBtn.style.display = 'none';
-}
-
-function showUsersPage() {
-  // Create users page container
-  let usersContainer = document.getElementById('usersPageContainer');
-  if (!usersContainer) {
-    usersContainer = document.createElement('div');
-    usersContainer.id = 'usersPageContainer';
-    usersContainer.innerHTML = `
-      <div class="users-page">
-        <div class="page-header">
-          <div class="page-title">
-            <h1>Users Management</h1>
-            <p>Manage registered users</p>
-          </div>
-          <div class="admin-info" id="adminInfo" style="display: none;">
-            <span>Admin: <span id="adminEmail"></span></span>
-            <button id="backToMain" class="btn subtle">← Back to Main</button>
-          </div>
-        </div>
-        
-        <div class="users-controls">
-          <div class="search-container">
-            <input type="text" id="userSearch" placeholder="Search users by name or email..." />
-            <button id="clearSearch" class="btn subtle" style="display: none;">Clear</button>
-          </div>
-          <div class="users-stats">
-            <span>Total: <span id="totalUsers">0</span></span>
-            <span>Showing: <span id="showingUsers">0</span></span>
-          </div>
-        </div>
-        
-        <div class="users-table-container">
-          <div id="tableLoading" class="loading">Loading users...</div>
-          <div id="tableError" class="error" style="display: none;">
-            <span id="errorMessage">Failed to load users</span>
-          </div>
-          <div id="noUsers" class="no-data" style="display: none;">
-            No users found
-          </div>
-          <table id="usersTable" class="users-table" style="display: none;">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>First Name</th>
-                <th>Last Name</th>
-                <th>Email</th>
-                <th>Registered</th>
-              </tr>
-            </thead>
-            <tbody id="usersTableBody"></tbody>
-          </table>
-        </div>
-        
-        <div id="paginationContainer" class="pagination-container" style="display: none;">
-          <div class="pagination-info">
-            <span id="paginationInfo">Page 1 of 1</span>
-          </div>
-          <div class="pagination-controls">
-            <button id="prevPage" class="btn subtle" disabled>Previous</button>
-            <div id="paginationPages" class="pagination-pages"></div>
-            <button id="nextPage" class="btn subtle" disabled>Next</button>
-          </div>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(usersContainer);
-  }
-  
-  usersContainer.style.display = 'block';
-  
-  // Show admin info
-  const adminInfo = document.getElementById('adminInfo');
-  const adminEmail = document.getElementById('adminEmail');
-  if (adminInfo) adminInfo.style.display = 'flex';
-  if (adminEmail) adminEmail.textContent = localStorage.getItem('userEmail');
-  
-  // Add back button listener
-  const backBtn = document.getElementById('backToMain');
-  if (backBtn) {
-    backBtn.addEventListener('click', () => {
-      usersContainer.style.display = 'none';
-      showMainContent();
-    });
-  }
-}
-
-function renderUsersPage(users) {
-  console.log("🔍 [DEBUG] Rendering users page with", users.length, "users");
+function renderUsersTable(users) {
+  console.log("🔍 [DEBUG] Rendering users table with", users.length, "users");
   
   const loading = document.getElementById('tableLoading');
   const error = document.getElementById('tableError');
@@ -1431,7 +1303,6 @@ function renderUsersPage(users) {
   if (error) error.style.display = 'none';
   
   if (!users || users.length === 0) {
-    console.log("⚠️ [DEBUG] No users found or users array is empty");
     if (noUsers) {
       noUsers.style.display = 'flex';
       noUsers.textContent = 'No users found in database';
@@ -1466,58 +1337,19 @@ function renderUsersPage(users) {
     }).join('');
   }
   
-  console.log("✅ [DEBUG] Users page rendered successfully");
-}
-
-function showMainContent() {
-  // Show all main content sections
-  const mainContent = document.querySelector('.main-content');
-  const analysisSection = document.querySelector('.analysis-section');
-  const resultsSection = document.querySelector('.results-section');
-  const headerControls = document.querySelector('.header-controls');
-  
-  // Show the ENTIRE control panel (date + buttons)
-  const controlPanel = document.querySelector('.control-panel');
-  const dateControls = document.querySelector('.date-controls');
-  const analyzeButtons = document.querySelector('.analysis-buttons');
-  
-  // Show individual elements
-  const fromDate = document.querySelector('input[name="from"]');
-  const toDate = document.querySelector('input[name="to"]');
-  const prepareDayBtn = document.getElementById('prepareDay');
-  const usersBtn = document.getElementById('usersBtn');
-  
-  // Show ALL buttons in header
-  const allButtons = document.querySelectorAll('.btn');
-  allButtons.forEach(btn => {
-    btn.style.display = 'flex';
-  });
-  
-  // Show main sections
-  if (mainContent) mainContent.style.display = 'block';
-  if (analysisSection) analysisSection.style.display = 'block';
-  if (resultsSection) resultsSection.style.display = 'block';
-  if (headerControls) headerControls.style.display = 'flex';
-  
-  // Show the ENTIRE control panel
-  if (controlPanel) controlPanel.style.display = 'block';
-  if (dateControls) dateControls.style.display = 'flex';
-  if (analyzeButtons) analyzeButtons.style.display = 'grid';
-  if (fromDate) fromDate.style.display = 'block';
-  if (toDate) toDate.style.display = 'block';
-  if (prepareDayBtn) prepareDayBtn.style.display = 'flex';
-  if (usersBtn) usersBtn.style.display = 'flex';
+  console.log("✅ [DEBUG] Users table rendered successfully");
 }
 
 function showError(message) {
-  const usersContainer = document.getElementById('usersPageContainer');
-  if (usersContainer) {
-    const error = document.getElementById('tableError');
-    const errorMessage = document.getElementById('errorMessage');
-    if (error) error.style.display = 'flex';
-    if (errorMessage) errorMessage.textContent = message;
-  }
+  const error = document.getElementById('tableError');
+  const errorMessage = document.getElementById('errorMessage');
+  if (error) error.style.display = 'flex';
+  if (errorMessage) errorMessage.textContent = message;
 }
+
+// hideMainContent function removed - not needed for separate /users route
+
+// All old users page functions removed - now using separate /users route
 
 // ===== PREPARE DAY MODAL FUNCTIONS =====
 

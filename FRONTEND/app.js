@@ -1117,6 +1117,7 @@ function checkAuthStatus() {
   const userName = document.getElementById('userName');
   const userEmail = document.getElementById('userEmail');
   const prepareDayBtn = document.getElementById('prepareDay');
+  const usersBtn = document.getElementById('usersBtn');
   
   if (user) {
     // User is logged in
@@ -1126,13 +1127,20 @@ function checkAuthStatus() {
     if (userName) userName.textContent = userData.name || 'User';
     if (userEmail) userEmail.textContent = userData.email || 'user@example.com';
     
-    // Show Prepare Day button only for admin user
+    // Show admin buttons only for admin user
+    const isAdmin = userData.email === 'klisaricf@gmail.com';
     if (prepareDayBtn) {
-      const isAdmin = userData.email === 'klisaricf@gmail.com';
       if (isAdmin) {
         prepareDayBtn.classList.add('show');
       } else {
         prepareDayBtn.classList.remove('show');
+      }
+    }
+    if (usersBtn) {
+      if (isAdmin) {
+        usersBtn.style.display = 'flex';
+      } else {
+        usersBtn.style.display = 'none';
       }
     }
   } else {
@@ -1140,6 +1148,7 @@ function checkAuthStatus() {
     if (authButtons) authButtons.style.display = 'flex';
     if (userMenu) userMenu.style.display = 'none';
     if (prepareDayBtn) prepareDayBtn.classList.remove('show');
+    if (usersBtn) usersBtn.style.display = 'none';
   }
 }
 

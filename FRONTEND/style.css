@@ -2906,6 +2906,46 @@ body:has(.page-title h1:contains("Users Management")) .panel.controls {
   }
 }
 
+/* ===== TEAMS STATS BUTTONS ===== */
+#teamsStatsButtonsGroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
+}
+
+#teamsStatsButtonsGroup .btn {
+  flex: 1;
+  min-width: 200px;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+  min-height: 48px;
+}
+
+#teamsStatsButtonsGroup .btn span {
+  flex: 1;
+  text-align: left;
+}
+
+/* Mobile responsive for teams stats */
+@media (max-width: 768px) {
+  #teamsStatsButtonsGroup {
+    flex-direction: column;
+    gap: var(--spacing-xs);
+  }
+  
+  #teamsStatsButtonsGroup .btn {
+    min-width: auto;
+    padding: var(--spacing-sm);
+    font-size: var(--font-size-xs);
+    min-height: 44px;
+  }
+}
+
 /* Mobile devices */
 @media (max-width: 640px) {
   .users-page {
@@ -3294,31 +3334,14 @@ body:has(.page-title h1:contains("Users Management")) .panel.controls {
 /* ===== TEAMS STATS BUTTONS ===== */
 #teamsStatsButtonsGroup {
   display: flex;
-  flex-direction: column;
-  gap: var(--spacing-lg);
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
   margin-top: var(--spacing-md);
 }
 
-.teams-stats-header {
-  display: flex;
-  justify-content: flex-start;
-  margin-bottom: var(--spacing-md);
-}
-
-.teams-stats-dates {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--spacing-lg);
-  margin-bottom: var(--spacing-lg);
-}
-
-.teams-stats-buttons {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: var(--spacing-sm);
-}
-
-.teams-stats-buttons .btn {
+#teamsStatsButtonsGroup .btn {
+  flex: 1;
+  min-width: 200px;
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
@@ -3326,33 +3349,24 @@ body:has(.page-title h1:contains("Users Management")) .panel.controls {
   font-size: var(--font-size-sm);
   white-space: nowrap;
   min-height: 48px;
-  justify-content: center;
 }
 
-.teams-stats-buttons .btn span {
+#teamsStatsButtonsGroup .btn span {
   flex: 1;
-  text-align: center;
+  text-align: left;
 }
 
 /* Mobile responsive for teams stats */
 @media (max-width: 768px) {
-  .teams-stats-dates {
-    grid-template-columns: 1fr;
+  #teamsStatsButtonsGroup {
+    flex-direction: column;
+    gap: var(--spacing-xs);
   }
   
-  .teams-stats-buttons {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  
-  .teams-stats-buttons .btn {
+  #teamsStatsButtonsGroup .btn {
+    min-width: auto;
     padding: var(--spacing-sm);
     font-size: var(--font-size-xs);
     min-height: 44px;
-  }
-}
-
-@media (max-width: 480px) {
-  .teams-stats-buttons {
-    grid-template-columns: 1fr;
   }
 }

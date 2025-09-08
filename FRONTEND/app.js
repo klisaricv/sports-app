@@ -1340,12 +1340,6 @@ document.addEventListener("DOMContentLoaded", () => {
     teamsStatsBtn.addEventListener("click", toggleTeamsStats);
   }
 
-  // Back to Analyze Button (inside teams stats)
-  const backToAnalyze = document.getElementById("backToAnalyze");
-  if (backToAnalyze) {
-    backToAnalyze.addEventListener("click", toggleTeamsStats);
-  }
-
   // Original Analyze buttons (now in hidden group)
   if (btn1p) btn1p.addEventListener("click", () => fetchAnalysis("1p"));
   if (btnGG) btnGG.addEventListener("click", () => fetchAnalysis("GG"));
@@ -1464,19 +1458,6 @@ function toggleTeamsStats() {
     // Hide PREPARE DAY and USER MANAGEMENT buttons when in TEAM STATS mode
     if (prepareDay) prepareDay.style.display = 'none';
     if (usersBtn) usersBtn.style.display = 'none';
-    
-    // Copy date values from main form to teams stats form
-    const fromDate = document.getElementById('fromDate');
-    const toDate = document.getElementById('toDate');
-    const teamsFromDate = document.getElementById('teamsFromDate');
-    const teamsToDate = document.getElementById('teamsToDate');
-    
-    if (fromDate && teamsFromDate) {
-      teamsFromDate.value = fromDate.value;
-    }
-    if (toDate && teamsToDate) {
-      teamsToDate.value = toDate.value;
-    }
     
     // Show teams stats buttons
     teamsStatsButtonsGroup.style.display = 'flex';

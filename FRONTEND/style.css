@@ -433,7 +433,7 @@ button[disabled],
 /* Responsive Layout */
 @media (min-width: 768px) {
   .controls__row {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr 2fr;
     align-items: end;
   }
   
@@ -3293,14 +3293,32 @@ body:has(.page-title h1:contains("Users Management")) .panel.controls {
 
 /* ===== TEAMS STATS BUTTONS ===== */
 #teamsStatsButtonsGroup {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: var(--spacing-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
   margin-top: var(--spacing-md);
-  max-width: 100%;
 }
 
-#teamsStatsButtonsGroup .btn {
+.teams-stats-header {
+  display: flex;
+  justify-content: flex-start;
+  margin-bottom: var(--spacing-md);
+}
+
+.teams-stats-dates {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
+}
+
+.teams-stats-buttons {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--spacing-sm);
+}
+
+.teams-stats-buttons .btn {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
@@ -3311,39 +3329,22 @@ body:has(.page-title h1:contains("Users Management")) .panel.controls {
   justify-content: center;
 }
 
-#teamsStatsButtonsGroup .btn span {
+.teams-stats-buttons .btn span {
   flex: 1;
   text-align: center;
 }
 
-/* Responsive grid for teams stats */
-@media (min-width: 1200px) {
-  #teamsStatsButtonsGroup {
-    grid-template-columns: repeat(5, 1fr);
-  }
-}
-
-@media (min-width: 1400px) {
-  #teamsStatsButtonsGroup {
-    grid-template-columns: repeat(6, 1fr);
-  }
-}
-
-/* Tablet responsive for teams stats */
-@media (max-width: 1024px) {
-  #teamsStatsButtonsGroup {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
 /* Mobile responsive for teams stats */
 @media (max-width: 768px) {
-  #teamsStatsButtonsGroup {
-    grid-template-columns: repeat(2, 1fr);
-    gap: var(--spacing-xs);
+  .teams-stats-dates {
+    grid-template-columns: 1fr;
   }
   
-  #teamsStatsButtonsGroup .btn {
+  .teams-stats-buttons {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .teams-stats-buttons .btn {
     padding: var(--spacing-sm);
     font-size: var(--font-size-xs);
     min-height: 44px;
@@ -3351,7 +3352,7 @@ body:has(.page-title h1:contains("Users Management")) .panel.controls {
 }
 
 @media (max-width: 480px) {
-  #teamsStatsButtonsGroup {
+  .teams-stats-buttons {
     grid-template-columns: 1fr;
   }
 }

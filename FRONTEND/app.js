@@ -1340,6 +1340,12 @@ document.addEventListener("DOMContentLoaded", () => {
     teamsStatsBtn.addEventListener("click", toggleTeamsStats);
   }
 
+  // Back to Analyze Button (inside teams stats)
+  const backToAnalyze = document.getElementById("backToAnalyze");
+  if (backToAnalyze) {
+    backToAnalyze.addEventListener("click", toggleTeamsStats);
+  }
+
   // Original Analyze buttons (now in hidden group)
   if (btn1p) btn1p.addEventListener("click", () => fetchAnalysis("1p"));
   if (btnGG) btnGG.addEventListener("click", () => fetchAnalysis("GG"));
@@ -1403,20 +1409,15 @@ window.addEventListener('hashchange', () => {
 // Toggle between analyze buttons and teams stats buttons
 function toggleTeamsStats() {
   const teamsStatsBtn = document.getElementById('teamsStatsBtn');
-  const analyze1p = document.getElementById('analyze1p');
-  const analyzeGG = document.getElementById('analyzeGG');
-  const analyze2plus = document.getElementById('analyze2plus');
-  const analyzeFT2plus = document.getElementById('analyzeFT2plus');
+  const controlsSection = document.querySelector('.panel.controls');
   const teamsStatsButtonsGroup = document.getElementById('teamsStatsButtonsGroup');
-  const prepareDay = document.getElementById('prepareDay');
-  const usersBtn = document.getElementById('usersBtn');
   
-  if (!teamsStatsBtn || !teamsStatsButtonsGroup) return;
+  if (!teamsStatsBtn || !teamsStatsButtonsGroup || !controlsSection) return;
   
   const isTeamsStatsVisible = teamsStatsButtonsGroup.style.display !== 'none';
   
   if (isTeamsStatsVisible) {
-    // Show analyze buttons, hide teams stats
+    // Show normal controls, hide teams stats
     teamsStatsBtn.innerHTML = `
       <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
         <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" stroke="currentColor" stroke-width="2" fill="none"/>
@@ -1427,20 +1428,14 @@ function toggleTeamsStats() {
     `;
     teamsStatsBtn.className = 'btn';
     
-    // Show original analyze buttons
-    if (analyze1p) analyze1p.style.display = 'flex';
-    if (analyzeGG) analyzeGG.style.display = 'flex';
-    if (analyze2plus) analyze2plus.style.display = 'flex';
-    if (analyzeFT2plus) analyzeFT2plus.style.display = 'flex';
+    // Show normal controls content
+    const normalControls = controlsSection.querySelector('.controls__row');
+    if (normalControls) normalControls.style.display = 'grid';
     
-    // Show PREPARE DAY and USER MANAGEMENT buttons
-    if (prepareDay) prepareDay.style.display = 'flex';
-    if (usersBtn) usersBtn.style.display = 'flex';
-    
-    // Hide teams stats buttons
+    // Hide teams stats
     teamsStatsButtonsGroup.style.display = 'none';
   } else {
-    // Show teams stats buttons, hide analyze buttons
+    // Show teams stats, hide normal controls
     teamsStatsBtn.innerHTML = `
       <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
         <path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -1449,17 +1444,24 @@ function toggleTeamsStats() {
     `;
     teamsStatsBtn.className = 'btn secondary';
     
-    // Hide original analyze buttons
-    if (analyze1p) analyze1p.style.display = 'none';
-    if (analyzeGG) analyzeGG.style.display = 'none';
-    if (analyze2plus) analyze2plus.style.display = 'none';
-    if (analyzeFT2plus) analyzeFT2plus.style.display = 'none';
+    // Hide normal controls content
+    const normalControls = controlsSection.querySelector('.controls__row');
+    if (normalControls) normalControls.style.display = 'none';
     
-    // Hide PREPARE DAY and USER MANAGEMENT buttons when in TEAM STATS mode
-    if (prepareDay) prepareDay.style.display = 'none';
-    if (usersBtn) usersBtn.style.display = 'none';
+    // Copy date values from main form to teams stats form
+    const fromDate = document.getElementById('fromDate');
+    const toDate = document.getElementById('toDate');
+    const teamsFromDate = document.getElementById('teamsFromDate');
+    const teamsToDate = document.getElementById('teamsToDate');
     
-    // Show teams stats buttons
+    if (fromDate && teamsFromDate) {
+      teamsFromDate.value = fromDate.value;
+    }
+    if (toDate && teamsToDate) {
+      teamsToDate.value = toDate.value;
+    }
+    
+    // Show teams stats
     teamsStatsButtonsGroup.style.display = 'flex';
   }
 }

@@ -1977,3 +1977,11 @@ if (document.readyState === "interactive" || document.readyState === "complete")
 
 // Log da znamo da je JS podignut
 console.log("app.js loaded");
+
+// Delegacija klika za BACK dugme unutar Teams panela (fallback)
+document.addEventListener('click', (e) => {
+  if (e.target.closest('#backToAnalyze')) {
+    e.preventDefault();
+    toggleTeamsStats();
+  }
+});

@@ -187,7 +187,7 @@
     <!-- ===== TEAMS STATS PANEL (new) ===== -->
     <section id="teamsStatsPanel" class="panel teams-stats" style="display: none;">
       <div class="teams-stats__header">
-        <button id="backToAnalyze" class="btn secondary">
+        <button id="backToAnalyze" class="btn secondary" type="button" onclick="toggleTeamsStats()">
           <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
             <path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
@@ -214,16 +214,16 @@
 
       <div id="teamsStatsButtonsGroup">
         <!-- (ista ona 10 dugmadi kao gore, samo bez style="display:none") -->
-        <button id="teamGGHT" class="btn">…</button>
-        <button id="team1plusHT" class="btn">…</button>
-        <button id="team2plusHT" class="btn">…</button>
-        <button id="team3plusFT" class="btn btn-ft">…</button>
-        <button id="team4plusFT" class="btn btn-ft">…</button>
-        <button id="teamAvgMostScored" class="btn">…</button>
-        <button id="teamAvgMostConceded" class="btn">…</button>
-        <button id="teamGGFT" class="btn btn-ft">…</button>
-        <button id="teamGG3plusFT" class="btn btn-ft">…</button>
-        <button id="teamXHT" class="btn">…</button>
+        <button id="teamGGHT" class="btn btn-team" type="button" onclick="handleTeamStats('GG','HT')">TEAMs GG HT</button>
+        <button id="team1plusHT" class="btn btn-team" type="button" onclick="handleTeamStats('1+','HT')">TEAMs 1+ HT</button>
+        <button id="team2plusHT" class="btn btn-team" type="button" onclick="handleTeamStats('2+','HT')">TEAMs 2+ HT</button>
+        <button id="team3plusFT" class="btn btn-team" type="button" onclick="handleTeamStats('3+','FT')">TEAMs 3+ FT</button>
+        <button id="team4plusFT" class="btn btn-team" type="button" onclick="handleTeamStats('4+','FT')">TEAMs 4+ FT</button>
+        <button id="teamAvgMostScored" class="btn btn-team" type="button" onclick="handleTeamStats('AVG_SC','ALL')">TEAMs AVG - most goals scored</button>
+        <button id="teamAvgMostConceded" class="btn btn-team" type="button" onclick="handleTeamStats('AVG_CONC','ALL')">TEAMs AVG - most goals concerned</button>
+        <button id="teamGGFT" class="btn btn-team" type="button" onclick="handleTeamStats('GG','FT')">TEAMs GG FT</button>
+        <button id="teamGG3plusFT" class="btn btn-team" type="button" onclick="handleTeamStats('GG3+','FT')">TEAMs GG3+ FT</button>
+        <button id="teamXHT" class="btn btn-team" type="button" onclick="handleTeamStats('X','HT')">TEAMs X HT</button>
       </div>
     </section>
 

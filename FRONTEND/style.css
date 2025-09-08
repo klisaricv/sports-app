@@ -2929,16 +2929,33 @@ body:has(.page-title h1:contains("Users Management")) .panel.controls {
   grid-template-columns: repeat(5, 1fr);
   gap: var(--spacing-sm);
   margin-top: var(--spacing-md);
+  align-items: stretch;          /* iste visine po redu */
 }
 
-#teamsStatsButtonsGroup .btn {
+#teamsStatsButtonsGroup .btn,
+#teamsStatsButtonsGroup .btn.btn-team,
+#teamsStatsButtonsGroup .btn.btn-ft,
+#teamsStatsButtonsGroup .btn.btn-warning {
+  /* unifikuj izgled samo u TEAMS panelu */
+  background: var(--surface-2);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  box-shadow: none;
   min-height: 56px;
-  display: flex;
+  height: 56px;                  /* fiksna visina = sve iste */
+  width: 100%;
+  display: inline-flex;
   align-items: center;
-  gap: var(--spacing-sm);
+  justify-content: center;
   padding: var(--spacing-md);
   font-size: var(--font-size-sm);
-  justify-content: center;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+#teamsStatsButtonsGroup .btn:hover {
+  background: var(--surface-3);
+  border-color: var(--border-strong, var(--border-color));
 }
 
 /* Tablets */
@@ -2959,9 +2976,12 @@ body:has(.page-title h1:contains("Users Management")) .panel.controls {
   }
   #teamsStatsButtonsGroup .btn {
     min-height: 44px;
+    height: 44px;
     font-size: var(--font-size-xs);
+    padding: var(--spacing-sm);
   }
 }
+
 
 /* Mobile devices */
 @media (max-width: 640px) {

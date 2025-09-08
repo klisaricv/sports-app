@@ -2906,46 +2906,6 @@ body:has(.page-title h1:contains("Users Management")) .panel.controls {
   }
 }
 
-/* ===== TEAMS STATS BUTTONS ===== */
-#teamsStatsButtonsGroup {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-sm);
-  margin-top: var(--spacing-md);
-}
-
-#teamsStatsButtonsGroup .btn {
-  flex: 1;
-  min-width: 200px;
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-md);
-  font-size: var(--font-size-sm);
-  white-space: nowrap;
-  min-height: 48px;
-}
-
-#teamsStatsButtonsGroup .btn span {
-  flex: 1;
-  text-align: left;
-}
-
-/* Mobile responsive for teams stats */
-@media (max-width: 768px) {
-  #teamsStatsButtonsGroup {
-    flex-direction: column;
-    gap: var(--spacing-xs);
-  }
-  
-  #teamsStatsButtonsGroup .btn {
-    min-width: auto;
-    padding: var(--spacing-sm);
-    font-size: var(--font-size-xs);
-    min-height: 44px;
-  }
-}
-
 /* Mobile devices */
 @media (max-width: 640px) {
   .users-page {
@@ -3333,15 +3293,13 @@ body:has(.page-title h1:contains("Users Management")) .panel.controls {
 
 /* ===== TEAMS STATS BUTTONS ===== */
 #teamsStatsButtonsGroup {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
   gap: var(--spacing-sm);
   margin-top: var(--spacing-md);
 }
 
 #teamsStatsButtonsGroup .btn {
-  flex: 1;
-  min-width: 200px;
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
@@ -3349,24 +3307,43 @@ body:has(.page-title h1:contains("Users Management")) .panel.controls {
   font-size: var(--font-size-sm);
   white-space: nowrap;
   min-height: 48px;
+  justify-content: center;
 }
 
 #teamsStatsButtonsGroup .btn span {
   flex: 1;
-  text-align: left;
+  text-align: center;
+}
+
+/* Responsive grid for teams stats */
+@media (min-width: 1200px) {
+  #teamsStatsButtonsGroup {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (min-width: 1400px) {
+  #teamsStatsButtonsGroup {
+    grid-template-columns: repeat(5, 1fr);
+  }
 }
 
 /* Mobile responsive for teams stats */
 @media (max-width: 768px) {
   #teamsStatsButtonsGroup {
-    flex-direction: column;
+    grid-template-columns: repeat(2, 1fr);
     gap: var(--spacing-xs);
   }
   
   #teamsStatsButtonsGroup .btn {
-    min-width: auto;
     padding: var(--spacing-sm);
     font-size: var(--font-size-xs);
     min-height: 44px;
+  }
+}
+
+@media (max-width: 480px) {
+  #teamsStatsButtonsGroup {
+    grid-template-columns: 1fr;
   }
 }

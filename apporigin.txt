@@ -31,7 +31,10 @@ function disableAllButtons(disable) {
     if (disable) {
       btn.disabled = true;
       btn.style.pointerEvents = 'none';
-      btn.style.opacity = '0.5';
+      // Don't change opacity for auth buttons to prevent height changes
+      if (!btn.classList.contains('auth-btn')) {
+        btn.style.opacity = '0.5';
+      }
     } else {
       btn.disabled = false;
       btn.style.pointerEvents = 'auto';
@@ -485,7 +488,8 @@ function ensureModernShell() {
   }
 
   // Kontrole: probaj prebaciti stare inpute/dugmad u modern panel
-  if (!document.querySelector(".controls__row")) {
+  // Skip creating controls panel on users page
+  if (!document.querySelector(".controls__row") && window.location.pathname !== '/users') {
     const panel = document.createElement("section");
     panel.className = "panel";
     panel.innerHTML = `
@@ -708,14 +712,20 @@ function getAnalysisTitle(market) {
   return titles[market] || '📈 Rezultati analize';
 }
 
-function renderResults(data, market) {
+// Global variables for results
+let allResults = [];
+
+async function renderResults(data, market) {
   const currentMarket = market || "1h_over05";
   window.currentAnalysisResults = data;
+  window.currentAnalysisMarket = currentMarket;
+  
+  // Initialize with data
+  allResults = Array.isArray(data) ? data : [];
 
-  const top5Container = document.getElementById("top5");
-  const otherContainer = document.getElementById("other");
-
-  const total = Array.isArray(data) ? data.length : 0;
+  // Set total count - use data.total if available, otherwise use array length
+  const totalResultsCount = data?.total || allResults.length;
+  const total = totalResultsCount;
 
   // Dodaj naslov analize iznad rezultata
   const analysisTitle = getAnalysisTitle(currentMarket);
@@ -735,12 +745,17 @@ function renderResults(data, market) {
     titleEl.querySelector('.analysis-subtitle').textContent = `Analiza završena • ${total} mečeva pronađeno`;
   }
 
-  // Clear content areas, preserve section titles and descriptions
-  const top5ContentArea = top5Container?.querySelector('.section-content');
-  const otherContentArea = otherContainer?.querySelector('.section-content');
-  
-  if (top5ContentArea) top5ContentArea.innerHTML = '';
-  if (otherContentArea) otherContentArea.innerHTML = '';
+  // Render matches (max 7)
+  renderMatches();
+}
+
+function renderMatches() {
+  const matchesContent = document.getElementById('matchesContent');
+
+  if (!matchesContent) return;
+
+  // Clear content area
+  matchesContent.innerHTML = '';
 
   const cardHTML = (m) => {
     // Format kickoff time
@@ -775,22 +790,27 @@ function renderResults(data, market) {
             <span class="final-value">${fmt(m.final_percent, '%')}</span>
           </div>
           <div class="narrative">
-            ${buildSimplifiedNarrative(m, currentMarket)}
+            ${buildSimplifiedNarrative(m, window.currentAnalysisMarket || "1h_over05")}
           </div>
         </div>
       </div>
     `;
   };
 
-  (data || []).forEach((match, index) => {
-    const html = cardHTML(match);
-    if (index < 5) {
-      top5ContentArea.innerHTML = (top5ContentArea.innerHTML || "") + html;
-    } else {
-      otherContentArea.innerHTML = (otherContentArea.innerHTML || "") + html;
-    }
-  });
+  // Sort by final_percent descending and take max 7
+  const sortedResults = allResults
+    .sort((a, b) => (b.final_percent || 0) - (a.final_percent || 0))
+    .slice(0, 7);
+
+  if (sortedResults.length > 0) {
+    sortedResults.forEach((match) => {
+      matchesContent.innerHTML += cardHTML(match);
+    });
+  } else {
+    matchesContent.innerHTML = '<div class="placeholder">Nema rezultata za ovaj period.</div>';
+  }
 }
+
 
 // ====== HELPERS ======
 function normalizeResults(json) {
@@ -1180,8 +1200,71 @@ async function logout() {
   } finally {
     // Always clear local storage and update UI
     localStorage.removeItem('user');
+    
+    // Clear analysis results
+    clearAnalysisResults();
+    
     checkAuthStatus();
     showToast('Logged out successfully!', 'success');
+  }
+}
+
+// Clear analysis results
+function clearAnalysisResults() {
+  // Hide results section
+  const resultsSection = document.getElementById('resultsSection');
+  if (resultsSection) {
+    resultsSection.style.display = 'none';
+  }
+  
+  // Clear results content
+  const top5Content = document.getElementById('top5Content');
+  const otherContent = document.getElementById('otherContent');
+  if (top5Content) {
+    top5Content.innerHTML = '<div class="placeholder">Nema rezultata analize još.</div>';
+  }
+  if (otherContent) {
+    otherContent.innerHTML = '<div class="placeholder">Nema rezultata analize još.</div>';
+  }
+  
+  // Reset counts
+  const countTop = document.getElementById('countTop');
+  const countOther = document.getElementById('countOther');
+  if (countTop) countTop.textContent = '(0)';
+  if (countOther) countOther.textContent = '(0)';
+  
+  // Hide pagination
+  const pagination = document.getElementById('resultsPagination');
+  const paginationTop = document.getElementById('resultsPaginationTop');
+  if (pagination) {
+    pagination.style.display = 'none';
+  }
+  if (paginationTop) {
+    paginationTop.style.display = 'none';
+  }
+  
+  // Remove analysis title
+  const analysisTitle = document.getElementById('analysis-title');
+  if (analysisTitle) {
+    analysisTitle.remove();
+  }
+  
+  // Reset pagination variables
+  currentResultsPage = 1;
+  allResults = [];
+  top5Results = [];
+  totalResultsCount = 0;
+  
+  console.log('🧹 Analysis results cleared');
+}
+
+// Function to hide controls on users page
+function hideControlsOnUsersPage() {
+  if (window.location.pathname === '/users') {
+    const controlsPanel = document.querySelector('.panel.controls');
+    if (controlsPanel) {
+      controlsPanel.style.display = 'none';
+    }
   }
 }
 
@@ -1203,7 +1286,27 @@ document.addEventListener("DOMContentLoaded", () => {
     console.log("🔍 [DEBUG] On users page, initializing users functionality");
     initUsersPage();
   } else {
-    console.log("🔍 [DEBUG] Not on users page, skipping users initialization");
+    console.log("🔍 [DEBUG] Not on users page, ensuring controls are visible");
+    // Ensure controls are visible on non-users pages
+    document.body.removeAttribute('data-page');
+    const controlsPanel = document.querySelector('.panel.controls');
+    if (controlsPanel) {
+      controlsPanel.style.display = '';
+      controlsPanel.classList.remove('hidden-on-users');
+    }
+  }
+  
+  // 3.2) Hide controls on users page - wait for DOM to be ready
+  if (window.location.pathname === '/users') {
+    setTimeout(() => {
+      const controlsPanel = document.querySelector('.panel.controls');
+      if (controlsPanel) {
+        controlsPanel.style.display = 'none';
+        console.log('✅ Controls panel hidden on users page');
+      } else {
+        console.log('❌ Controls panel not found');
+      }
+    }, 500);
   }
   
   // 4) Initialize logout button
@@ -1231,6 +1334,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnPrep = document.getElementById("prepareDay");
   console.log("🔍 [DEBUG] prepareDay button found:", btnPrep);
 
+  // Teams Stats Button
+  const teamsStatsBtn = document.getElementById("teamsStatsBtn");
+  if (teamsStatsBtn) {
+    teamsStatsBtn.addEventListener("click", toggleTeamsStats);
+  }
+
+  // Original Analyze buttons (now in hidden group)
   if (btn1p) btn1p.addEventListener("click", () => fetchAnalysis("1p"));
   if (btnGG) btnGG.addEventListener("click", () => fetchAnalysis("GG"));
   if (btn1pls) btn1pls.addEventListener("click", () => fetchAnalysis("O15"));
@@ -1242,11 +1352,152 @@ document.addEventListener("DOMContentLoaded", () => {
       showPrepareDayModal();
     });
   }
+
+  // Teams Stats buttons
+  const teamGGHT = document.getElementById("teamGGHT");
+  const team1plusHT = document.getElementById("team1plusHT");
+  const team2plusHT = document.getElementById("team2plusHT");
+  const team3plusFT = document.getElementById("team3plusFT");
+  const team4plusFT = document.getElementById("team4plusFT");
+  const teamAvgMostScored = document.getElementById("teamAvgMostScored");
+  const teamAvgMostConceded = document.getElementById("teamAvgMostConceded");
+  const teamGGFT = document.getElementById("teamGGFT");
+  const teamGG3plusFT = document.getElementById("teamGG3plusFT");
+  const teamXHT = document.getElementById("teamXHT");
+
+  if (teamGGHT) teamGGHT.addEventListener("click", () => handleTeamStats("GG", "HT"));
+  if (team1plusHT) team1plusHT.addEventListener("click", () => handleTeamStats("1+", "HT"));
+  if (team2plusHT) team2plusHT.addEventListener("click", () => handleTeamStats("2+", "HT"));
+  if (team3plusFT) team3plusFT.addEventListener("click", () => handleTeamStats("3+", "FT"));
+  if (team4plusFT) team4plusFT.addEventListener("click", () => handleTeamStats("4+", "FT"));
+  if (teamAvgMostScored) teamAvgMostScored.addEventListener("click", () => handleTeamStats("AVG_MOST_SCORED", "FT"));
+  if (teamAvgMostConceded) teamAvgMostConceded.addEventListener("click", () => handleTeamStats("AVG_MOST_CONCEDED", "FT"));
+  if (teamGGFT) teamGGFT.addEventListener("click", () => handleTeamStats("GG", "FT"));
+  if (teamGG3plusFT) teamGG3plusFT.addEventListener("click", () => handleTeamStats("GG3+", "FT"));
+  if (teamXHT) teamXHT.addEventListener("click", () => handleTeamStats("X", "HT"));
   
   // Users button is now a direct link - no JavaScript needed
+  
+  // Final check to hide controls on users page
+  setTimeout(() => {
+    hideControlsOnUsersPage();
+  }, 100);
 });
 
+// Listen for URL changes (for SPA navigation)
+window.addEventListener('popstate', () => {
+  setTimeout(() => {
+    hideControlsOnUsersPage();
+  }, 50);
+});
+
+// Listen for hash changes
+window.addEventListener('hashchange', () => {
+  setTimeout(() => {
+    hideControlsOnUsersPage();
+  }, 50);
+});
+
+// ===== TEAMS STATS FUNCTIONS =====
+
+// Toggle between analyze buttons and teams stats buttons
+function toggleTeamsStats() {
+  const teamsStatsBtn = document.getElementById('teamsStatsBtn');
+  const analyze1p = document.getElementById('analyze1p');
+  const analyzeGG = document.getElementById('analyzeGG');
+  const analyze2plus = document.getElementById('analyze2plus');
+  const analyzeFT2plus = document.getElementById('analyzeFT2plus');
+  const teamsStatsButtonsGroup = document.getElementById('teamsStatsButtonsGroup');
+  const prepareDay = document.getElementById('prepareDay');
+  const usersBtn = document.getElementById('usersBtn');
+  
+  if (!teamsStatsBtn || !teamsStatsButtonsGroup) return;
+  
+  const isTeamsStatsVisible = teamsStatsButtonsGroup.style.display !== 'none';
+  
+  if (isTeamsStatsVisible) {
+    // Show analyze buttons, hide teams stats
+    teamsStatsBtn.innerHTML = `
+      <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+        <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" stroke="currentColor" stroke-width="2" fill="none"/>
+        <rect x="8" y="2" width="8" height="4" rx="1" ry="1" stroke="currentColor" stroke-width="2" fill="none"/>
+        <path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span>TEAMS STATS</span>
+    `;
+    teamsStatsBtn.className = 'btn';
+    
+    // Show original analyze buttons
+    if (analyze1p) analyze1p.style.display = 'flex';
+    if (analyzeGG) analyzeGG.style.display = 'flex';
+    if (analyze2plus) analyze2plus.style.display = 'flex';
+    if (analyzeFT2plus) analyzeFT2plus.style.display = 'flex';
+    
+    // Show PREPARE DAY and USER MANAGEMENT buttons
+    if (prepareDay) prepareDay.style.display = 'flex';
+    if (usersBtn) usersBtn.style.display = 'flex';
+    
+    // Hide teams stats buttons
+    teamsStatsButtonsGroup.style.display = 'none';
+  } else {
+    // Show teams stats buttons, hide analyze buttons
+    teamsStatsBtn.innerHTML = `
+      <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+        <path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span>BACK TO ANALYZE</span>
+    `;
+    teamsStatsBtn.className = 'btn secondary';
+    
+    // Hide original analyze buttons
+    if (analyze1p) analyze1p.style.display = 'none';
+    if (analyzeGG) analyzeGG.style.display = 'none';
+    if (analyze2plus) analyze2plus.style.display = 'none';
+    if (analyzeFT2plus) analyzeFT2plus.style.display = 'none';
+    
+    // Hide PREPARE DAY and USER MANAGEMENT buttons when in TEAM STATS mode
+    if (prepareDay) prepareDay.style.display = 'none';
+    if (usersBtn) usersBtn.style.display = 'none';
+    
+    // Show teams stats buttons
+    teamsStatsButtonsGroup.style.display = 'flex';
+  }
+}
+
+// Handle team stats button clicks
+function handleTeamStats(market, period) {
+  console.log('🏆 Team Stats clicked:', { market, period });
+  
+  // Show loading state
+  showToast('Loading team stats...', 'info');
+  
+  // TODO: Implement team stats API call
+  // For now, just show a placeholder message
+  setTimeout(() => {
+    showToast(`Team Stats: ${market} ${period} - Coming soon!`, 'success');
+  }, 1000);
+}
+
 // ===== USERS PAGE FUNCTIONS =====
+
+// Load users.js script dynamically
+function loadUsersScript() {
+  if (!window.usersScriptLoaded) {
+    console.log("🔍 [DEBUG] Loading users.js dynamically");
+    const script = document.createElement('script');
+    script.src = '/static/users.js';
+    script.defer = true;
+    script.onload = function() {
+      console.log("✅ users.js loaded successfully");
+      window.usersScriptLoaded = true;
+    };
+    script.onerror = function() {
+      console.error("❌ Failed to load users.js");
+    };
+    document.head.appendChild(script);
+  }
+}
+
 
 async function initUsersPage() {
   console.log("🔍 [DEBUG] Initializing users page");
@@ -1254,6 +1505,33 @@ async function initUsersPage() {
   console.log("🔍 [DEBUG] Current pathname:", window.location.pathname);
   
   try {
+    // Set page attribute for CSS targeting (this will hide controls via CSS)
+    document.body.setAttribute('data-page', 'users');
+    
+    // Hide controls panel on users page
+    const controlsPanel = document.querySelector('.panel.controls');
+    if (controlsPanel) {
+      controlsPanel.style.display = 'none';
+      controlsPanel.classList.add('hidden-on-users');
+    }
+    
+    // Load users.js dynamically when needed
+    loadUsersScript();
+    
+    // Wait a bit for script to load, then initialize
+    setTimeout(() => {
+      if (window.initUsersPage) {
+        window.initUsersPage();
+      } else {
+        console.log("❌ initUsersPage not available yet, retrying...");
+        setTimeout(() => {
+          if (window.initUsersPage) {
+            window.initUsersPage();
+          }
+        }, 500);
+      }
+    }, 100);
+    
     // Check if user is admin
     const user = localStorage.getItem('user');
     const userData = user ? JSON.parse(user) : null;
@@ -1689,3 +1967,6 @@ if (document.readyState === "interactive" || document.readyState === "complete")
 
 // Log da znamo da je JS podignut
 console.log("app.js loaded");
+
+
+APP.js 

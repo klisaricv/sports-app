@@ -468,10 +468,71 @@ button[disabled],
   margin-top: var(--spacing-lg);
 }
 
-@media (min-width: 1024px) {
-  .results__grid {
-    grid-template-columns: 1fr 1fr;
-  }
+/* Always single column for results */
+.results__grid {
+  grid-template-columns: 1fr !important;
+}
+
+/* Section Header */
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: var(--spacing-md);
+}
+
+.section-title {
+  flex: 1;
+}
+
+/* Results Pagination */
+.results-pagination,
+.results-pagination-top {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.results-pagination {
+  margin-top: var(--spacing-lg);
+  padding: var(--spacing-md);
+}
+
+.results-pagination-top {
+  margin-left: var(--spacing-md);
+}
+
+.results-pagination button,
+.results-pagination-top button {
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-primary);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: var(--transition);
+  min-width: 40px;
+  height: 40px;
+}
+
+.results-pagination button:hover:not(:disabled),
+.results-pagination-top button:hover:not(:disabled) {
+  background: var(--surface-elevated);
+  border-color: var(--primary);
+}
+
+.results-pagination button:disabled,
+.results-pagination-top button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.results-pagination .page-info,
+.results-pagination-top .page-info {
+  margin: 0 var(--spacing-md);
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
 }
 
 .section {
@@ -1134,17 +1195,20 @@ button[disabled],
 
 /* Header Auth Button Styles */
 .header-actions .auth-btn {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-  padding: var(--spacing-sm) var(--spacing-md);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  text-decoration: none;
-  transition: var(--transition);
-  min-height: 32px;
+  display: flex !important;
+  align-items: center !important;
+  gap: var(--spacing-xs) !important;
+  padding: var(--spacing-sm) var(--spacing-md) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius) !important;
+  font-size: var(--font-size-sm) !important;
+  font-weight: var(--font-weight-medium) !important;
+  text-decoration: none !important;
+  transition: var(--transition) !important;
+  min-height: 40px !important; /* Consistent with main auth-btn */
+  height: 40px !important; /* Fixed height to prevent changes */
+  width: auto !important; /* Prevent width changes */
+  box-sizing: border-box !important; /* Include padding in height calculation */
 }
 
 .header-actions .auth-btn.primary {
@@ -1160,22 +1224,55 @@ button[disabled],
 }
 
 .header-actions .auth-btn:hover {
-  opacity: 0.9;
+  opacity: 0.9 !important;
+  height: 40px !important; /* Maintain height on hover */
+  min-height: 40px !important;
 }
 
 .header-actions .auth-btn.primary:hover {
-  background: var(--surface-elevated);
-  color: var(--primary);
+  background: var(--surface-elevated) !important;
+  color: var(--primary) !important;
+  height: 40px !important; /* Maintain height on hover */
+  min-height: 40px !important;
 }
 
 .header-actions .auth-btn.secondary:hover {
-  background: var(--surface-elevated);
-  border-color: var(--primary);
-  }
+  background: var(--surface-elevated) !important;
+  border-color: var(--primary) !important;
+  height: 40px !important; /* Maintain height on hover */
+  min-height: 40px !important;
+}
   
   .header-actions .auth-btn svg {
     width: 14px;
     height: 14px;
+}
+
+/* Active state (when clicked) */
+.header-actions .auth-btn:active {
+  height: 40px !important;
+  min-height: 40px !important;
+  transform: none !important; /* Prevent any transform effects */
+}
+
+.header-actions .auth-btn.primary:active {
+  height: 40px !important;
+  min-height: 40px !important;
+  transform: none !important;
+}
+
+.header-actions .auth-btn.secondary:active {
+  height: 40px !important;
+  min-height: 40px !important;
+  transform: none !important;
+}
+
+/* Loading state for header auth buttons */
+.header-actions .auth-btn.loading {
+  height: 40px !important;
+  min-height: 40px !important;
+  position: relative !important;
+  overflow: hidden !important;
 }
 
 /* ---------- Placeholders & Loading ---------- */
@@ -1348,6 +1445,8 @@ input:focus-visible {
 .auth-btn.loading {
   position: relative;
   overflow: hidden;
+  height: 40px !important;
+  min-height: 40px !important;
 }
 
 .ripple-effect {
@@ -2035,15 +2134,21 @@ input:focus-visible {
   color: var(--text-primary);
 }
 
-/* Hide controls section on users page */
-.main-content .panel.controls {
-  display: none !important;
+/* Hide controls panel on users page */
+.panel.controls {
+  display: block;
 }
 
-/* Hide controls section specifically on users page */
-body:has(.page-title h1:contains("Users Management")) .panel.controls,
-body:has(.page-title h1:contains("👥 Users Management")) .panel.controls {
+/* Force hide on users page */
+body:has(.page-title h1:contains("👥 Users Management")) .panel.controls,
+body:has(.page-title h1:contains("Users Management")) .panel.controls {
   display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 .users-page {
@@ -2148,6 +2253,7 @@ body:has(.page-title h1:contains("👥 Users Management")) .panel.controls {
   width: 100%;
   border-collapse: collapse;
   font-size: var(--font-size-sm);
+  table-layout: fixed;
 }
 
 .users-table th {
@@ -2455,6 +2561,7 @@ body:has(.page-title h1:contains("👥 Users Management")) .panel.controls {
   width: 100%;
   border-collapse: collapse;
   font-size: var(--font-size-sm);
+  table-layout: fixed;
 }
 
 .users-table th {
@@ -2466,10 +2573,19 @@ body:has(.page-title h1:contains("👥 Users Management")) .panel.controls {
   border-bottom: 2px solid var(--border);
 }
 
+.users-table th:nth-child(1) { width: 8%; }   /* ID */
+.users-table th:nth-child(2) { width: 20%; }  /* First Name */
+.users-table th:nth-child(3) { width: 20%; }  /* Last Name */
+.users-table th:nth-child(4) { width: 35%; }  /* Email */
+.users-table th:nth-child(5) { width: 17%; }  /* Registered */
+
 .users-table td {
   padding: var(--spacing-md);
   border-bottom: 1px solid var(--border);
   color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .users-table tbody tr:hover {
@@ -2588,6 +2704,8 @@ body:has(.page-title h1:contains("👥 Users Management")) .panel.controls {
   
   .users-stats {
     justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
   }
   
   .pagination-container {
@@ -2601,12 +2719,21 @@ body:has(.page-title h1:contains("👥 Users Management")) .panel.controls {
   }
   
   .users-table {
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-sm);
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
   }
   
   .users-table th,
   .users-table td {
     padding: var(--spacing-sm);
+    min-width: 100px;
+  }
+  
+  .users-table th:first-child,
+  .users-table td:first-child {
+    min-width: 50px;
   }
 }
 
@@ -2615,16 +2742,35 @@ body:has(.page-title h1:contains("👥 Users Management")) .panel.controls {
     display: block;
     overflow-x: auto;
     white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .users-table th,
+  .users-table td {
+    padding: var(--spacing-xs);
+    min-width: 80px;
+    font-size: var(--font-size-xs);
+  }
+  
+  .users-table th:first-child,
+  .users-table td:first-child {
+    min-width: 40px;
   }
   
   .pagination-pages {
     flex-wrap: wrap;
     justify-content: center;
+    gap: var(--spacing-xs);
   }
   
   .pagination-page {
-    min-width: 32px;
-    height: 32px;
+    min-width: 28px;
+    height: 28px;
+    font-size: var(--font-size-xs);
+  }
+  
+  .pagination-btn {
+    padding: var(--spacing-xs) var(--spacing-sm);
     font-size: var(--font-size-xs);
   }
 }
@@ -2672,6 +2818,17 @@ body:has(.page-title h1:contains("👥 Users Management")) .panel.controls {
   
   .users-stats {
     justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+  }
+  
+  .users-table {
+    font-size: var(--font-size-sm);
+  }
+  
+  .users-table th,
+  .users-table td {
+    padding: var(--spacing-sm);
   }
 }
 
@@ -2716,11 +2873,21 @@ body:has(.page-title h1:contains("👥 Users Management")) .panel.controls {
   
   .users-table {
     font-size: var(--font-size-sm);
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
   }
   
   .users-table th,
   .users-table td {
     padding: var(--spacing-sm);
+    min-width: 120px;
+  }
+  
+  .users-table th:first-child,
+  .users-table td:first-child {
+    min-width: 60px;
   }
   
   .pagination-container {
@@ -2739,6 +2906,46 @@ body:has(.page-title h1:contains("👥 Users Management")) .panel.controls {
   }
 }
 
+/* ===== TEAMS STATS BUTTONS ===== */
+#teamsStatsButtonsGroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
+}
+
+#teamsStatsButtonsGroup .btn {
+  flex: 1;
+  min-width: 200px;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+  min-height: 48px;
+}
+
+#teamsStatsButtonsGroup .btn span {
+  flex: 1;
+  text-align: left;
+}
+
+/* Mobile responsive for teams stats */
+@media (max-width: 768px) {
+  #teamsStatsButtonsGroup {
+    flex-direction: column;
+    gap: var(--spacing-xs);
+  }
+  
+  #teamsStatsButtonsGroup .btn {
+    min-width: auto;
+    padding: var(--spacing-sm);
+    font-size: var(--font-size-xs);
+    min-height: 44px;
+  }
+}
+
 /* Mobile devices */
 @media (max-width: 640px) {
   .users-page {
@@ -2751,10 +2958,12 @@ body:has(.page-title h1:contains("👥 Users Management")) .panel.controls {
   
   .page-title h1 {
     font-size: var(--font-size-xl);
+    line-height: 1.2;
   }
   
   .page-subtitle {
     font-size: var(--font-size-sm);
+    line-height: 1.4;
   }
   
   .users-controls {
@@ -2764,6 +2973,7 @@ body:has(.page-title h1:contains("👥 Users Management")) .panel.controls {
   .search-input {
     font-size: var(--font-size-sm);
     padding: var(--spacing-sm) var(--spacing-sm) var(--spacing-sm) 40px;
+    border-radius: var(--radius);
   }
   
   .search-icon {
@@ -2774,43 +2984,110 @@ body:has(.page-title h1:contains("👥 Users Management")) .panel.controls {
   
   .clear-search {
     right: var(--spacing-sm);
+    padding: 4px;
   }
   
   .users-stats {
     flex-direction: column;
     gap: var(--spacing-xs);
     align-items: center;
+    text-align: center;
   }
   
   .stats-text {
     font-size: var(--font-size-xs);
+    line-height: 1.3;
   }
   
+  /* Hide table on mobile, show cards instead */
   .users-table {
-    font-size: var(--font-size-xs);
-    display: block;
-    overflow-x: auto;
-    white-space: nowrap;
+    display: none;
   }
   
-  .users-table th,
-  .users-table td {
-    padding: var(--spacing-xs);
-    min-width: 80px;
+  .users-table-container {
+    background: transparent;
+    border: none;
+    margin-bottom: var(--spacing-lg);
+  }
+  
+  /* Mobile card layout */
+  .users-table-container::after {
+    content: '';
+    display: block;
+  }
+  
+  .users-table tbody {
+    display: block;
+  }
+  
+  .users-table tbody tr {
+    display: block;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: var(--spacing-sm);
+    padding: var(--spacing-md);
+    box-shadow: var(--shadow-sm);
+  }
+  
+  .users-table tbody tr:hover {
+    background: var(--surface-2);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow);
+  }
+  
+  .users-table tbody td {
+    display: block;
+    padding: var(--spacing-xs) 0;
+    border: none;
+    text-align: left;
+    position: relative;
+    padding-left: 120px;
+  }
+  
+  .users-table tbody td:before {
+    content: attr(data-label);
+    position: absolute;
+    left: 0;
+    top: 0;
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-secondary);
+    font-size: var(--font-size-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  
+  .users-table tbody td:first-child {
+    font-weight: var(--font-weight-semibold);
+    color: var(--primary);
+    font-size: var(--font-size-sm);
+    padding-left: 0;
+    margin-bottom: var(--spacing-xs);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: var(--spacing-xs);
+  }
+  
+  .users-table tbody td:first-child:before {
+    display: none;
   }
   
   .pagination-container {
     padding: var(--spacing-sm);
+    background: var(--surface);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
   }
   
   .pagination-info {
     font-size: var(--font-size-xs);
     text-align: center;
+    margin-bottom: var(--spacing-xs);
   }
   
   .pagination-btn {
     padding: var(--spacing-xs) var(--spacing-sm);
     font-size: var(--font-size-xs);
+    min-height: 32px;
   }
   
   .pagination-page {
@@ -2819,12 +3096,19 @@ body:has(.page-title h1:contains("👥 Users Management")) .panel.controls {
     font-size: var(--font-size-xs);
   }
   
+  .no-users {
+    padding: var(--spacing-lg);
+    text-align: center;
+  }
+  
   .no-users h3 {
     font-size: var(--font-size-base);
+    margin-bottom: var(--spacing-xs);
   }
   
   .no-users p {
     font-size: var(--font-size-xs);
+    line-height: 1.4;
   }
 }
 
@@ -2898,22 +3182,193 @@ body:has(.page-title h1:contains("👥 Users Management")) .panel.controls {
     font-size: var(--font-size-lg);
   }
   
-  .page-subtitle {
-    font-size: var(--font-size-sm);
+  .users-table {
+    font-size: var(--font-size-xs);
   }
   
-  .users-controls {
-    flex-direction: row;
-    align-items: center;
+  .users-table th,
+  .users-table td {
+    padding: var(--spacing-xs);
+  }
+}
+
+/* Touch device improvements */
+@media (hover: none) and (pointer: coarse) {
+  .pagination-btn,
+  .pagination-page {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  .search-input {
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+  
+  .btn {
+    min-height: 44px;
+  }
+}
+
+/* ===== USERS PAGE MOBILE FIXES ===== */
+@media (max-width: 768px) {
+  /* Page header mobile layout */
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--spacing-md);
+  }
+  
+  .page-actions {
+    width: 100%;
+  }
+  
+  .page-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  /* Search improvements */
+  .search-input {
+    font-size: 16px;
+    padding: var(--spacing-md);
+    min-height: 48px;
   }
   
   .search-container {
-    flex: 1;
-    max-width: 300px;
+    margin-bottom: var(--spacing-md);
   }
   
   .users-stats {
-    flex-direction: row;
+    text-align: center;
+    margin-bottom: var(--spacing-md);
+  }
+  
+  /* Hide table on mobile */
+  .users-table {
+    display: none !important;
+  }
+  
+  .users-table-container {
+    background: transparent;
+    border: none;
+    padding: 0;
+  }
+  
+  /* Mobile cards layout */
+  .users-mobile-cards {
+    display: block;
+  }
+  
+  .user-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-md);
+    margin-bottom: var(--spacing-sm);
+    box-shadow: var(--shadow-sm);
+  }
+  
+  .user-card:hover {
+    background: var(--surface-2);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow);
+  }
+  
+  .user-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-sm);
+    padding-bottom: var(--spacing-sm);
+    border-bottom: 1px solid var(--border);
+  }
+  
+  .user-id {
+    font-weight: var(--font-weight-semibold);
+    color: var(--primary);
+    font-size: var(--font-size-sm);
+  }
+  
+  .user-details {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+  }
+  
+  .user-detail {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .user-detail-label {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    font-weight: var(--font-weight-medium);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+  }
+  
+  .user-detail-value {
+    font-size: var(--font-size-sm);
+    color: var(--text-primary);
+  }
+  
+  /* Pagination mobile */
+  .pagination-container {
+    flex-direction: column;
     gap: var(--spacing-md);
   }
+  
+  .pagination-controls {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .pagination-pages {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
 }
+
+/* ===== TEAMS STATS BUTTONS ===== */
+#teamsStatsButtonsGroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
+}
+
+#teamsStatsButtonsGroup .btn {
+  flex: 1;
+  min-width: 200px;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+  min-height: 48px;
+}
+
+#teamsStatsButtonsGroup .btn span {
+  flex: 1;
+  text-align: left;
+}
+
+/* Mobile responsive for teams stats */
+@media (max-width: 768px) {
+  #teamsStatsButtonsGroup {
+    flex-direction: column;
+    gap: var(--spacing-xs);
+  }
+  
+  #teamsStatsButtonsGroup .btn {
+    min-width: auto;
+    padding: var(--spacing-sm);
+    font-size: var(--font-size-xs);
+    min-height: 44px;
+  }
+}
+
+style.css 

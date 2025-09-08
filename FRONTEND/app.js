@@ -1400,23 +1400,16 @@ window.addEventListener('hashchange', () => {
 
 // ===== TEAMS STATS FUNCTIONS =====
 
-// Toggle between analyze buttons and teams stats buttons
 function toggleTeamsStats() {
   const teamsStatsBtn = document.getElementById('teamsStatsBtn');
-  const analyze1p = document.getElementById('analyze1p');
-  const analyzeGG = document.getElementById('analyzeGG');
-  const analyze2plus = document.getElementById('analyze2plus');
-  const analyzeFT2plus = document.getElementById('analyzeFT2plus');
-  const teamsStatsButtonsGroup = document.getElementById('teamsStatsButtonsGroup');
-  const prepareDay = document.getElementById('prepareDay');
-  const usersBtn = document.getElementById('usersBtn');
-  
-  if (!teamsStatsBtn || !teamsStatsButtonsGroup) return;
-  
-  const isTeamsStatsVisible = teamsStatsButtonsGroup.style.display !== 'none';
-  
-  if (isTeamsStatsVisible) {
-    // Show analyze buttons, hide teams stats
+  const controlsPanel = document.querySelector('.panel.controls');
+  const teamsStatsPanel = document.getElementById('teamsStatsPanel');
+  if (!teamsStatsBtn || !controlsPanel || !teamsStatsPanel) return;
+
+  const isVisible = teamsStatsPanel.style.display !== 'none';
+
+  if (isVisible) {
+    // BACK to analyze
     teamsStatsBtn.innerHTML = `
       <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
         <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" stroke="currentColor" stroke-width="2" fill="none"/>
@@ -1426,21 +1419,19 @@ function toggleTeamsStats() {
       <span>TEAMS STATS</span>
     `;
     teamsStatsBtn.className = 'btn';
-    
-    // Show original analyze buttons
-    if (analyze1p) analyze1p.style.display = 'flex';
-    if (analyzeGG) analyzeGG.style.display = 'flex';
-    if (analyze2plus) analyze2plus.style.display = 'flex';
-    if (analyzeFT2plus) analyzeFT2plus.style.display = 'flex';
-    
-    // Show PREPARE DAY and USER MANAGEMENT buttons
-    if (prepareDay) prepareDay.style.display = 'flex';
-    if (usersBtn) usersBtn.style.display = 'flex';
-    
-    // Hide teams stats buttons
-    teamsStatsButtonsGroup.style.display = 'none';
+
+    // copy dates back
+    const f = document.getElementById('fromDate');
+    const t = document.getElementById('toDate');
+    const tf = document.getElementById('teamsFromDate');
+    const tt = document.getElementById('teamsToDate');
+    if (f && tf && tf.value) f.value = tf.value;
+    if (t && tt && tt.value) t.value = tt.value;
+
+    teamsStatsPanel.style.display = 'none';
+    controlsPanel.style.display = '';
   } else {
-    // Show teams stats buttons, hide analyze buttons
+    // Show TEAMS STATS view
     teamsStatsBtn.innerHTML = `
       <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
         <path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -1448,34 +1439,53 @@ function toggleTeamsStats() {
       <span>BACK TO ANALYZE</span>
     `;
     teamsStatsBtn.className = 'btn secondary';
-    
-    // Hide original analyze buttons
-    if (analyze1p) analyze1p.style.display = 'none';
-    if (analyzeGG) analyzeGG.style.display = 'none';
-    if (analyze2plus) analyze2plus.style.display = 'none';
-    if (analyzeFT2plus) analyzeFT2plus.style.display = 'none';
-    
-    // Hide PREPARE DAY and USER MANAGEMENT buttons when in TEAM STATS mode
-    if (prepareDay) prepareDay.style.display = 'none';
-    if (usersBtn) usersBtn.style.display = 'none';
-    
-    // Show teams stats buttons
-    teamsStatsButtonsGroup.style.display = 'flex';
+
+    // prefill dates
+    const f = document.getElementById('fromDate');
+    const t = document.getElementById('toDate');
+    const tf = document.getElementById('teamsFromDate');
+    const tt = document.getElementById('teamsToDate');
+    if (f && tf) tf.value = f.value;
+    if (t && tt) tt.value = t.value;
+
+    controlsPanel.style.display = 'none';
+    teamsStatsPanel.style.display = 'block';
   }
 }
 
-// Handle team stats button clicks
 function handleTeamStats(market, period) {
   console.log('🏆 Team Stats clicked:', { market, period });
-  
-  // Show loading state
-  showToast('Loading team stats...', 'info');
-  
-  // TODO: Implement team stats API call
-  // For now, just show a placeholder message
+
+  const fromEl = document.getElementById('teamsFromDate');
+  const toEl = document.getElementById('teamsToDate');
+
+  if (!fromEl || !toEl || !fromEl.value || !toEl.value) {
+    showError("Potrebno je odabrati datume", "Molim vas odaberite i početni i završni datum.");
+    return;
+  }
+
+  const fromDate = new Date(fromEl.value);
+  const toDate = new Date(toEl.value);
+  if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+    showError("Neispravni datumi", "Neispravne vrednosti datuma.");
+    return;
+  }
+  if (toDate < fromDate) {
+    showError("Neispravan opseg datuma", "Završni datum/vreme mora biti posle početnog datuma/vremena.");
+    return;
+  }
+
+  const fromIso = fromDate.toISOString();
+  const toIso = toDate.toISOString();
+
+  showLoader('📊 Loading Team Stats...');
+  showToast(`Team Stats: ${market} ${period}`, 'info');
+
+  // TODO: ovdje kasnije pozovi pravi API endpoint kada ga dodaš na backendu
   setTimeout(() => {
-    showToast(`Team Stats: ${market} ${period} - Coming soon!`, 'success');
-  }, 1000);
+    hideLoader();
+    showToast(`(Demo) Loaded ${market} ${period} from ${fromEl.value} to ${toEl.value}`, 'success');
+  }, 800);
 }
 
 // ===== USERS PAGE FUNCTIONS =====

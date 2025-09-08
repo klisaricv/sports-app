@@ -1409,12 +1409,12 @@ window.addEventListener('hashchange', () => {
 // Toggle between analyze buttons and teams stats buttons
 function toggleTeamsStats() {
   const teamsStatsBtn = document.getElementById('teamsStatsBtn');
-  const normalControlsSection = document.querySelector('.panel.controls:not(#teamsStatsSection)');
-  const teamsStatsSection = document.getElementById('teamsStatsSection');
+  const controlsSection = document.querySelector('.panel.controls');
+  const teamsStatsButtonsGroup = document.getElementById('teamsStatsButtonsGroup');
   
-  if (!teamsStatsBtn || !teamsStatsSection || !normalControlsSection) return;
+  if (!teamsStatsBtn || !teamsStatsButtonsGroup || !controlsSection) return;
   
-  const isTeamsStatsVisible = teamsStatsSection.style.display !== 'none';
+  const isTeamsStatsVisible = teamsStatsButtonsGroup.style.display !== 'none';
   
   if (isTeamsStatsVisible) {
     // Show normal controls, hide teams stats
@@ -1428,9 +1428,12 @@ function toggleTeamsStats() {
     `;
     teamsStatsBtn.className = 'btn';
     
-    // Show normal controls, hide teams stats
-    normalControlsSection.style.display = 'block';
-    teamsStatsSection.style.display = 'none';
+    // Show normal controls content
+    const normalControls = controlsSection.querySelector('.controls__row');
+    if (normalControls) normalControls.style.display = 'grid';
+    
+    // Hide teams stats
+    teamsStatsButtonsGroup.style.display = 'none';
   } else {
     // Show teams stats, hide normal controls
     teamsStatsBtn.innerHTML = `
@@ -1440,6 +1443,10 @@ function toggleTeamsStats() {
       <span>BACK TO ANALYZE</span>
     `;
     teamsStatsBtn.className = 'btn secondary';
+    
+    // Hide normal controls content
+    const normalControls = controlsSection.querySelector('.controls__row');
+    if (normalControls) normalControls.style.display = 'none';
     
     // Copy date values from main form to teams stats form
     const fromDate = document.getElementById('fromDate');
@@ -1454,9 +1461,8 @@ function toggleTeamsStats() {
       teamsToDate.value = toDate.value;
     }
     
-    // Hide normal controls, show teams stats
-    normalControlsSection.style.display = 'none';
-    teamsStatsSection.style.display = 'block';
+    // Show teams stats
+    teamsStatsButtonsGroup.style.display = 'flex';
   }
 }
 

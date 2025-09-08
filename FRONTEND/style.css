@@ -354,7 +354,7 @@ button[disabled],
 /* ---------- Controls Section ---------- */
 .controls__row {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: 1fr 1fr 2fr;
   gap: var(--spacing-lg);
   align-items: end;
 }
@@ -422,23 +422,23 @@ button[disabled],
 /* Actions Grid */
 .actions {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: var(--spacing-sm);
 }
 
 .actions.actions--stack {
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
 }
 
 /* Responsive Layout */
 @media (min-width: 768px) {
   .controls__row {
-    grid-template-columns: 1fr 1fr 2fr;
+    grid-template-columns: 1fr 1fr 3fr;
     align-items: end;
   }
   
   .actions {
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(4, 1fr);
   }
   
   .micro-grid {
@@ -451,12 +451,32 @@ button[disabled],
 }
 
 @media (min-width: 1024px) {
+  .controls__row {
+    grid-template-columns: 1fr 1fr 4fr;
+  }
+  
+  .actions {
+    grid-template-columns: repeat(5, 1fr);
+  }
+  
   .micro-grid {
     grid-template-columns: repeat(3, 1fr);
   }
   
   .breakdown-grid {
     grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Mobile responsive for controls */
+@media (max-width: 767px) {
+  .controls__row {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-md);
+  }
+  
+  .actions {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 
@@ -2906,46 +2926,6 @@ body:has(.page-title h1:contains("Users Management")) .panel.controls {
   }
 }
 
-/* ===== TEAMS STATS BUTTONS ===== */
-#teamsStatsButtonsGroup {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-sm);
-  margin-top: var(--spacing-md);
-}
-
-#teamsStatsButtonsGroup .btn {
-  flex: 1;
-  min-width: 200px;
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-md);
-  font-size: var(--font-size-sm);
-  white-space: nowrap;
-  min-height: 48px;
-}
-
-#teamsStatsButtonsGroup .btn span {
-  flex: 1;
-  text-align: left;
-}
-
-/* Mobile responsive for teams stats */
-@media (max-width: 768px) {
-  #teamsStatsButtonsGroup {
-    flex-direction: column;
-    gap: var(--spacing-xs);
-  }
-  
-  #teamsStatsButtonsGroup .btn {
-    min-width: auto;
-    padding: var(--spacing-sm);
-    font-size: var(--font-size-xs);
-    min-height: 44px;
-  }
-}
-
 /* Mobile devices */
 @media (max-width: 640px) {
   .users-page {
@@ -3333,15 +3313,14 @@ body:has(.page-title h1:contains("Users Management")) .panel.controls {
 
 /* ===== TEAMS STATS BUTTONS ===== */
 #teamsStatsButtonsGroup {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
   gap: var(--spacing-sm);
   margin-top: var(--spacing-md);
+  max-width: 100%;
 }
 
 #teamsStatsButtonsGroup .btn {
-  flex: 1;
-  min-width: 200px;
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
@@ -3349,24 +3328,50 @@ body:has(.page-title h1:contains("Users Management")) .panel.controls {
   font-size: var(--font-size-sm);
   white-space: nowrap;
   min-height: 48px;
+  justify-content: center;
 }
 
 #teamsStatsButtonsGroup .btn span {
   flex: 1;
-  text-align: left;
+  text-align: center;
+}
+
+/* Responsive grid for teams stats */
+@media (min-width: 1200px) {
+  #teamsStatsButtonsGroup {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}
+
+@media (min-width: 1400px) {
+  #teamsStatsButtonsGroup {
+    grid-template-columns: repeat(6, 1fr);
+  }
+}
+
+/* Tablet responsive for teams stats */
+@media (max-width: 1024px) {
+  #teamsStatsButtonsGroup {
+    grid-template-columns: repeat(3, 1fr);
+  }
 }
 
 /* Mobile responsive for teams stats */
 @media (max-width: 768px) {
   #teamsStatsButtonsGroup {
-    flex-direction: column;
+    grid-template-columns: repeat(2, 1fr);
     gap: var(--spacing-xs);
   }
   
   #teamsStatsButtonsGroup .btn {
-    min-width: auto;
     padding: var(--spacing-sm);
     font-size: var(--font-size-xs);
     min-height: 44px;
+  }
+}
+
+@media (max-width: 480px) {
+  #teamsStatsButtonsGroup {
+    grid-template-columns: 1fr;
   }
 }

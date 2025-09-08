@@ -1408,6 +1408,8 @@ function toggleTeamsStats() {
   const analyze2plus = document.getElementById('analyze2plus');
   const analyzeFT2plus = document.getElementById('analyzeFT2plus');
   const teamsStatsButtonsGroup = document.getElementById('teamsStatsButtonsGroup');
+  const prepareDay = document.getElementById('prepareDay');
+  const usersBtn = document.getElementById('usersBtn');
   
   if (!teamsStatsBtn || !teamsStatsButtonsGroup) return;
   
@@ -1431,6 +1433,10 @@ function toggleTeamsStats() {
     if (analyze2plus) analyze2plus.style.display = 'flex';
     if (analyzeFT2plus) analyzeFT2plus.style.display = 'flex';
     
+    // Show PREPARE DAY and USER MANAGEMENT buttons
+    if (prepareDay) prepareDay.style.display = 'flex';
+    if (usersBtn) usersBtn.style.display = 'flex';
+    
     // Hide teams stats buttons
     teamsStatsButtonsGroup.style.display = 'none';
   } else {
@@ -1448,6 +1454,10 @@ function toggleTeamsStats() {
     if (analyzeGG) analyzeGG.style.display = 'none';
     if (analyze2plus) analyze2plus.style.display = 'none';
     if (analyzeFT2plus) analyzeFT2plus.style.display = 'none';
+    
+    // Hide PREPARE DAY and USER MANAGEMENT buttons when in TEAM STATS mode
+    if (prepareDay) prepareDay.style.display = 'none';
+    if (usersBtn) usersBtn.style.display = 'none';
     
     // Show teams stats buttons
     teamsStatsButtonsGroup.style.display = 'flex';

@@ -1404,23 +1404,26 @@ function toggleTeamsStats() {
   const teamsStatsBtn = document.getElementById('teamsStatsBtn');
   const controlsPanel = document.querySelector('.panel.controls');
   const teamsStatsPanel = document.getElementById('teamsStatsPanel');
-  if (!teamsStatsBtn || !controlsPanel || !teamsStatsPanel) return;
+  if (!controlsPanel || !teamsStatsPanel) return; // NE zavisi od teamsStatsBtn
 
-  const isVisible = teamsStatsPanel.style.display !== 'none';
+  // čitaj realnu vidljivost (ne samo inline style)
+  const isVisible = window.getComputedStyle(teamsStatsPanel).display !== 'none';
 
   if (isVisible) {
     // BACK to analyze
-    teamsStatsBtn.innerHTML = `
-      <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
-        <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" stroke="currentColor" stroke-width="2" fill="none"/>
-        <rect x="8" y="2" width="8" height="4" rx="1" ry="1" stroke="currentColor" stroke-width="2" fill="none"/>
-        <path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-      <span>TEAMS STATS</span>
-    `;
-    teamsStatsBtn.className = 'btn';
+    if (teamsStatsBtn) { // <<< ovo je “uslov ako postoji dugme”
+      teamsStatsBtn.innerHTML = `
+        <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+          <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" stroke="currentColor" stroke-width="2" fill="none"/>
+          <rect x="8" y="2" width="8" height="4" rx="1" ry="1" stroke="currentColor" stroke-width="2" fill="none"/>
+          <path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>TEAMS STATS</span>
+      `;
+      teamsStatsBtn.className = 'btn';
+    }
 
-    // copy dates back
+    // kopiraj datume nazad
     const f = document.getElementById('fromDate');
     const t = document.getElementById('toDate');
     const tf = document.getElementById('teamsFromDate');
@@ -1432,15 +1435,17 @@ function toggleTeamsStats() {
     controlsPanel.style.display = '';
   } else {
     // Show TEAMS STATS view
-    teamsStatsBtn.innerHTML = `
-      <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
-        <path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-      <span>BACK TO ANALYZE</span>
-    `;
-    teamsStatsBtn.className = 'btn secondary';
+    if (teamsStatsBtn) { // <<< isto “ako postoji dugme”
+      teamsStatsBtn.innerHTML = `
+        <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+          <path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>BACK TO ANALYZE</span>
+      `;
+      teamsStatsBtn.className = 'btn secondary';
+    }
 
-    // prefill dates
+    // prefill datume u teams panel
     const f = document.getElementById('fromDate');
     const t = document.getElementById('toDate');
     const tf = document.getElementById('teamsFromDate');
@@ -1450,8 +1455,44 @@ function toggleTeamsStats() {
 
     controlsPanel.style.display = 'none';
     teamsStatsPanel.style.display = 'block';
+
+    // nakon što se panel prikaže – prilagodi tekst dugmadi
+    adjustTeamButtons();
+    setTimeout(adjustTeamButtons, 0);
   }
 }
+
+function adjustTeamButtons() {
+  const buttons = document.querySelectorAll('#teamsStatsButtonsGroup .btn');
+  buttons.forEach(btn => {
+    const labelEl = btn; // ako kasnije dodaš <span class="btn-label"> koristi to; za sada je ceo button label
+    labelEl.style.whiteSpace = 'normal';
+    labelEl.style.lineHeight = '1.1';
+    labelEl.style.textAlign = 'center';
+    labelEl.style.overflow = 'hidden';
+    labelEl.style.wordBreak = 'break-word';
+
+    let font = 14;           // početna (po potrebi povećaš/smanjiš)
+    const minFont = 10;      // donja granica
+    labelEl.style.fontSize = font + 'px';
+
+    // dozvoljena visina: visina dugmeta - mali buffer
+    const maxH = btn.clientHeight - 6;
+
+    // smanjuj font dok sadržaj ne stane u visinu
+    // (sa white-space:normal biće max ~2 reda jer je visina fiksna 56px)
+    while (btn.scrollHeight > maxH && font > minFont) {
+      font -= 0.5;
+      labelEl.style.fontSize = font + 'px';
+    }
+  });
+}
+
+// prilagodi i na resize dok je panel vidljiv
+window.addEventListener('resize', () => {
+  const p = document.getElementById('teamsStatsPanel');
+  if (p && window.getComputedStyle(p).display !== 'none') adjustTeamButtons();
+});
 
 function handleTeamStats(market, period) {
   console.log('🏆 Team Stats clicked:', { market, period });

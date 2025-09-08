@@ -712,27 +712,19 @@ function getAnalysisTitle(market) {
   return titles[market] || '📈 Rezultati analize';
 }
 
-// Global variables for results pagination
-let currentResultsPage = 1;
-let resultsPerPage = 10;
+// Global variables for results
 let allResults = [];
-let top5Results = []; // Always store the top 5 results separately
-let totalResultsCount = 0; // Total count from server
 
 async function renderResults(data, market) {
   const currentMarket = market || "1h_over05";
   window.currentAnalysisResults = data;
   window.currentAnalysisMarket = currentMarket;
   
-  // Initialize with first page data
+  // Initialize with data
   allResults = Array.isArray(data) ? data : [];
-  currentResultsPage = 1;
-
-  // Always store the top 5 results separately
-  top5Results = allResults.slice(0, 5);
 
   // Set total count - use data.total if available, otherwise use array length
-  totalResultsCount = data?.total || allResults.length;
+  const totalResultsCount = data?.total || allResults.length;
   const total = totalResultsCount;
 
   // Dodaj naslov analize iznad rezultata
@@ -753,21 +745,17 @@ async function renderResults(data, market) {
     titleEl.querySelector('.analysis-subtitle').textContent = `Analiza završena • ${total} mečeva pronađeno`;
   }
 
-  // Render first page
-  renderResultsPage();
-  renderResultsPagination();
+  // Render matches (max 7)
+  renderMatches();
 }
 
-function renderResultsPage() {
-  const top5Content = document.getElementById('top5Content');
-  const otherContent = document.getElementById('otherContent');
-  const top5Section = document.getElementById('top5');
+function renderMatches() {
+  const matchesContent = document.getElementById('matchesContent');
 
-  if (!top5Content || !otherContent) return;
+  if (!matchesContent) return;
 
-  // Clear content areas
-  top5Content.innerHTML = '';
-  otherContent.innerHTML = '';
+  // Clear content area
+  matchesContent.innerHTML = '';
 
   const cardHTML = (m) => {
     // Format kickoff time
@@ -809,105 +797,20 @@ function renderResultsPage() {
     `;
   };
 
-  // Show/hide TOP 5 section based on current page
-  if (top5Section) {
-    if (currentResultsPage === 1) {
-      top5Section.style.display = 'block';
-      
-      // Render TOP 5 only on first page
-      if (top5Results.length > 0) {
-        top5Results.forEach((match) => {
-          top5Content.innerHTML += cardHTML(match);
-        });
-      } else {
-        top5Content.innerHTML = '<div class="placeholder">Nema top 5 rezultata.</div>';
-      }
-    } else {
-      top5Section.style.display = 'none';
-    }
-  }
+  // Sort by final_percent descending and take max 7
+  const sortedResults = allResults
+    .sort((a, b) => (b.final_percent || 0) - (a.final_percent || 0))
+    .slice(0, 7);
 
-  // Render OTHERS with pagination
-  let othersStartIndex, otherResults;
-  
-  if (currentResultsPage === 1) {
-    // First page: skip first 5 results for OTHERS
-    othersStartIndex = 5;
-    const othersEndIndex = othersStartIndex + resultsPerPage;
-    otherResults = allResults.slice(othersStartIndex, othersEndIndex);
-  } else {
-    // Other pages: show all results for that page (including first 5)
-    othersStartIndex = (currentResultsPage - 1) * resultsPerPage;
-    const othersEndIndex = othersStartIndex + resultsPerPage;
-    otherResults = allResults.slice(othersStartIndex, othersEndIndex);
-  }
-
-  if (otherResults.length > 0) {
-    otherResults.forEach((match) => {
-      otherContent.innerHTML += cardHTML(match);
+  if (sortedResults.length > 0) {
+    sortedResults.forEach((match) => {
+      matchesContent.innerHTML += cardHTML(match);
     });
   } else {
-    otherContent.innerHTML = '<div class="placeholder">Nema rezultata za ovu stranicu.</div>';
+    matchesContent.innerHTML = '<div class="placeholder">Nema rezultata za ovaj period.</div>';
   }
 }
 
-function renderResultsPagination() {
-  const pagination = document.getElementById('resultsPagination');
-  const paginationTop = document.getElementById('resultsPaginationTop');
-  const prevBtn = document.getElementById('prevPage');
-  const nextBtn = document.getElementById('nextPage');
-  const pageInfo = document.getElementById('pageInfo');
-  const prevBtnTop = document.getElementById('prevPageTop');
-  const nextBtnTop = document.getElementById('nextPageTop');
-  const pageInfoTop = document.getElementById('pageInfoTop');
-
-  if (!pagination || !prevBtn || !nextBtn || !pageInfo) return;
-  if (!paginationTop || !prevBtnTop || !nextBtnTop || !pageInfoTop) return;
-
-  // Calculate pagination based on total results count
-  const totalPages = Math.ceil(totalResultsCount / resultsPerPage);
-
-  if (totalPages <= 1) {
-    pagination.style.display = 'none';
-    paginationTop.style.display = 'none';
-    return;
-  }
-
-  pagination.style.display = 'flex';
-  paginationTop.style.display = 'flex';
-
-  // Update button states
-  prevBtn.disabled = currentResultsPage <= 1;
-  nextBtn.disabled = currentResultsPage >= totalPages;
-  prevBtnTop.disabled = currentResultsPage <= 1;
-  nextBtnTop.disabled = currentResultsPage >= totalPages;
-
-  // Update page info
-  const pageText = `Strana ${currentResultsPage} od ${totalPages}`;
-  pageInfo.textContent = pageText;
-  pageInfoTop.textContent = pageText;
-
-  // Add event listeners
-  prevBtn.onclick = () => changeResultsPage(currentResultsPage - 1);
-  nextBtn.onclick = () => changeResultsPage(currentResultsPage + 1);
-  prevBtnTop.onclick = () => changeResultsPage(currentResultsPage - 1);
-  nextBtnTop.onclick = () => changeResultsPage(currentResultsPage + 1);
-}
-
-function changeResultsPage(page) {
-  // Calculate total pages based on total results count
-  const totalPages = Math.ceil(totalResultsCount / resultsPerPage);
-  
-  if (page < 1 || page > totalPages) return;
-
-  currentResultsPage = page;
-  
-  // Just render the page (no server call)
-  renderResultsPage();
-  renderResultsPagination();
-}
-
-// Removed loadResultsPage - using client-side pagination only
 
 // ====== HELPERS ======
 function normalizeResults(json) {

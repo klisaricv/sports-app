@@ -1315,6 +1315,10 @@ document.addEventListener("DOMContentLoaded", () => {
     logoutBtn.addEventListener('click', logout);
   }
 
+  // inicijalno (ako je panel već otvoren iz nekog razloga)
+  applyTeamsButtonTextSizing();
+  window.addEventListener('resize', () => applyTeamsButtonTextSizing());
+
   // 5) Podrazumijevani datumi (ako su prazni)
   setDefaultDatesIfEmpty();
   
@@ -1339,6 +1343,8 @@ document.addEventListener("DOMContentLoaded", () => {
   if (teamsStatsBtn) {
     teamsStatsBtn.addEventListener("click", toggleTeamsStats);
   }
+  const backBtn = document.getElementById("backToAnalyze");
+  if (backBtn) backBtn.addEventListener("click", toggleTeamsStats);
 
   // Original Analyze buttons (now in hidden group)
   if (btn1p) btn1p.addEventListener("click", () => fetchAnalysis("1p"));
@@ -1401,6 +1407,7 @@ window.addEventListener('hashchange', () => {
 // ===== TEAMS STATS FUNCTIONS =====
 
 function toggleTeamsStats() {
+  window.toggleTeamsStats = toggleTeamsStats;
   const teamsStatsBtn = document.getElementById('teamsStatsBtn');
   const controlsPanel = document.querySelector('.panel.controls');
   const teamsStatsPanel = document.getElementById('teamsStatsPanel');
@@ -1455,11 +1462,37 @@ function toggleTeamsStats() {
 
     controlsPanel.style.display = 'none';
     teamsStatsPanel.style.display = 'block';
+    requestAnimationFrame(applyTeamsButtonTextSizing);
 
     // nakon što se panel prikaže – prilagodi tekst dugmadi
     adjustTeamButtons();
     setTimeout(adjustTeamButtons, 0);
   }
+}
+
+// === Teams buttons autosize (ne smanjuje font osim ako bi "iskočio" iz 56px)
+function adjustTeamsButtonText(btn) {
+  if (!btn) return;
+  // default veći font
+  btn.style.fontSize = '16px';
+  btn.style.lineHeight = '1.15';
+  btn.style.whiteSpace = 'normal';
+
+  const maxH = 56;  // isto kao u CSS-u
+  const min = 12;   // ne idi ispod ovoga
+  let size = 16;
+
+  // Smanjuj samo ako "ne staje" u zadatu visinu (dva reda max)
+  while (size > min && btn.scrollHeight > maxH + 1) {
+    size -= 0.5;
+    btn.style.fontSize = size + 'px';
+  }
+}
+
+function applyTeamsButtonTextSizing() {
+  const group = document.getElementById('teamsStatsButtonsGroup');
+  if (!group) return;
+  group.querySelectorAll('button.btn').forEach(adjustTeamsButtonText);
 }
 
 function adjustTeamButtons() {

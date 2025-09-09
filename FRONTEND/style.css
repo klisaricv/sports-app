@@ -2938,50 +2938,47 @@ body:has(.page-title h1:contains("Users Management")) .panel.controls {
 #teamsStatsButtonsGroup .btn.btn-warning {
   background: var(--surface-2);
   color: var(--text-primary);
-  border: 1px solid var(--border);           /* FIX var */
+  border: 1px solid var(--border);     /* was: var(--border-color) */
   box-shadow: none;
+
+  /* Fiksna visina svih dugmadi */
   min-height: 56px;
-  height: 56px;                              /* fiksna visina */
+  height: 56px;
   width: 100%;
+
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: var(--spacing-md);
-  font-size: var(--font-size-sm);
+  padding: 10px 12px;
+
+  /* VEĆI font po defaultu */
+  font-size: 16px;                     /* veće nego ranije */
+  line-height: 1.15;
   font-weight: 600;
-  white-space: normal;                        /* DOZVOLI PRELAMANJE */
+
+  /* Dozvoli prelamanje u 2 reda, bez rasta visine */
+  white-space: normal;                 
   text-align: center;
-  line-height: 1.1;
-  overflow: hidden;                           /* ne sme da “iscuri” */
+  overflow: hidden;                    /* ništa ne “curi” van 56px */
+  text-overflow: ellipsis;
   word-break: break-word;
 }
 
-#teamsStatsButtonsGroup .btn:hover {
-  background: var(--surface-elevated);
-  border-color: var(--border-strong);
-}
-
-/* Tablets */
+/* Tablet raspored ostaje isti kao kod tebe */
 @media (max-width: 1024px) {
   #teamsStatsButtonsGroup {
     grid-template-columns: repeat(3, 1fr);
   }
 }
 
-/* Mobiles */
+/* Na mobilu zadrži čitljivost, i dalje bez rasta visine */
 @media (max-width: 640px) {
-  .teams-stats__row {
-    grid-template-columns: 1fr;
-    gap: var(--spacing-sm);
-  }
-  #teamsStatsButtonsGroup {
-    grid-template-columns: repeat(2, 1fr);
-  }
   #teamsStatsButtonsGroup .btn {
     min-height: 44px;
     height: 44px;
-    font-size: var(--font-size-xs);
-    padding: var(--spacing-sm);
+    font-size: 14px;                   /* i ovde veći nego ranije */
+    line-height: 1.15;
+    padding: 8px;
   }
 }
 

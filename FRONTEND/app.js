@@ -384,14 +384,6 @@ function stopGlobalLoaderPolling() {
   console.log("🌍 [GLOBAL LOADER] Stopped polling");
 }
 
-// (ako nemaš već) bezbedno JSON parsiranje
-async function parseJsonSafe(resp) {
-  const ct = resp.headers.get("content-type") || "";
-  if (ct.includes("application/json")) return await resp.json();
-  const txt = await resp.text();
-  throw new Error(`HTTP ${resp.status}: ${txt.slice(0, 200)}`);
-}
-
 // ====== THEME ======
 function initTheme() {
   const root = document.documentElement;
@@ -491,7 +483,7 @@ function ensureModernShell() {
   // Skip creating controls panel on users page
   if (!document.querySelector(".controls__row") && window.location.pathname !== '/users') {
     const panel = document.createElement("section");
-    panel.className = "panel";
+    panel.className = "panel controls";
     panel.innerHTML = `
       <div class="controls__row">
         <div class="field">
@@ -618,14 +610,6 @@ const ANALYZE_BUTTON_IDS = [
   "analyzeFT2plus",
   "prepareDay",
 ];
-
-async function parseJsonSafe(resp) {
-  const ct = resp.headers.get("content-type") || "";
-  if (ct.includes("application/json")) return await resp.json();
-  const txt = await resp.text();
-  throw new Error(`HTTP ${resp.status}: ${txt.substring(0, 200)}`);
-}
-
 
 function setBusyUI(busy, note = "") {
   // Don't change button text anymore - the loader handles the UI feedback
@@ -1407,7 +1391,6 @@ window.addEventListener('hashchange', () => {
 // ===== TEAMS STATS FUNCTIONS =====
 
 function toggleTeamsStats() {
-  window.toggleTeamsStats = toggleTeamsStats;
   const teamsStatsBtn = document.getElementById('teamsStatsBtn');
   const controlsPanel = document.querySelector('.panel.controls');
   const teamsStatsPanel = document.getElementById('teamsStatsPanel');
@@ -1463,12 +1446,9 @@ function toggleTeamsStats() {
     controlsPanel.style.display = 'none';
     teamsStatsPanel.style.display = 'block';
     requestAnimationFrame(applyTeamsButtonTextSizing);
-
-    // nakon što se panel prikaže – prilagodi tekst dugmadi
-    adjustTeamButtons();
-    setTimeout(adjustTeamButtons, 0);
   }
 }
+window.toggleTeamsStats = toggleTeamsStats;
 
 // === Teams buttons autosize (ne smanjuje font osim ako bi "iskočio" iz 56px)
 function adjustTeamsButtonText(btn) {
@@ -1495,37 +1475,37 @@ function applyTeamsButtonTextSizing() {
   group.querySelectorAll('button.btn').forEach(adjustTeamsButtonText);
 }
 
-function adjustTeamButtons() {
-  const buttons = document.querySelectorAll('#teamsStatsButtonsGroup .btn');
-  buttons.forEach(btn => {
-    const labelEl = btn; // ako kasnije dodaš <span class="btn-label"> koristi to; za sada je ceo button label
-    labelEl.style.whiteSpace = 'normal';
-    labelEl.style.lineHeight = '1.1';
-    labelEl.style.textAlign = 'center';
-    labelEl.style.overflow = 'hidden';
-    labelEl.style.wordBreak = 'break-word';
+// function adjustTeamButtons() {
+//   const buttons = document.querySelectorAll('#teamsStatsButtonsGroup .btn');
+//   buttons.forEach(btn => {
+//     const labelEl = btn; // ako kasnije dodaš <span class="btn-label"> koristi to; za sada je ceo button label
+//     labelEl.style.whiteSpace = 'normal';
+//     labelEl.style.lineHeight = '1.1';
+//     labelEl.style.textAlign = 'center';
+//     labelEl.style.overflow = 'hidden';
+//     labelEl.style.wordBreak = 'break-word';
 
-    let font = 14;           // početna (po potrebi povećaš/smanjiš)
-    const minFont = 10;      // donja granica
-    labelEl.style.fontSize = font + 'px';
+//     let font = 14;           // početna (po potrebi povećaš/smanjiš)
+//     const minFont = 10;      // donja granica
+//     labelEl.style.fontSize = font + 'px';
 
-    // dozvoljena visina: visina dugmeta - mali buffer
-    const maxH = btn.clientHeight - 6;
+//     // dozvoljena visina: visina dugmeta - mali buffer
+//     const maxH = btn.clientHeight - 6;
 
-    // smanjuj font dok sadržaj ne stane u visinu
-    // (sa white-space:normal biće max ~2 reda jer je visina fiksna 56px)
-    while (btn.scrollHeight > maxH && font > minFont) {
-      font -= 0.5;
-      labelEl.style.fontSize = font + 'px';
-    }
-  });
-}
+//     // smanjuj font dok sadržaj ne stane u visinu
+//     // (sa white-space:normal biće max ~2 reda jer je visina fiksna 56px)
+//     while (btn.scrollHeight > maxH && font > minFont) {
+//       font -= 0.5;
+//       labelEl.style.fontSize = font + 'px';
+//     }
+//   });
+// }
 
-// prilagodi i na resize dok je panel vidljiv
-window.addEventListener('resize', () => {
-  const p = document.getElementById('teamsStatsPanel');
-  if (p && window.getComputedStyle(p).display !== 'none') adjustTeamButtons();
-});
+// // prilagodi i na resize dok je panel vidljiv
+// window.addEventListener('resize', () => {
+//   const p = document.getElementById('teamsStatsPanel');
+//   if (p && window.getComputedStyle(p).display !== 'none') adjustTeamButtons();
+// });
 
 function handleTeamStats(market, period) {
   console.log('🏆 Team Stats clicked:', { market, period });
@@ -1655,7 +1635,7 @@ async function initUsersPage() {
     
   } catch (error) {
     console.error("❌ [ERROR] Failed to initialize users page:", error);
-    showError("Failed to load users page. Please try again.");
+    showTableError("Failed to load users page. Please try again.");
   }
 }
 
@@ -1708,7 +1688,7 @@ function renderUsersTable(users) {
   console.log("✅ [DEBUG] Users table rendered successfully");
 }
 
-function showError(message) {
+function showTableError(message) {
   const error = document.getElementById('tableError');
   const errorMessage = document.getElementById('errorMessage');
   if (error) error.style.display = 'flex';

@@ -1403,48 +1403,21 @@ window.addEventListener('hashchange', () => {
 
 // ===== TEAMS STATS FUNCTIONS =====
 
-function toggleTeamsStats(forceOn) {
-  const analyze1p      = document.getElementById('analyze1p');
-  const analyzeGG      = document.getElementById('analyzeGG');
-  const analyze2plus   = document.getElementById('analyze2plus');
-  const analyzeFT2plus = document.getElementById('analyzeFT2plus');
-  const prepareDay     = document.getElementById('prepareDay');
-  const usersBtn       = document.getElementById('usersBtn');
+function toggleTeamsStats(show) {
+  const group = document.getElementById('teamsStatsButtonsGroup');
+  const backBar = document.getElementById('teamStatsBackBar');
+  const mainActions = document.getElementById('teamStatsActions');
+  if (!group || !backBar || !mainActions) return;
 
-  const teamStatsButtonsGroup = document.getElementById('teamsStatsButtonsGroup');
-  const teamStatsBackBar      = document.getElementById('teamStatsBackBar');
-  const teamStatsActions      = document.getElementById('teamStatsActions');
+  // osiguraj grid kada je vidljivo
+  if (show) group.style.display = 'grid';
 
-  if (!teamStatsButtonsGroup || !teamStatsBackBar || !teamStatsActions) return;
-
-  // Ako je prosleđeno true/false, koristi to; u suprotnom toggluj na osnovu stanja
-  const currentlyVisible = teamStatsButtonsGroup.style.display !== 'none';
-  const turnOn = (typeof forceOn === 'boolean') ? forceOn : !currentlyVisible;
-
-  if (turnOn) {
-    // Ulaz u Team Stats: pokaži grid sa timskim dugmićima i back bar,
-    // sakrij originalne analyze dugmiće i ostale akcije
-    teamStatsButtonsGroup.style.display = 'grid';
-    teamStatsBackBar.style.display = 'block';
-    teamStatsActions.style.display = 'none';
-
-    [analyze1p, analyzeGG, analyze2plus, analyzeFT2plus, prepareDay, usersBtn]
-      .forEach(el => { if (el) el.style.display = 'none'; });
-
-  } else {
-    // Izlaz iz Team Stats: sakrij grid i back bar, vrati analyze akcije
-    teamStatsButtonsGroup.style.display = 'none';
-    teamStatsBackBar.style.display = 'none';
-    teamStatsActions.style.display = '';
-
-    if (analyze1p)      analyze1p.style.display = 'flex';
-    if (analyzeGG)      analyzeGG.style.display = 'flex';
-    if (analyze2plus)   analyze2plus.style.display = 'flex';
-    if (analyzeFT2plus) analyzeFT2plus.style.display = 'flex';
-    if (prepareDay)     prepareDay.style.display = 'flex';
-    if (usersBtn)       usersBtn.style.display = 'flex';
-  }
+  // sakrivanje/prikaz preko klase .hidden
+  group.classList.toggle('hidden', !show);
+  backBar.classList.toggle('hidden', !show);
+  mainActions.classList.toggle('hidden', show);
 }
+
 
 
 // Handle team stats button clicks

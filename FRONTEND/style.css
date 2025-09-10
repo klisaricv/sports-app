@@ -2902,7 +2902,7 @@ body.users-page .panel.controls {
 
 /* === Team Stats layout fixes === */
 #teamsStatsButtonsGroup {
-  display: none; /* kontrolisano iz JS */
+  display: grid; /* default je grid, sakrivanje ide preko .hidden */
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 12px;
   align-items: stretch;

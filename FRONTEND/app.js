@@ -1338,6 +1338,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const teamsStatsBtn = document.getElementById("teamsStatsBtn");
   if (teamsStatsBtn) {
     teamsStatsBtn.addEventListener("click", toggleTeamsStats);
+    const backFromTeamStats = document.getElementById('backFromTeamStats');
+    if (backFromTeamStats) backFromTeamStats.addEventListener('click', toggleTeamsStats);
   }
 
   // Original Analyze buttons (now in hidden group)
@@ -1410,6 +1412,8 @@ function toggleTeamsStats() {
   const teamsStatsButtonsGroup = document.getElementById('teamsStatsButtonsGroup');
   const prepareDay = document.getElementById('prepareDay');
   const usersBtn = document.getElementById('usersBtn');
+  const teamStatsBackBar = document.getElementById('teamStatsBackBar');
+  const teamStatsActions = document.getElementById('teamStatsActions');
   
   if (!teamsStatsBtn || !teamsStatsButtonsGroup) return;
   
@@ -1439,6 +1443,8 @@ function toggleTeamsStats() {
     
     // Hide teams stats buttons
     teamsStatsButtonsGroup.style.display = 'none';
+    if (teamStatsBackBar) teamStatsBackBar.style.display = 'none';
+    if (teamStatsActions) teamStatsActions.style.display = 'none';
   } else {
     // Show teams stats buttons, hide analyze buttons
     teamsStatsBtn.innerHTML = `
@@ -1460,7 +1466,9 @@ function toggleTeamsStats() {
     if (usersBtn) usersBtn.style.display = 'none';
     
     // Show teams stats buttons
-    teamsStatsButtonsGroup.style.display = 'flex';
+    teamsStatsButtonsGroup.style.display = 'grid';
+    if (teamStatsBackBar) teamStatsBackBar.style.display = 'block';
+    if (teamStatsActions) teamStatsActions.style.display = 'block';
   }
 }
 

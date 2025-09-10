@@ -1185,14 +1185,230 @@ function toggleTeamsStats(show) {
   }
 }
 // Handle team stats button clicks
-function handleTeamStats(market, period) {
+async function handleTeamStats(market, period) {
+  // Check if user is logged in first
+  if (!isUserLoggedIn()) {
+    showAuthRequiredModal();
+    return;
+  }
+
+  const teamStatsTitles = {
+    'GG_HT': '🥅 Timovi sa najvećim % uspešnosti GG - 1. poluvreme',
+    '1+_HT': '⚽ Timovi sa najvećim % uspešnosti 1+ - 1. poluvreme', 
+    '2+_HT': '⚽ Timovi sa najvećim % uspešnosti 2+ - 1. poluvreme',
+    '3+_FT': '⚽ Timovi sa najvećim % uspešnosti 3+ - ceo meč',
+    '4+_FT': '⚽ Timovi sa najvećim % uspešnosti 4+ - ceo meč',
+    'AVG_MOST_SCORED': '📊 Timovi sa najvećim prosekom postignutih golova',
+    'AVG_MOST_CONCEDED': '📊 Timovi sa najvećim prosekom primljenih golova',
+    'GG_FT': '🥅 Timovi sa najvećim % uspešnosti GG - ceo meč',
+    'GG3+_FT': '🥅 Timovi sa najvećim % uspešnosti GG3+ - ceo meč',
+    'X_HT': '❌ Timovi sa najvećim % uspešnosti X - 1. poluvreme'
+  };
+
+  const title = teamStatsTitles[`${market}_${period}`] || `Timovi sa najvećim % uspešnosti ${market} - ${period}`;
+  
   // Show loading state
-  showToast('Loading team stats...', 'info');
-  // For now, just show a placeholder message
-  setTimeout(() => {
-    showToast(`Team Stats: ${market} ${period} - Coming soon!`, 'success');
-  }, 1000);
+  showLoader(`🔍 ${title}...`);
+  
+  // Show results section
+  const resultsSection = document.getElementById('resultsSection');
+  if (resultsSection) {
+    resultsSection.style.display = 'block';
+  }
+
+  try {
+    // Get dates from Teams Stats date fields
+    const fromEl = document.getElementById("fromDateTS");
+    const toEl = document.getElementById("toDateTS");
+    
+    if (!fromEl || !toEl || !fromEl.value || !toEl.value) {
+      showError("Potrebno je odabrati datume", "Molim vas odaberite i početni i završni datum u Teams Stats sekciji.");
+      hideLoader();
+      return;
+    }
+
+    const fromDate = new Date(fromEl.value);
+    const toDate = new Date(toEl.value);
+    
+    if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+      showError("Neispravni datumi", "Neispravne vrednosti datuma.");
+      hideLoader();
+      return;
+    }
+    
+    if (toDate < fromDate) {
+      showError("Neispravan opseg datuma", "Završni datum/vreme mora biti posle početnog datuma/vremena.");
+      hideLoader();
+      return;
+    }
+
+    const fromIso = fromDate.toISOString();
+    const toIso = toDate.toISOString();
+    const fh = fromDate.getHours();
+    const th = toDate.getHours() + ((toDate.getMinutes() || toDate.getSeconds()) ? 1 : 0);
+
+    // Map market and period to API parameters
+    let apiMarket;
+    if (market === "GG" && period === "HT") apiMarket = "gg1h";
+    else if (market === "1+" && period === "HT") apiMarket = "1h_over05";
+    else if (market === "2+" && period === "HT") apiMarket = "1h_over15";
+    else if (market === "3+" && period === "FT") apiMarket = "ft_over15";
+    else if (market === "4+" && period === "FT") apiMarket = "ft_over25";
+    else if (market === "GG" && period === "FT") apiMarket = "ggft";
+    else if (market === "GG3+" && period === "FT") apiMarket = "gg3plus_ft";
+    else if (market === "X" && period === "HT") apiMarket = "x_ht";
+    else {
+      showError("Nepodržan tip analize", `Kombinacija ${market} ${period} nije podržana.`);
+      hideLoader();
+      return;
+    }
+
+    const url = `${BACKEND_URL}/api/team-stats` +
+      `?from_date=${encodeURIComponent(fromIso)}` +
+      `&to_date=${encodeURIComponent(toIso)}` +
+      `&from_hour=${fh}` +
+      `&to_hour=${th}` +
+      `&market=${encodeURIComponent(apiMarket)}&no_api=1`;
+
+    setBusyUI(true);
+    const MAX_RETRIES = 6;
+    let attempt = 0;
+    
+    while (true) {
+      const res = await fetch(url, { headers: { Accept: "application/json" } });
+      const raw = await res.text();
+      let json;
+      
+      try {
+        json = JSON.parse(raw);
+      } catch {
+        showError("Greška servera", `Server je vratio neispravan odgovor (nije JSON):\n${raw.slice(0, 300)}...`);
+        hideLoader();
+        break;
+      }
+      
+      if (res.status === 429) {
+        attempt += 1;
+        if (attempt > MAX_RETRIES) {
+          const msg = json?.detail || "Server je trenutno zauzet. Pokušaj ponovo.";
+          showError("Greška servera", msg);
+          hideLoader();
+          break;
+        }
+        const wait = Math.min(1000 * Math.pow(1.6, attempt), 5000);
+        const note = `Zauzeto (${attempt}/${MAX_RETRIES})… čekam ${(wait / 1000).toFixed(1)}s`;
+        console.warn(`429, retry in ${wait}ms`);
+        setBusyUI(true, note);
+        await sleep(wait);
+        continue;
+      }
+      
+      if (!res.ok) {
+        const msg = json?.detail || json?.error || JSON.stringify(json).slice(0, 300);
+        showError("Greška servera", `Greška servera: ${msg}`);
+        hideLoader();
+        break;
+      }
+      
+      const data = normalizeResults(json);
+      data.sort((a, b) => (b.success_rate ?? 0) - (a.success_rate ?? 0));
+      renderTeamStats(data, `${market}_${period}`, title);
+      showToast(`Završeno • ${data.length} timova`, "ok");
+      hideLoader();
+      break;
+    }
+  } catch (err) {
+    showError("Greška analize", `Greška tokom analize timova: ${err}`);
+    hideLoader();
+  } finally {
+    setBusyUI(false);
+  }
 }
+
+// Render team stats results
+function renderTeamStats(data, marketPeriod, title) {
+  const currentMarket = marketPeriod || "GG_HT";
+  window.currentTeamStatsResults = data;
+  window.currentTeamStatsMarket = currentMarket;
+  
+  // Initialize with data
+  allResults = Array.isArray(data) ? data : [];
+  const total = allResults.length;
+  
+  // Add title above results
+  const analysisTitle = title || '📈 Statistike timova';
+  const resultsSection = document.querySelector('.results');
+  if (resultsSection && !document.getElementById('analysis-title')) {
+    const titleElement = document.createElement('div');
+    titleElement.id = 'analysis-title';
+    titleElement.className = 'analysis-title';
+    titleElement.innerHTML = `
+      <h2>${analysisTitle}</h2>
+      <div class="analysis-subtitle">Analiza završena • ${total} timova pronađeno</div>
+    `;
+    resultsSection.insertBefore(titleElement, resultsSection.firstChild);
+  } else if (document.getElementById('analysis-title')) {
+    const titleEl = document.getElementById('analysis-title');
+    titleEl.querySelector('h2').textContent = analysisTitle;
+    titleEl.querySelector('.analysis-subtitle').textContent = `Analiza završena • ${total} timova pronađeno`;
+  }
+  
+  // Render team stats (max 10)
+  renderTeamStatsList();
+}
+
+function renderTeamStatsList() {
+  const matchesContent = document.getElementById('matchesContent');
+  if (!matchesContent) return;
+  
+  // Clear content area
+  matchesContent.innerHTML = '';
+  
+  const teamCardHTML = (team) => {
+    const successRate = team.success_rate || 0;
+    const totalMatches = team.total_matches || 0;
+    const successfulMatches = team.successful_matches || 0;
+    
+    return `
+      <div class="team-stat">
+        <div class="team-header">
+          <div class="team-name">${fmt(team.team_name)}</div>
+          <div class="team-league">${fmt(team.league || 'N/A')}</div>
+        </div>
+        <div class="team-stats">
+          <div class="stat-item">
+            <span class="stat-label">Uspešnost</span>
+            <span class="stat-value success-rate">${fmt(successRate, '%')}</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Uspešni mečevi</span>
+            <span class="stat-value">${successfulMatches}/${totalMatches}</span>
+          </div>
+          ${team.avg_goals_scored ? `
+          <div class="stat-item">
+            <span class="stat-label">Prosek golova</span>
+            <span class="stat-value">${fmt(team.avg_goals_scored, '')}</span>
+          </div>
+          ` : ''}
+        </div>
+      </div>
+    `;
+  };
+  
+  // Sort by success_rate descending and take max 10
+  const sortedResults = allResults
+    .sort((a, b) => (b.success_rate || 0) - (a.success_rate || 0))
+    .slice(0, 10);
+    
+  if (sortedResults.length > 0) {
+    sortedResults.forEach((team) => {
+      matchesContent.innerHTML += teamCardHTML(team);
+    });
+  } else {
+    matchesContent.innerHTML = '<div class="placeholder">Nema rezultata za ovaj period.</div>';
+  }
+}
+
 // ===== USERS PAGE FUNCTIONS =====
 // Load users.js script dynamically
 function loadUsersScript() {
@@ -1585,4 +1801,3 @@ window.addEventListener('load', function(){
     })();
   } catch(e) { console.warn('initTeamStatsDates failed', e); }
 });
-

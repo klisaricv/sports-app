@@ -6907,6 +6907,44 @@ async def api_analyze(request: Request):
         print(traceback.format_exc())
         return JSONResponse(status_code=500, content={"error": "analyze_failed", "detail": str(e)})
 
+@app.get("/api/team-stats")
+async def api_team_stats(request: Request):
+    """
+    Get team statistics for specific market and period.
+    Returns top 10 teams with highest success rate for the given market.
+    """
+    try:
+        q = request.query_params
+        market = (q.get("market") or "gg1h").strip()
+        fh = q.get("from_hour")
+        th = q.get("to_hour")
+        from_s = q.get("from_date")
+        to_s = q.get("to_date")
+
+        # Default range: today locally
+        if from_s:
+            from_date = datetime.fromisoformat(from_s)
+        else:
+            from_date = datetime.now(USER_TZ).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
+
+        if to_s:
+            to_date = datetime.fromisoformat(to_s)
+        else:
+            to_date = datetime.now(USER_TZ).replace(hour=23, minute=59, second=59, microsecond=0).astimezone(timezone.utc)
+
+        # Get team stats from database
+        team_stats = get_team_stats_for_market(from_date, to_date, fh, th, market)
+        
+        return JSONResponse(status_code=200, content={
+            "prepared": len(team_stats) > 0,
+            "results": team_stats
+        })
+
+    except Exception as e:
+        print("team-stats error:", e)
+        print(traceback.format_exc())
+        return JSONResponse(status_code=500, content={"error": "team_stats_failed", "detail": str(e)})
+
 @app.post("/api/save-pdf")
 async def save_pdf(data: dict):
     file_path = "analysis_results.pdf"
@@ -6943,3 +6981,88 @@ async def save_pdf(data: dict):
 
     c.save()
     return FileResponse(file_path, filename="analysis_results.pdf")
+
+def get_team_stats_for_market(from_date: datetime, to_date: datetime, fh: int, th: int, market: str) -> list:
+    """
+    Get team statistics for a specific market and period.
+    Returns list of teams with their success rates.
+    """
+    try:
+        conn = get_mysql_connection()
+        cur = conn.cursor()
+        
+        # Map market to database column
+        market_columns = {
+            'gg1h': 'gg_1h_success_rate',
+            '1h_over05': 'over05_1h_success_rate', 
+            '1h_over15': 'over15_1h_success_rate',
+            'ft_over15': 'over15_ft_success_rate',
+            'ft_over25': 'over25_ft_success_rate',
+            'ggft': 'gg_ft_success_rate',
+            'gg3plus_ft': 'gg3plus_ft_success_rate',
+            'x_ht': 'x_ht_success_rate'
+        }
+        
+        success_rate_col = market_columns.get(market, 'gg_1h_success_rate')
+        
+        # Build query based on market type
+        if market in ['gg1h', '1h_over05', '1h_over15', 'x_ht']:
+            # First half markets
+            query = f"""
+                SELECT 
+                    t.name as team_name,
+                    l.name as league,
+                    ts.{success_rate_col} as success_rate,
+                    ts.gg_1h_total_matches as total_matches,
+                    ts.gg_1h_successful_matches as successful_matches,
+                    ts.avg_goals_scored
+                FROM team_stats ts
+                JOIN teams t ON ts.team_id = t.id
+                JOIN leagues l ON ts.league_id = l.id
+                WHERE ts.{success_rate_col} IS NOT NULL
+                AND ts.{success_rate_col} > 0
+                AND ts.gg_1h_total_matches >= 5
+                ORDER BY ts.{success_rate_col} DESC
+                LIMIT 10
+            """
+        else:
+            # Full time markets
+            query = f"""
+                SELECT 
+                    t.name as team_name,
+                    l.name as league,
+                    ts.{success_rate_col} as success_rate,
+                    ts.gg_ft_total_matches as total_matches,
+                    ts.gg_ft_successful_matches as successful_matches,
+                    ts.avg_goals_scored
+                FROM team_stats ts
+                JOIN teams t ON ts.team_id = t.id
+                JOIN leagues l ON ts.league_id = l.id
+                WHERE ts.{success_rate_col} IS NOT NULL
+                AND ts.{success_rate_col} > 0
+                AND ts.gg_ft_total_matches >= 5
+                ORDER BY ts.{success_rate_col} DESC
+                LIMIT 10
+            """
+        
+        cur.execute(query)
+        results = cur.fetchall()
+        conn.close()
+        
+        # Convert to list of dictionaries
+        team_stats = []
+        for row in results:
+            team_stats.append({
+                'team_name': row[0],
+                'league': row[1], 
+                'success_rate': float(row[2]) * 100,  # Convert to percentage
+                'total_matches': row[3],
+                'successful_matches': row[4],
+                'avg_goals_scored': float(row[5]) if row[5] else None
+            })
+        
+        return team_stats
+        
+    except Exception as e:
+        print(f"Error getting team stats: {e}")
+        return []

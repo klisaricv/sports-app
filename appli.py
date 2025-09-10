@@ -6928,6 +6928,7 @@ async def api_team_stats(request: Request):
     """
     Get team statistics for specific market and period.
     Returns top 10 teams with highest success rate for the given market.
+    Uses the same system as analyze - reads from model_outputs table.
     """
     try:
         q = request.query_params
@@ -6948,9 +6949,25 @@ async def api_team_stats(request: Request):
         else:
             to_date = datetime.now(USER_TZ).replace(hour=23, minute=59, second=59, microsecond=0).astimezone(timezone.utc)
 
-        # Get team stats from database
-        team_stats = get_team_stats_for_market(from_date, to_date, fh, th, market)
+        print(f"DEBUG: api_team_stats called with market={market}, from_date={from_date}, to_date={to_date}")
+
+        # Use the same system as analyze - read from model_outputs
+        results = read_precomputed_results(from_date, to_date, fh, th, market)
+        print(f"DEBUG: read_precomputed_results returned {len(results)} results")
+
+        # Convert results to team stats format
+        team_stats = []
+        for result in results:
+            team_stats.append({
+                'team_name': result.get('team1', 'Unknown'),
+                'league': result.get('league', 'Unknown'),
+                'success_rate': result.get('final_percent', 0),
+                'total_matches': result.get('team1_total', 0),
+                'successful_matches': result.get('team1_hits', 0),
+                'avg_goals_scored': result.get('team1_percent', 0)
+            })
         
+        print(f"DEBUG: Returning {len(team_stats)} team stats")
         return JSONResponse(status_code=200, content={
             "prepared": len(team_stats) > 0,
             "results": team_stats

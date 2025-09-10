@@ -1407,34 +1407,23 @@ function toggleTeamsStats(show) {
   const group = document.getElementById('teamsStatsButtonsGroup');
   const backBar = document.getElementById('teamStatsBackBar');
   const mainActions = document.getElementById('teamStatsActions');
+  const dateRangeRow = document.getElementById('dateRangeRow');
+  if (!group || !backBar || !mainActions) return;
 
-  // 1) TEAMS STATS dugmad
-  if (group) {
-    if (show) {
-      group.classList.remove('hidden');
-      group.style.display = 'grid'; // garantuj grid kada je vidljivo
-    } else {
-      group.classList.add('hidden');
-      group.style.display = '';     // vrati na CSS podrazumevano
-    }
-  }
+  // Ensure grid when visible
+  if (show) group.style.display = 'grid';
 
-  // 2) BACK bar
-  if (backBar) {
-    if (show) {
-      backBar.classList.remove('hidden');
-      backBar.style.display = '';   // ne ostavljaj hard-coded none
-    } else {
-      backBar.classList.add('hidden');
-      backBar.style.display = '';   // pusti .hidden da radi
-    }
-  }
-
-  // 3) Glavne akcije (filtri + ANALYZE dugmad) sakrij u Team Stats režimu
-  if (mainActions) {
-    mainActions.classList.toggle('hidden', show);
+  // Toggle visibility
+  group.classList.toggle('hidden', !show);
+  backBar.classList.toggle('hidden', !show);
+  // Hide the main actions (analyze buttons etc.) while in Team Stats
+  mainActions.classList.toggle('hidden', show);
+  // Show date range row in Team Stats mode
+  if (dateRangeRow) {
+    dateRangeRow.classList.toggle('hidden', !show);
   }
 }
+
 
 
 // Handle team stats button clicks
@@ -1940,3 +1929,26 @@ if (document.readyState === "interactive" || document.readyState === "complete")
 
 // Log da znamo da je JS podignut
 console.log("app.js loaded");
+
+
+window.addEventListener('load', function(){
+  try {
+    // Initialize Team Stats date inputs mirrors
+    (function initTeamStatsDates(){
+      const from1 = document.getElementById('fromDate');
+      const to1 = document.getElementById('toDate');
+      const from2 = document.getElementById('fromDateTS');
+      const to2 = document.getElementById('toDateTS');
+      if (from2 && to2) {
+        const now = new Date();
+        const prior = new Date(now.getTime() - 7*24*60*60*1000);
+        const fmt = (d) => {
+          const pad = (n) => String(n).padStart(2,'0');
+          return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+        };
+        from2.value = from1 && from1.value ? from1.value : fmt(prior);
+        to2.value = to1 && to1.value ? to1.value : fmt(now);
+      }
+    })();
+  } catch(e) { console.warn('initTeamStatsDates failed', e); }
+});

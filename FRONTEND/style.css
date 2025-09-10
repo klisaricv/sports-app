@@ -3293,7 +3293,7 @@ body.users-page .panel.controls {
 
 #teamsStatsButtonsGroup{
   display:grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(5, 1fr);
   gap:12px;
   align-items:stretch;
   margin-top: var(--spacing-md);
@@ -3318,7 +3318,7 @@ body.users-page .panel.controls {
 
 @media (max-width:768px){
   #teamsStatsButtonsGroup{
-    grid-template-columns:1fr;
+    grid-template-columns:repeat(5, 1fr);
     gap: var(--spacing-xs);
   }
   
@@ -3327,5 +3327,13 @@ body.users-page .panel.controls {
     padding: var(--spacing-sm);
     font-size: var(--font-size-xs);
     min-height:44px;
+  }
+}
+
+
+/* Team Stats layout: exactly 5 buttons per row on desktop, stack on small screens */
+@media (max-width: 700px) {
+  #teamsStatsButtonsGroup {
+    grid-template-columns: repeat(2, 1fr);
   }
 }

@@ -3330,8 +3330,8 @@ body:has(.page-title h1:contains("Users Management")) .panel.controls {
 
 /* ===== TEAMS STATS BUTTONS ===== */
 #teamsStatsButtonsGroup {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: var(--spacing-sm);
   margin-top: var(--spacing-md);
 }

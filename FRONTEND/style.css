@@ -42,7 +42,15 @@
   /* Shadows */
   --shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.4);
-  
+  --shadow-sm: 0 1px 4px rgba(0,0,0,0.25);
+  --radius-sm: 6px;
+  --surface-secondary: var(--surface-2);
+  --surface-3: var(--surface-elevated);
+  --color-bg: var(--surface);
+  --color-border: var(--border);
+  --color-text: var(--text-primary);
+  --color-hover: var(--surface-2);
+  --color-primary: var(--primary);
   /* Transitions */
   --transition: 150ms ease;
   
@@ -468,19 +476,6 @@ button[disabled],
   margin-top: var(--spacing-lg);
 }
 
-/* Always single column for results */
-.results__grid {
-  grid-template-columns: 1fr !important;
-}
-
-/* Section Header */
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: var(--spacing-md);
-}
-
 .section-title {
   flex: 1;
 }
@@ -804,10 +799,10 @@ button[disabled],
 }
 
 /* No Data Styling */
-.stat-value:contains("No Data"),
-.micro-values:contains("No Data"),
-.breakdown-value:contains("No Data"),
-.final-value:contains("No Data") {
+.stat-value.is-empty,
+.micro-values.is-empty,
+.breakdown-value.is-empty,
+.final-value.is-empty {
   color: var(--text-muted);
   font-style: italic;
   opacity: 0.7;
@@ -2140,8 +2135,7 @@ input:focus-visible {
 }
 
 /* Force hide on users page */
-body:has(.page-title h1:contains("👥 Users Management")) .panel.controls,
-body:has(.page-title h1:contains("Users Management")) .panel.controls {
+body.users-page .panel.controls {
   display: none !important;
   visibility: hidden !important;
   opacity: 0 !important;
@@ -2916,7 +2910,11 @@ body:has(.page-title h1:contains("Users Management")) .panel.controls {
 
 #teamsStatsButtonsGroup .btn {
   width: 100%;
+  min-width: 0;          /* dozvoli skupljanje u gridu */
   justify-content: center;
+  min-height: 48px;
+  padding: var(--spacing-md);
+  font-size: var(--font-size-sm);
 }
 
 /* Back bar malo odvoji od ostatka */
@@ -2933,7 +2931,7 @@ body:has(.page-title h1:contains("Users Management")) .panel.controls {
 /* Mobile responsive for teams stats */
 @media (max-width: 768px) {
   #teamsStatsButtonsGroup {
-    flex-direction: column;
+    grid-template-columns: 1fr;
     gap: var(--spacing-xs);
   }
   
@@ -3327,45 +3325,5 @@ body:has(.page-title h1:contains("Users Management")) .panel.controls {
   .pagination-pages {
     flex-wrap: wrap;
     justify-content: center;
-  }
-}
-
-/* ===== TEAMS STATS BUTTONS ===== */
-#teamsStatsButtonsGroup {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: var(--spacing-sm);
-  margin-top: var(--spacing-md);
-}
-
-#teamsStatsButtonsGroup .btn {
-  flex: 1;
-  min-width: 200px;
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-md);
-  font-size: var(--font-size-sm);
-  white-space: nowrap;
-  min-height: 48px;
-}
-
-#teamsStatsButtonsGroup .btn span {
-  flex: 1;
-  text-align: left;
-}
-
-/* Mobile responsive for teams stats */
-@media (max-width: 768px) {
-  #teamsStatsButtonsGroup {
-    flex-direction: column;
-    gap: var(--spacing-xs);
-  }
-  
-  #teamsStatsButtonsGroup .btn {
-    min-width: auto;
-    padding: var(--spacing-sm);
-    font-size: var(--font-size-xs);
-    min-height: 44px;
   }
 }

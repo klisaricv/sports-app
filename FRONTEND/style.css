@@ -2900,49 +2900,6 @@ body.users-page .panel.controls {
   }
 }
 
-/* === Team Stats layout fixes === */
-#teamsStatsButtonsGroup {
-  display: grid; /* default je grid, sakrivanje ide preko .hidden */
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px;
-  align-items: stretch;
-}
-
-#teamsStatsButtonsGroup .btn {
-  width: 100%;
-  min-width: 0;          /* dozvoli skupljanje u gridu */
-  justify-content: center;
-  min-height: 48px;
-  padding: var(--spacing-md);
-  font-size: var(--font-size-sm);
-}
-
-/* Back bar malo odvoji od ostatka */
-#teamStatsBackBar {
-  display: none; /* kontrolisano iz JS */
-  margin-bottom: 12px;
-}
-
-#teamsStatsButtonsGroup .btn span {
-  flex: 1;
-  text-align: left;
-}
-
-/* Mobile responsive for teams stats */
-@media (max-width: 768px) {
-  #teamsStatsButtonsGroup {
-    grid-template-columns: 1fr;
-    gap: var(--spacing-xs);
-  }
-  
-  #teamsStatsButtonsGroup .btn {
-    min-width: auto;
-    padding: var(--spacing-sm);
-    font-size: var(--font-size-xs);
-    min-height: 44px;
-  }
-}
-
 /* Mobile devices */
 @media (max-width: 640px) {
   .users-page {
@@ -3206,75 +3163,6 @@ body.users-page .panel.controls {
   }
 }
 
-/* ===== TEAM STATS STYLES ===== */
-.team-stats {
-  margin-top: var(--spacing-md);
-  padding: var(--spacing-md);
-  background: var(--surface);
-  border-radius: var(--radius);
-  border: 1px solid var(--border);
-}
-
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: var(--spacing-sm);
-  margin-top: var(--spacing-sm);
-}
-
-.stat-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--spacing-xs) var(--spacing-sm);
-  background: var(--surface-2);
-  border-radius: var(--radius);
-  border: 1px solid var(--border);
-  transition: var(--transition);
-}
-
-.stat-item:hover {
-  background: var(--surface-elevated);
-  border-color: var(--primary);
-}
-
-.stat-label {
-  color: var(--text-secondary);
-  font-weight: var(--font-weight-medium);
-  font-size: var(--font-size-sm);
-  flex: 1;
-}
-
-.stat-value {
-  color: var(--text-primary);
-  font-weight: var(--font-weight-bold);
-  font-size: var(--font-size-sm);
-  margin-left: var(--spacing-sm);
-  text-align: right;
-  min-width: 60px;
-}
-
-/* Team stats responsive */
-@media (max-width: 768px) {
-  .stats-grid {
-    grid-template-columns: 1fr;
-    gap: var(--spacing-xs);
-  }
-  
-  .stat-item {
-    padding: var(--spacing-xs);
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--spacing-xs);
-  }
-  
-  .stat-value {
-    margin-left: 0;
-    text-align: left;
-    min-width: auto;
-  }
-}
-
 /* ===== USERS PAGE MOBILE FIXES ===== */
 @media (max-width: 768px) {
   /* Page header mobile layout */
@@ -3394,5 +3282,50 @@ body.users-page .panel.controls {
   .pagination-pages {
     flex-wrap: wrap;
     justify-content: center;
+  }
+}
+
+/* ===== TEAMS STATS (konsolidovano) ===== */
+#teamStatsBackBar{
+  display:none; /* pali/gaši JS */
+  margin-bottom:12px;
+}
+
+#teamsStatsButtonsGroup{
+  display:grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap:12px;
+  align-items:stretch;
+  margin-top: var(--spacing-md);
+}
+
+#teamsStatsButtonsGroup .btn{
+  width:100%;
+  min-height:48px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+}
+
+#teamsStatsButtonsGroup .btn span{
+  flex:1;
+  text-align:left;
+}
+
+@media (max-width:768px){
+  #teamsStatsButtonsGroup{
+    grid-template-columns:1fr;
+    gap: var(--spacing-xs);
+  }
+  
+  #teamsStatsButtonsGroup .btn{
+    min-width:auto;
+    padding: var(--spacing-sm);
+    font-size: var(--font-size-xs);
+    min-height:44px;
   }
 }

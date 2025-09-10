@@ -1337,11 +1337,12 @@ document.addEventListener("DOMContentLoaded", () => {
   // Teams Stats Button
   const teamsStatsBtn = document.getElementById("teamsStatsBtn");
   if (teamsStatsBtn) {
-    teamsStatsBtn.addEventListener("click", toggleTeamsStats);
+    // Klik na TEAMS STATS uvek ULAZI u Team Stats režim
+    teamsStatsBtn.addEventListener("click", () => toggleTeamsStats(true));
     const backFromTeamStats = document.getElementById('backFromTeamStats');
-    if (backFromTeamStats) backFromTeamStats.addEventListener('click', toggleTeamsStats);
+    // Klik na BACK bar uvek IZLAZI iz Team Stats režima
+    if (backFromTeamStats) backFromTeamStats.addEventListener('click', () => toggleTeamsStats(false));
   }
-
   // Original Analyze buttons (now in hidden group)
   if (btn1p) btn1p.addEventListener("click", () => fetchAnalysis("1p"));
   if (btnGG) btnGG.addEventListener("click", () => fetchAnalysis("GG"));
@@ -1402,75 +1403,49 @@ window.addEventListener('hashchange', () => {
 
 // ===== TEAMS STATS FUNCTIONS =====
 
-// Toggle between analyze buttons and teams stats buttons
-function toggleTeamsStats() {
-  const teamsStatsBtn = document.getElementById('teamsStatsBtn');
-  const analyze1p = document.getElementById('analyze1p');
-  const analyzeGG = document.getElementById('analyzeGG');
-  const analyze2plus = document.getElementById('analyze2plus');
+function toggleTeamsStats(forceOn) {
+  const analyze1p      = document.getElementById('analyze1p');
+  const analyzeGG      = document.getElementById('analyzeGG');
+  const analyze2plus   = document.getElementById('analyze2plus');
   const analyzeFT2plus = document.getElementById('analyzeFT2plus');
-  const teamsStatsButtonsGroup = document.getElementById('teamsStatsButtonsGroup');
-  const prepareDay = document.getElementById('prepareDay');
-  const usersBtn = document.getElementById('usersBtn');
-  const teamStatsBackBar = document.getElementById('teamStatsBackBar');
-  const teamStatsActions = document.getElementById('teamStatsActions');
-  
-  if (!teamsStatsBtn || !teamsStatsButtonsGroup) return;
-  
-  const isTeamsStatsVisible = teamsStatsButtonsGroup.style.display !== 'none';
-  
-  if (isTeamsStatsVisible) {
-    // Show analyze buttons, hide teams stats
-    teamsStatsBtn.innerHTML = `
-      <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
-        <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" stroke="currentColor" stroke-width="2" fill="none"/>
-        <rect x="8" y="2" width="8" height="4" rx="1" ry="1" stroke="currentColor" stroke-width="2" fill="none"/>
-        <path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-      <span>TEAMS STATS</span>
-    `;
-    teamsStatsBtn.className = 'btn';
-    
-    // Show original analyze buttons
-    if (analyze1p) analyze1p.style.display = 'flex';
-    if (analyzeGG) analyzeGG.style.display = 'flex';
-    if (analyze2plus) analyze2plus.style.display = 'flex';
-    if (analyzeFT2plus) analyzeFT2plus.style.display = 'flex';
-    
-    // Show PREPARE DAY and USER MANAGEMENT buttons
-    if (prepareDay) prepareDay.style.display = 'flex';
-    if (usersBtn) usersBtn.style.display = 'flex';
-    
-    // Hide teams stats buttons
-    teamsStatsButtonsGroup.style.display = 'none';
-    if (teamStatsBackBar) teamStatsBackBar.style.display = 'none';
-    if (teamStatsActions) teamStatsActions.style.display = 'none';
+  const prepareDay     = document.getElementById('prepareDay');
+  const usersBtn       = document.getElementById('usersBtn');
+
+  const teamStatsButtonsGroup = document.getElementById('teamsStatsButtonsGroup');
+  const teamStatsBackBar      = document.getElementById('teamStatsBackBar');
+  const teamStatsActions      = document.getElementById('teamStatsActions');
+
+  if (!teamStatsButtonsGroup || !teamStatsBackBar || !teamStatsActions) return;
+
+  // Ako je prosleđeno true/false, koristi to; u suprotnom toggluj na osnovu stanja
+  const currentlyVisible = teamStatsButtonsGroup.style.display !== 'none';
+  const turnOn = (typeof forceOn === 'boolean') ? forceOn : !currentlyVisible;
+
+  if (turnOn) {
+    // Ulaz u Team Stats: pokaži grid sa timskim dugmićima i back bar,
+    // sakrij originalne analyze dugmiće i ostale akcije
+    teamStatsButtonsGroup.style.display = 'grid';
+    teamStatsBackBar.style.display = 'block';
+    teamStatsActions.style.display = 'none';
+
+    [analyze1p, analyzeGG, analyze2plus, analyzeFT2plus, prepareDay, usersBtn]
+      .forEach(el => { if (el) el.style.display = 'none'; });
+
   } else {
-    // Show teams stats buttons, hide analyze buttons
-    teamsStatsBtn.innerHTML = `
-      <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
-        <path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-      <span>BACK TO ANALYZE</span>
-    `;
-    teamsStatsBtn.className = 'btn secondary';
-    
-    // Hide original analyze buttons
-    if (analyze1p) analyze1p.style.display = 'none';
-    if (analyzeGG) analyzeGG.style.display = 'none';
-    if (analyze2plus) analyze2plus.style.display = 'none';
-    if (analyzeFT2plus) analyzeFT2plus.style.display = 'none';
-    
-    // Hide PREPARE DAY and USER MANAGEMENT buttons when in TEAM STATS mode
-    if (prepareDay) prepareDay.style.display = 'none';
-    if (usersBtn) usersBtn.style.display = 'none';
-    
-    // Show teams stats buttons
-    teamsStatsButtonsGroup.style.display = 'grid';
-    if (teamStatsBackBar) teamStatsBackBar.style.display = 'block';
-    if (teamStatsActions) teamStatsActions.style.display = 'block';
+    // Izlaz iz Team Stats: sakrij grid i back bar, vrati analyze akcije
+    teamStatsButtonsGroup.style.display = 'none';
+    teamStatsBackBar.style.display = 'none';
+    teamStatsActions.style.display = '';
+
+    if (analyze1p)      analyze1p.style.display = 'flex';
+    if (analyzeGG)      analyzeGG.style.display = 'flex';
+    if (analyze2plus)   analyze2plus.style.display = 'flex';
+    if (analyzeFT2plus) analyzeFT2plus.style.display = 'flex';
+    if (prepareDay)     prepareDay.style.display = 'flex';
+    if (usersBtn)       usersBtn.style.display = 'flex';
   }
 }
+
 
 // Handle team stats button clicks
 function handleTeamStats(market, period) {

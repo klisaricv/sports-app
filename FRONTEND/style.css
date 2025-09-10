@@ -2906,21 +2906,23 @@ body:has(.page-title h1:contains("Users Management")) .panel.controls {
   }
 }
 
-/* ===== TEAMS STATS BUTTONS ===== */
+/* === Team Stats layout fixes === */
 #teamsStatsButtonsGroup {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: var(--spacing-sm);
-  margin-top: var(--spacing-md);
+  display: none; /* kontrolisano iz JS */
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  align-items: stretch;
 }
+
 #teamsStatsButtonsGroup .btn {
   width: 100%;
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-md);
-  font-size: var(--font-size-sm);
-  white-space: nowrap;
+  justify-content: center;
+}
+
+/* Back bar malo odvoji od ostatka */
+#teamStatsBackBar {
+  display: none; /* kontrolisano iz JS */
+  margin-bottom: 12px;
 }
 
 #teamsStatsButtonsGroup .btn span {

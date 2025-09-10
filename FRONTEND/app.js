@@ -1165,18 +1165,24 @@ function toggleTeamsStats(show) {
   const backBar = document.getElementById('teamStatsBackBar');
   const mainActions = document.getElementById('teamStatsActions');
   const dateRangeRow = document.getElementById('dateRangeRow');
-  if (!group || !backBar || !mainActions) return;
+  
+  if (!group || !backBar || !mainActions || !dateRangeRow) {
+    console.warn('Missing required elements for toggleTeamsStats');
+    return;
+  }
+  
   // Ensure grid when visible
-  if (show) group.style.display = 'grid';
+  if (show) {
+    group.style.display = 'grid';
+  }
+  
   // Toggle visibility
   group.classList.toggle('hidden', !show);
   backBar.classList.toggle('hidden', !show);
+  dateRangeRow.classList.toggle('hidden', !show);
+  
   // Hide the main actions (analyze buttons etc.) while in Team Stats
   mainActions.classList.toggle('hidden', show);
-  // Show date range row in Team Stats mode
-  if (dateRangeRow) {
-    dateRangeRow.classList.toggle('hidden', !show);
-  }
 }
 // Handle team stats button clicks
 function handleTeamStats(market, period) {
@@ -1580,15 +1586,3 @@ window.addEventListener('load', function(){
   } catch(e) { console.warn('initTeamStatsDates failed', e); }
 });
 
-function toggleTeamsStats(show) {
-  const group = document.getElementById('teamsStatsButtonsGroup');
-  const backBar = document.getElementById('teamStatsBackBar');
-  const mainActions = document.getElementById('teamStatsActions');
-  const dateRow = document.getElementById('dateRangeRow');
-  if (!group || !backBar || !mainActions || !dateRow) return;
-
-  group.classList.toggle('hidden', !show);
-  backBar.classList.toggle('hidden', !show);
-  dateRow.classList.toggle('hidden', !show);
-  mainActions.classList.toggle('hidden', show);
-}

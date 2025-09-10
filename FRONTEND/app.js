@@ -1404,35 +1404,37 @@ window.addEventListener('hashchange', () => {
 // ===== TEAMS STATS FUNCTIONS =====
 
 function toggleTeamsStats(show) {
-  const group = document.getElementById('teamsStatsButtonsGroup');
-  const backBar = document.getElementById('teamStatsBackBar');
-  const mainActions = document.getElementById('teamStatsActions');
+  const group      = document.getElementById('teamsStatsButtonsGroup');
+  const backBar    = document.getElementById('teamStatsBackBar');
+  const mainActions= document.getElementById('teamStatsActions');
+  const dateBar    = document.getElementById('dateRangeBar'); // uvek vidljiv
 
-  // 1) TEAMS STATS dugmad
+  // Team Stats dugmad (grid)
   if (group) {
     if (show) {
       group.classList.remove('hidden');
-      group.style.display = 'grid'; // garantuj grid kada je vidljivo
+      group.style.display = 'grid';
     } else {
       group.classList.add('hidden');
-      group.style.display = '';     // vrati na CSS podrazumevano
+      group.style.display = '';
     }
   }
 
-  // 2) BACK bar
+  // Back bar
   if (backBar) {
-    if (show) {
-      backBar.classList.remove('hidden');
-      backBar.style.display = '';   // ne ostavljaj hard-coded none
-    } else {
-      backBar.classList.add('hidden');
-      backBar.style.display = '';   // pusti .hidden da radi
-    }
+    backBar.classList.toggle('hidden', !show);
+    backBar.style.display = '';
   }
 
-  // 3) Glavne akcije (filtri + ANALYZE dugmad) sakrij u Team Stats režimu
+  // Sakrij samo akcije (Analyze dugmad) u Team Stats modu
   if (mainActions) {
     mainActions.classList.toggle('hidden', show);
+  }
+
+  // Datumski bar uvek vidljiv
+  if (dateBar) {
+    dateBar.classList.remove('hidden');
+    dateBar.style.display = '';
   }
 }
 

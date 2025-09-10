@@ -3299,17 +3299,46 @@ body.users-page .panel.controls {
   margin-top: var(--spacing-md);
 }
 
+/* GRID – ako već nemaš */
+#teamsStatsButtonsGroup{
+  display:grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--spacing-md);
+}
+
+/* DUGMAD u gridu: 2 linije max, ista visina za sve */
 #teamsStatsButtonsGroup .btn{
   width:100%;
-  min-height:48px;
+  height:64px;
+  min-height:64px;
+
   display:flex;
   align-items:center;
-  justify-content:center;
+  justify-content:flex-start; /* tekst ulevo */
   gap: var(--spacing-sm);
   padding: var(--spacing-md);
+
   font-size: var(--font-size-sm);
-  white-space: nowrap;
+  line-height:1.2;
+
+  /* dozvoli prelamanje */
+  white-space: normal;
+  text-align:left;
 }
+
+#teamsStatsButtonsGroup .btn svg{
+  flex-shrink:0;
+}
+
+#teamsStatsButtonsGroup .btn span{
+  display:-webkit-box;
+  -webkit-line-clamp:2;        /* najviše 2 reda */
+  -webkit-box-orient:vertical;
+  overflow:hidden;
+  flex:1;
+}
+
+/* Ako imaš posebnu klasu za FT varijante – ostavi boje, ne diramo visinu */
 
 #teamsStatsButtonsGroup .btn span{
   flex:1;

@@ -2906,45 +2906,82 @@ body:has(.page-title h1:contains("Users Management")) .panel.controls {
   }
 }
 
-/* ===== TEAMS STATS BUTTONS ===== */
-#teamsStatsButtonsGroup {
+/* ===== TEAMS STATS (panel + buttons) ===== */
+.teams-stats {
+  display: block;
+}
+
+.teams-stats__header {
   display: flex;
-  flex-wrap: wrap;
+  justify-content: flex-start;
+  margin-bottom: var(--spacing-md);
+}
+
+.teams-stats__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-md);
+}
+
+#teamsStatsButtonsGroup {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
   gap: var(--spacing-sm);
   margin-top: var(--spacing-md);
+  align-items: stretch;          /* iste visine po redu */
 }
 
-#teamsStatsButtonsGroup .btn {
-  flex: 1;
-  min-width: 200px;
-  display: flex;
+#teamsStatsButtonsGroup .btn,
+#teamsStatsButtonsGroup .btn.btn-team,
+#teamsStatsButtonsGroup .btn.btn-ft,
+#teamsStatsButtonsGroup .btn.btn-warning {
+  background: var(--surface-2);
+  color: var(--text-primary);
+  border: 1px solid var(--border);     /* was: var(--border-color) */
+  box-shadow: none;
+
+  /* Fiksna visina svih dugmadi */
+  min-height: 56px;
+  height: 56px;
+  width: 100%;
+
+  display: inline-flex;
   align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-md);
-  font-size: var(--font-size-sm);
-  white-space: nowrap;
-  min-height: 48px;
+  justify-content: center;
+  padding: 10px 12px;
+
+  /* VEĆI font po defaultu */
+  font-size: 16px;                     /* veće nego ranije */
+  line-height: 1.15;
+  font-weight: 600;
+
+  /* Dozvoli prelamanje u 2 reda, bez rasta visine */
+  white-space: normal;                 
+  text-align: center;
+  overflow: hidden;                    /* ništa ne “curi” van 56px */
+  text-overflow: ellipsis;
+  word-break: break-word;
 }
 
-#teamsStatsButtonsGroup .btn span {
-  flex: 1;
-  text-align: left;
-}
-
-/* Mobile responsive for teams stats */
-@media (max-width: 768px) {
+/* Tablet raspored ostaje isti kao kod tebe */
+@media (max-width: 1024px) {
   #teamsStatsButtonsGroup {
-    flex-direction: column;
-    gap: var(--spacing-xs);
-  }
-  
-  #teamsStatsButtonsGroup .btn {
-    min-width: auto;
-    padding: var(--spacing-sm);
-    font-size: var(--font-size-xs);
-    min-height: 44px;
+    grid-template-columns: repeat(3, 1fr);
   }
 }
+
+/* Na mobilu zadrži čitljivost, i dalje bez rasta visine */
+@media (max-width: 640px) {
+  #teamsStatsButtonsGroup .btn {
+    min-height: 44px;
+    height: 44px;
+    font-size: 14px;                   /* i ovde veći nego ranije */
+    line-height: 1.15;
+    padding: 8px;
+  }
+}
+
 
 /* Mobile devices */
 @media (max-width: 640px) {
@@ -3331,44 +3368,40 @@ body:has(.page-title h1:contains("Users Management")) .panel.controls {
   }
 }
 
-/* ===== TEAMS STATS BUTTONS ===== */
-#teamsStatsButtonsGroup {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-sm);
-  margin-top: var(--spacing-md);
-}
-
+/* === BUTTON FONT FIX (global override) === */
+button,
+.btn,
+button.btn,
+.actions .btn,
 #teamsStatsButtonsGroup .btn {
-  flex: 1;
-  min-width: 200px;
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-md);
-  font-size: var(--font-size-sm);
-  white-space: nowrap;
-  min-height: 48px;
+  font-size: 16px !important;
+  line-height: 1.15 !important;
+  font-weight: 600;
 }
 
-#teamsStatsButtonsGroup .btn span {
-  flex: 1;
-  text-align: left;
+/* Teams grid dugmad: fiksna visina + 2 reda bez rastezanja */
+#teamsStatsButtonsGroup .btn {
+  min-height: 56px;
+  height: 56px;
+  white-space: normal;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-word;
 }
 
-/* Mobile responsive for teams stats */
-@media (max-width: 768px) {
-  #teamsStatsButtonsGroup {
-    flex-direction: column;
-    gap: var(--spacing-xs);
-  }
-  
+/* U mobilnom ipak 14px (i dalje veće nego pre) */
+@media (max-width: 640px) {
+  button,
+  .btn,
+  button.btn,
+  .actions .btn,
   #teamsStatsButtonsGroup .btn {
-    min-width: auto;
-    padding: var(--spacing-sm);
-    font-size: var(--font-size-xs);
-    min-height: 44px;
+    font-size: 14px !important;
   }
 }
 
-style.css 
+/* Ako label stoji u <span>, neka nasledi veličinu */
+.btn span, .btn > * {
+  font-size: inherit !important;
+}

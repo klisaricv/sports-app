@@ -384,14 +384,6 @@ function stopGlobalLoaderPolling() {
   console.log("🌍 [GLOBAL LOADER] Stopped polling");
 }
 
-// (ako nemaš već) bezbedno JSON parsiranje
-async function parseJsonSafe(resp) {
-  const ct = resp.headers.get("content-type") || "";
-  if (ct.includes("application/json")) return await resp.json();
-  const txt = await resp.text();
-  throw new Error(`HTTP ${resp.status}: ${txt.slice(0, 200)}`);
-}
-
 // ====== THEME ======
 function initTheme() {
   const root = document.documentElement;
@@ -491,7 +483,7 @@ function ensureModernShell() {
   // Skip creating controls panel on users page
   if (!document.querySelector(".controls__row") && window.location.pathname !== '/users') {
     const panel = document.createElement("section");
-    panel.className = "panel";
+    panel.className = "panel controls";
     panel.innerHTML = `
       <div class="controls__row">
         <div class="field">
@@ -618,14 +610,6 @@ const ANALYZE_BUTTON_IDS = [
   "analyzeFT2plus",
   "prepareDay",
 ];
-
-async function parseJsonSafe(resp) {
-  const ct = resp.headers.get("content-type") || "";
-  if (ct.includes("application/json")) return await resp.json();
-  const txt = await resp.text();
-  throw new Error(`HTTP ${resp.status}: ${txt.substring(0, 200)}`);
-}
-
 
 function setBusyUI(busy, note = "") {
   // Don't change button text anymore - the loader handles the UI feedback
@@ -1315,6 +1299,10 @@ document.addEventListener("DOMContentLoaded", () => {
     logoutBtn.addEventListener('click', logout);
   }
 
+  // inicijalno (ako je panel već otvoren iz nekog razloga)
+  applyTeamsButtonTextSizing();
+  window.addEventListener('resize', () => applyTeamsButtonTextSizing());
+
   // 5) Podrazumijevani datumi (ako su prazni)
   setDefaultDatesIfEmpty();
   
@@ -1339,6 +1327,8 @@ document.addEventListener("DOMContentLoaded", () => {
   if (teamsStatsBtn) {
     teamsStatsBtn.addEventListener("click", toggleTeamsStats);
   }
+  const backBtn = document.getElementById("backToAnalyze");
+  if (backBtn) backBtn.addEventListener("click", toggleTeamsStats);
 
   // Original Analyze buttons (now in hidden group)
   if (btn1p) btn1p.addEventListener("click", () => fetchAnalysis("1p"));
@@ -1400,82 +1390,156 @@ window.addEventListener('hashchange', () => {
 
 // ===== TEAMS STATS FUNCTIONS =====
 
-// Toggle between analyze buttons and teams stats buttons
 function toggleTeamsStats() {
   const teamsStatsBtn = document.getElementById('teamsStatsBtn');
-  const analyze1p = document.getElementById('analyze1p');
-  const analyzeGG = document.getElementById('analyzeGG');
-  const analyze2plus = document.getElementById('analyze2plus');
-  const analyzeFT2plus = document.getElementById('analyzeFT2plus');
-  const teamsStatsButtonsGroup = document.getElementById('teamsStatsButtonsGroup');
-  const prepareDay = document.getElementById('prepareDay');
-  const usersBtn = document.getElementById('usersBtn');
-  
-  if (!teamsStatsBtn || !teamsStatsButtonsGroup) return;
-  
-  const isTeamsStatsVisible = teamsStatsButtonsGroup.style.display !== 'none';
-  
-  if (isTeamsStatsVisible) {
-    // Show analyze buttons, hide teams stats
-    teamsStatsBtn.innerHTML = `
-      <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
-        <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" stroke="currentColor" stroke-width="2" fill="none"/>
-        <rect x="8" y="2" width="8" height="4" rx="1" ry="1" stroke="currentColor" stroke-width="2" fill="none"/>
-        <path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-      <span>TEAMS STATS</span>
-    `;
-    teamsStatsBtn.className = 'btn';
-    
-    // Show original analyze buttons
-    if (analyze1p) analyze1p.style.display = 'flex';
-    if (analyzeGG) analyzeGG.style.display = 'flex';
-    if (analyze2plus) analyze2plus.style.display = 'flex';
-    if (analyzeFT2plus) analyzeFT2plus.style.display = 'flex';
-    
-    // Show PREPARE DAY and USER MANAGEMENT buttons
-    if (prepareDay) prepareDay.style.display = 'flex';
-    if (usersBtn) usersBtn.style.display = 'flex';
-    
-    // Hide teams stats buttons
-    teamsStatsButtonsGroup.style.display = 'none';
+  const controlsPanel = document.querySelector('.panel.controls');
+  const teamsStatsPanel = document.getElementById('teamsStatsPanel');
+  if (!controlsPanel || !teamsStatsPanel) return; // NE zavisi od teamsStatsBtn
+
+  // čitaj realnu vidljivost (ne samo inline style)
+  const isVisible = window.getComputedStyle(teamsStatsPanel).display !== 'none';
+
+  if (isVisible) {
+    // BACK to analyze
+    if (teamsStatsBtn) { // <<< ovo je “uslov ako postoji dugme”
+      teamsStatsBtn.innerHTML = `
+        <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+          <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" stroke="currentColor" stroke-width="2" fill="none"/>
+          <rect x="8" y="2" width="8" height="4" rx="1" ry="1" stroke="currentColor" stroke-width="2" fill="none"/>
+          <path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>TEAMS STATS</span>
+      `;
+      teamsStatsBtn.className = 'btn';
+    }
+
+    // kopiraj datume nazad
+    const f = document.getElementById('fromDate');
+    const t = document.getElementById('toDate');
+    const tf = document.getElementById('teamsFromDate');
+    const tt = document.getElementById('teamsToDate');
+    if (f && tf && tf.value) f.value = tf.value;
+    if (t && tt && tt.value) t.value = tt.value;
+
+    teamsStatsPanel.style.display = 'none';
+    controlsPanel.style.display = '';
   } else {
-    // Show teams stats buttons, hide analyze buttons
-    teamsStatsBtn.innerHTML = `
-      <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
-        <path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-      <span>BACK TO ANALYZE</span>
-    `;
-    teamsStatsBtn.className = 'btn secondary';
-    
-    // Hide original analyze buttons
-    if (analyze1p) analyze1p.style.display = 'none';
-    if (analyzeGG) analyzeGG.style.display = 'none';
-    if (analyze2plus) analyze2plus.style.display = 'none';
-    if (analyzeFT2plus) analyzeFT2plus.style.display = 'none';
-    
-    // Hide PREPARE DAY and USER MANAGEMENT buttons when in TEAM STATS mode
-    if (prepareDay) prepareDay.style.display = 'none';
-    if (usersBtn) usersBtn.style.display = 'none';
-    
-    // Show teams stats buttons
-    teamsStatsButtonsGroup.style.display = 'flex';
+    // Show TEAMS STATS view
+    if (teamsStatsBtn) { // <<< isto “ako postoji dugme”
+      teamsStatsBtn.innerHTML = `
+        <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+          <path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>BACK TO ANALYZE</span>
+      `;
+      teamsStatsBtn.className = 'btn secondary';
+    }
+
+    // prefill datume u teams panel
+    const f = document.getElementById('fromDate');
+    const t = document.getElementById('toDate');
+    const tf = document.getElementById('teamsFromDate');
+    const tt = document.getElementById('teamsToDate');
+    if (f && tf) tf.value = f.value;
+    if (t && tt) tt.value = t.value;
+
+    controlsPanel.style.display = 'none';
+    teamsStatsPanel.style.display = 'block';
+    requestAnimationFrame(applyTeamsButtonTextSizing);
+  }
+}
+window.toggleTeamsStats = toggleTeamsStats;
+
+// === Teams buttons autosize (ne smanjuje font osim ako bi "iskočio" iz 56px)
+function adjustTeamsButtonText(btn) {
+  if (!btn) return;
+  // default veći font
+  btn.style.fontSize = '16px';
+  btn.style.lineHeight = '1.15';
+  btn.style.whiteSpace = 'normal';
+
+  const maxH = 56;  // isto kao u CSS-u
+  const min = 12;   // ne idi ispod ovoga
+  let size = 16;
+
+  // Smanjuj samo ako "ne staje" u zadatu visinu (dva reda max)
+  while (size > min && btn.scrollHeight > maxH + 1) {
+    size -= 0.5;
+    btn.style.fontSize = size + 'px';
   }
 }
 
-// Handle team stats button clicks
+function applyTeamsButtonTextSizing() {
+  const group = document.getElementById('teamsStatsButtonsGroup');
+  if (!group) return;
+  group.querySelectorAll('button.btn').forEach(adjustTeamsButtonText);
+}
+
+// function adjustTeamButtons() {
+//   const buttons = document.querySelectorAll('#teamsStatsButtonsGroup .btn');
+//   buttons.forEach(btn => {
+//     const labelEl = btn; // ako kasnije dodaš <span class="btn-label"> koristi to; za sada je ceo button label
+//     labelEl.style.whiteSpace = 'normal';
+//     labelEl.style.lineHeight = '1.1';
+//     labelEl.style.textAlign = 'center';
+//     labelEl.style.overflow = 'hidden';
+//     labelEl.style.wordBreak = 'break-word';
+
+//     let font = 14;           // početna (po potrebi povećaš/smanjiš)
+//     const minFont = 10;      // donja granica
+//     labelEl.style.fontSize = font + 'px';
+
+//     // dozvoljena visina: visina dugmeta - mali buffer
+//     const maxH = btn.clientHeight - 6;
+
+//     // smanjuj font dok sadržaj ne stane u visinu
+//     // (sa white-space:normal biće max ~2 reda jer je visina fiksna 56px)
+//     while (btn.scrollHeight > maxH && font > minFont) {
+//       font -= 0.5;
+//       labelEl.style.fontSize = font + 'px';
+//     }
+//   });
+// }
+
+// // prilagodi i na resize dok je panel vidljiv
+// window.addEventListener('resize', () => {
+//   const p = document.getElementById('teamsStatsPanel');
+//   if (p && window.getComputedStyle(p).display !== 'none') adjustTeamButtons();
+// });
+
 function handleTeamStats(market, period) {
   console.log('🏆 Team Stats clicked:', { market, period });
-  
-  // Show loading state
-  showToast('Loading team stats...', 'info');
-  
-  // TODO: Implement team stats API call
-  // For now, just show a placeholder message
+
+  const fromEl = document.getElementById('teamsFromDate');
+  const toEl = document.getElementById('teamsToDate');
+
+  if (!fromEl || !toEl || !fromEl.value || !toEl.value) {
+    showError("Potrebno je odabrati datume", "Molim vas odaberite i početni i završni datum.");
+    return;
+  }
+
+  const fromDate = new Date(fromEl.value);
+  const toDate = new Date(toEl.value);
+  if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+    showError("Neispravni datumi", "Neispravne vrednosti datuma.");
+    return;
+  }
+  if (toDate < fromDate) {
+    showError("Neispravan opseg datuma", "Završni datum/vreme mora biti posle početnog datuma/vremena.");
+    return;
+  }
+
+  const fromIso = fromDate.toISOString();
+  const toIso = toDate.toISOString();
+
+  showLoader('📊 Loading Team Stats...');
+  showToast(`Team Stats: ${market} ${period}`, 'info');
+
+  // TODO: ovdje kasnije pozovi pravi API endpoint kada ga dodaš na backendu
   setTimeout(() => {
-    showToast(`Team Stats: ${market} ${period} - Coming soon!`, 'success');
-  }, 1000);
+    hideLoader();
+    showToast(`(Demo) Loaded ${market} ${period} from ${fromEl.value} to ${toEl.value}`, 'success');
+  }, 800);
 }
 
 // ===== USERS PAGE FUNCTIONS =====
@@ -1571,7 +1635,7 @@ async function initUsersPage() {
     
   } catch (error) {
     console.error("❌ [ERROR] Failed to initialize users page:", error);
-    showError("Failed to load users page. Please try again.");
+    showTableError("Failed to load users page. Please try again.");
   }
 }
 
@@ -1624,7 +1688,7 @@ function renderUsersTable(users) {
   console.log("✅ [DEBUG] Users table rendered successfully");
 }
 
-function showError(message) {
+function showTableError(message) {
   const error = document.getElementById('tableError');
   const errorMessage = document.getElementById('errorMessage');
   if (error) error.style.display = 'flex';
@@ -1968,5 +2032,10 @@ if (document.readyState === "interactive" || document.readyState === "complete")
 // Log da znamo da je JS podignut
 console.log("app.js loaded");
 
-
-APP.js 
+// Delegacija klika za BACK dugme unutar Teams panela (fallback)
+document.addEventListener('click', (e) => {
+  if (e.target.closest('#backToAnalyze')) {
+    e.preventDefault();
+    toggleTeamsStats();
+  }
+});

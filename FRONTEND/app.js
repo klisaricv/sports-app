@@ -1,30 +1,24 @@
 // ====== CONFIG ======
-console.log("🔍 [DEBUG] app.js script loaded!");
 const BACKEND_URL = window.location.origin;
 // ako backend nije isti origin/port, otkomentariši sledeće:
 // const BACKEND_URL = "http://127.0.0.1:8000";
-
 // Global loader state
 let globalLoaderActive = false;
 let loaderCheckInterval = null;
 let globalLoaderCheckCount = 0;
 const MAX_GLOBAL_LOADER_CHECKS = 100; // Maksimalno 100 provera (10 sekundi sa 100ms intervalom)
-
 // ====== SMALL UTILS ======
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const fmt = (v, suffix = "") =>
   v === null || v === undefined || Number.isNaN(v) ? "No Data" : `${v}${suffix}`;
-
 async function parseJsonSafe(resp) {
   const ct = resp.headers.get("content-type") || "";
   if (ct.includes("application/json")) return await resp.json();
   const txt = await resp.text();
   throw new Error(`HTTP ${resp.status}: ${txt.slice(0, 200)}`);
 }
-
 // === Loader helpers ===
 window.sleep = window.sleep || (ms => new Promise(r => setTimeout(r, ms)));
-
 function disableAllButtons(disable) {
   const buttons = document.querySelectorAll('button, .btn, #savePdf, .primary-ghost');
   buttons.forEach(btn => {
@@ -42,15 +36,10 @@ function disableAllButtons(disable) {
     }
   });
 }
-
 function ensureLoaderUI() {
-  console.log("🔍 [DEBUG] ensureLoaderUI called");
   if (document.getElementById("loaderOverlay")) {
-    console.log("🔍 [DEBUG] loaderOverlay already exists");
     return;
   }
-  
-  console.log("🔍 [DEBUG] creating loaderOverlay");
   const overlay = document.createElement("div");
   overlay.id = "loaderOverlay";
   overlay.innerHTML = `
@@ -59,34 +48,24 @@ function ensureLoaderUI() {
       <div id="loaderSpinner"></div>
       <div id="loaderDetail">Initializing system...</div>
     </div>`;
-  
   document.body.appendChild(overlay);
-  console.log("🔍 [DEBUG] loaderOverlay created and appended to body");
-}
+  }
 function showLoader(title = "🚀 Preparing Analysis...") {
-  console.log("🔍 [DEBUG] showLoader called with title:", title);
   ensureLoaderUI();
-  
   const overlay = document.getElementById("loaderOverlay");
   if (!overlay) {
-    console.error("❌ [ERROR] loaderOverlay not found!");
     return;
   }
-  
   // Set content
   const titleEl = document.getElementById("loaderTitle");
   const detailEl = document.getElementById("loaderDetail");
-  
   if (titleEl) {
     titleEl.textContent = title;
   }
-  
   if (detailEl) {
     detailEl.textContent = "Initializing system...";
   }
-  
   // Make loader visible with high z-index
-  console.log("🔍 [DEBUG] Setting loader styles");
   overlay.style.zIndex = "99999";
   overlay.style.display = "flex";
   overlay.style.visibility = "visible";
@@ -96,15 +75,11 @@ function showLoader(title = "🚀 Preparing Analysis...") {
   overlay.style.left = "0";
   overlay.style.width = "100vw";
   overlay.style.height = "100vh";
-  
   // Force a reflow to ensure styles are applied
   overlay.offsetHeight;
-  console.log("🔍 [DEBUG] Loader styles applied, display:", overlay.style.display, "visibility:", overlay.style.visibility);
-  
   // Disable all buttons during loading
   disableAllButtons(true);
 }
-
 // Custom Modal System
 function ensureCustomModalUI() {
   if (document.getElementById("customModalOverlay")) return;
@@ -118,21 +93,16 @@ function ensureCustomModalUI() {
     </div>`;
   document.body.appendChild(overlay);
 }
-
 function showCustomModal(title, message, buttons = []) {
   ensureCustomModalUI();
-  
   const overlay = document.getElementById("customModalOverlay");
   const modalTitle = document.getElementById("customModalTitle");
   const modalMessage = document.getElementById("customModalMessage");
   const modalButtons = document.getElementById("customModalButtons");
-  
   modalTitle.textContent = title;
   modalMessage.textContent = message;
-  
   // Clear existing buttons
   modalButtons.innerHTML = '';
-  
   // Add buttons
   buttons.forEach(button => {
     const btn = document.createElement("button");
@@ -144,11 +114,9 @@ function showCustomModal(title, message, buttons = []) {
     };
     modalButtons.appendChild(btn);
   });
-  
   // Show modal
   overlay.style.display = "flex";
   overlay.style.zIndex = "100000";
-  
   // Close on overlay click
   overlay.onclick = (e) => {
     if (e.target === overlay) {
@@ -156,33 +124,28 @@ function showCustomModal(title, message, buttons = []) {
     }
   };
 }
-
 function hideCustomModal() {
   const overlay = document.getElementById("customModalOverlay");
   if (overlay) {
     overlay.style.display = "none";
   }
 }
-
 // Replace browser alerts with custom modals
 function showNotification(title, message) {
   showCustomModal(title, message, [
     { text: "OK", type: "primary", onClick: () => {} }
   ]);
 }
-
 function showError(title, message) {
   showCustomModal(title, message, [
     { text: "OK", type: "danger", onClick: () => {} }
   ]);
 }
-
 function showSuccess(title, message) {
   showCustomModal(title, message, [
     { text: "OK", type: "success", onClick: () => {} }
   ]);
 }
-
 function showConfirm(title, message, onConfirm, onCancel = null) {
   showCustomModal(title, message, [
     { text: "Cancel", type: "secondary", onClick: onCancel },
@@ -196,19 +159,13 @@ function updateLoader(detail) {
   }
 }
 function hideLoader() {
-  console.log("🔍 [DEBUG] hideLoader called");
   const el = document.getElementById("loaderOverlay");
   if (el) {
-    console.log("🔍 [DEBUG] Hiding loader, current display:", el.style.display);
     el.style.display = "none";
-    console.log("🔍 [DEBUG] Loader hidden, new display:", el.style.display);
-  } else {
-    console.log("🔍 [DEBUG] loaderOverlay not found in hideLoader");
-  }
-  
+    } else {
+    }
   // Re-enable all buttons after loading
   disableAllButtons(false);
-  
   // Stop global loader checking
   if (loaderCheckInterval) {
     clearInterval(loaderCheckInterval);
@@ -216,174 +173,126 @@ function hideLoader() {
   }
   globalLoaderActive = false;
 }
-
 // Global loader functions
 async function checkGlobalLoaderStatus() {
   try {
     globalLoaderCheckCount++;
-    
     // Zaustavi provere ako je prekoračio limit
     if (globalLoaderCheckCount > MAX_GLOBAL_LOADER_CHECKS) {
-      console.log("🛑 [GLOBAL LOADER] Max checks reached, stopping polling");
       stopGlobalLoaderPolling();
       hideGlobalLoader();
       return;
     }
-    
     const response = await fetch('/api/global-loader-status');
     const data = await response.json();
-    
     // Proveri da li je job zastareo (stariji od 5 minuta)
     if (data.active && data.started_at) {
       const startTime = new Date(data.started_at);
       const now = new Date();
       const diffMinutes = (now - startTime) / (1000 * 60);
-      
       if (diffMinutes > 5) {
-        console.log("⚠️ [GLOBAL LOADER] Job is stale (older than 5 minutes), stopping polling");
         stopGlobalLoaderPolling();
         hideGlobalLoader();
         return;
       }
     }
-    
     if (data.active && !globalLoaderActive) {
-      console.log("🌍 [GLOBAL LOADER] Showing global loader:", data);
       showGlobalLoader(data.detail || "Preparing analysis...", data.progress || 0);
     } else if (!data.active && globalLoaderActive) {
-      console.log("🌍 [GLOBAL LOADER] Hiding global loader");
       hideGlobalLoader();
       stopGlobalLoaderPolling();
     } else if (data.active && globalLoaderActive) {
       // Ažuriraj postojeći loader
       updateGlobalLoader(data.detail || "Preparing analysis...", data.progress || 0);
     }
-    
   } catch (error) {
-    console.error("❌ [GLOBAL LOADER] Error checking status:", error);
     // Ako ima grešku, zaustavi polling
     stopGlobalLoaderPolling();
     hideGlobalLoader();
   }
 }
-
 // Funkcija za proveru globalnog loader statusa BEZ automatskog prikazivanja
 async function checkGlobalLoaderStatusSilent() {
   try {
     const response = await fetch('/api/global-loader-status');
     const data = await response.json();
-    
     if (data.active && !globalLoaderActive) {
-      console.log("🌍 [GLOBAL LOADER] Found active job, starting polling:", data);
       // Pokreni polling samo ako postoji aktivan job
       startGlobalLoaderPolling();
     }
-    
     return data;
   } catch (error) {
-    console.error("❌ [GLOBAL LOADER] Error checking status silently:", error);
     return { active: false };
   }
 }
-
 // Funkcija za proveru da li se radi Prepare Day
 async function isPrepareDayRunning() {
   try {
     const response = await fetch('/api/global-loader-status');
     const data = await response.json();
-    console.log("🔍 [PREPARE CHECK] API Response:", data);
-    console.log("🔍 [PREPARE CHECK] Is active:", data.active);
-    console.log("🔍 [PREPARE CHECK] Status:", data.status);
-    
     // Ako je job stariji od 5 minuta, smatraj ga "zastarelim" i ne čekaj ga
     if (data.active && data.started_at) {
       const startTime = new Date(data.started_at);
       const now = new Date();
       const diffMinutes = (now - startTime) / (1000 * 60);
-      
       if (diffMinutes > 5) {
-        console.log("⚠️ [PREPARE CHECK] Job is older than 5 minutes, considering it stale");
         return false;
       }
     }
-    
     return data.active === true;
   } catch (error) {
-    console.error("❌ [PREPARE CHECK] Error checking prepare status:", error);
     return false;
   }
 }
-
 // Funkcija za čekanje da se Prepare Day završi
 async function waitForPrepareDayToComplete() {
-  console.log("⏳ [PREPARE WAIT] Waiting for Prepare Day to complete...");
-  
   while (true) {
     const isRunning = await isPrepareDayRunning();
-    
     if (!isRunning) {
-      console.log("✅ [PREPARE WAIT] Prepare Day completed, proceeding with analysis");
       return true;
     }
-    
-    console.log("⏳ [PREPARE WAIT] Prepare Day still running, waiting...");
     await sleep(2000); // Čekaj 2 sekunde pre sledeće provere
   }
 }
-
 function showGlobalLoader(title, progress = 0, detail = "Please wait...") {
   globalLoaderActive = true;
   showLoader(title);
   updateLoader(detail);
-  
   // Pokreni polling ako nije već pokrenut
   if (!loaderCheckInterval) {
     startGlobalLoaderPolling();
   }
 }
-
 function updateGlobalLoader(detail, progress = 0) {
   updateLoader(detail);
 }
-
 function hideGlobalLoader() {
   globalLoaderActive = false;
   hideLoader();
   stopGlobalLoaderPolling();
 }
-
 function startGlobalLoaderPolling() {
   if (loaderCheckInterval) {
     clearInterval(loaderCheckInterval);
   }
-  
   // Resetuj brojač
   globalLoaderCheckCount = 0;
-  
   // Pokreni polling svakih 100ms
   loaderCheckInterval = setInterval(checkGlobalLoaderStatus, 100);
-  
   // Dodaj timeout kao sigurnosnu mrežu - uvek sakrij loader nakon 30 sekundi
   setTimeout(() => {
     if (globalLoaderActive) {
-      console.log("⏰ [GLOBAL LOADER] Timeout reached, force hiding loader");
       stopGlobalLoaderPolling();
       hideGlobalLoader();
     }
   }, 30000); // 30 sekundi
-  
-  console.log("🌍 [GLOBAL LOADER] Started polling");
-}
-
+  }
 function stopGlobalLoaderPolling() {
   if (loaderCheckInterval) {
     clearInterval(loaderCheckInterval);
     loaderCheckInterval = null;
   }
-  
-  console.log("🌍 [GLOBAL LOADER] Stopped polling");
-}
-
+  }
 // (ako nemaš već) bezbedno JSON parsiranje
 async function parseJsonSafe(resp) {
   const ct = resp.headers.get("content-type") || "";
@@ -391,7 +300,6 @@ async function parseJsonSafe(resp) {
   const txt = await resp.text();
   throw new Error(`HTTP ${resp.status}: ${txt.slice(0, 200)}`);
 }
-
 // ====== THEME ======
 function initTheme() {
   const root = document.documentElement;
@@ -410,7 +318,6 @@ function initTheme() {
     });
   }
 }
-
 // ====== TOASTS ======
 function ensureToastHost() {
   if (!document.getElementById("toastHost")) {
@@ -426,7 +333,6 @@ function ensureToastHost() {
 function showToast(msg, kind = "info") {
   // Notifikacije su isključene
   return;
-  
   ensureToastHost();
   const t = document.createElement("div");
   t.textContent = msg;
@@ -455,11 +361,9 @@ function showToast(msg, kind = "info") {
     setTimeout(() => t.remove(), 240);
   }, 3000);
 }
-
 // ====== MODERN SHELL (radi i sa starim HTML-om) ======
 function ensureModernShell() {
   const container = document.querySelector(".container") || document.body;
-
   // Header
   if (!document.querySelector(".app-header")) {
     const header = document.createElement("header");
@@ -486,7 +390,6 @@ function ensureModernShell() {
     `;
     document.body.insertBefore(header, document.body.firstChild);
   }
-
   // Kontrole: probaj prebaciti stare inpute/dugmad u modern panel
   // Skip creating controls panel on users page
   if (!document.querySelector(".controls__row") && window.location.pathname !== '/users') {
@@ -498,14 +401,12 @@ function ensureModernShell() {
           <label for="fromDate">From</label>
           <div class="field__input">
             <svg width="18" height="18" viewBox="0 0 24 24"><path d="M7 11h5v5H7z" opacity=".3"/><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-2 .89-2 2v13c0 1.1.89 2 2 2h14c1.11 0 2-.9 2-2V6c0-1.11-.89-2-2-2zm0 15H5V9h14v10z"/></svg>
-            <!-- fromDate lives here -->
           </div>
         </div>
         <div class="field">
           <label for="toDate">To</label>
           <div class="field__input">
             <svg width="18" height="18" viewBox="0 0 24 24"><path d="M7 11h5v5H7z" opacity=".3"/><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-2 .89-2 2v13c0 1.1.89 2 2 2h14c1.11 0 2-.9 2-2V6c0-1.11-.89-2-2-2zm0 15H5V9h14v10z"/></svg>
-            <!-- toDate lives here -->
           </div>
         </div>
         <div class="actions">
@@ -546,7 +447,6 @@ function ensureModernShell() {
     const afterHeaderTarget =
       document.querySelector(".app-header")?.nextSibling || document.body.firstChild;
     container.parentNode.insertBefore(panel, container);
-
     // Reparent stara polja (da ne imamo duple ID-jeve)
     const fromOld = document.getElementById("fromDate");
     const toOld = document.getElementById("toDate");
@@ -554,7 +454,6 @@ function ensureModernShell() {
     const btnLegacy = document.querySelector(".buttons");
     const fromSlot = panel.querySelector('.field__input:nth-of-type(1)') || panel.querySelector('.field .field__input');
     const toSlot = panel.querySelectorAll('.field .field__input')[1];
-
     if (fromOld) fromSlot.appendChild(fromOld);
     else {
       const inp = document.createElement("input");
@@ -562,7 +461,6 @@ function ensureModernShell() {
       inp.id = "fromDate";
       fromSlot.appendChild(inp);
     }
-
     if (toOld) toSlot.appendChild(toOld);
     else {
       const inp = document.createElement("input");
@@ -570,12 +468,10 @@ function ensureModernShell() {
       inp.id = "toDate";
       toSlot.appendChild(inp);
     }
-
     // Sakrij legacy blokove ako postoje (CSS ih već skriva, ali i JS fallback)
     if (dateRangeLegacy) dateRangeLegacy.style.display = "none";
     if (btnLegacy) btnLegacy.style.display = "none";
   }
-
   // Results grid
   if (!document.querySelector(".results__grid")) {
     const grid = document.createElement("section");
@@ -606,10 +502,7 @@ function ensureModernShell() {
       c.appendChild(grid);
     }
   }
-
-
 }
-
 // ====== UI HELPERS ======
 const ANALYZE_BUTTON_IDS = [
   "analyze1p",
@@ -618,22 +511,17 @@ const ANALYZE_BUTTON_IDS = [
   "analyzeFT2plus",
   "prepareDay",
 ];
-
 async function parseJsonSafe(resp) {
   const ct = resp.headers.get("content-type") || "";
   if (ct.includes("application/json")) return await resp.json();
   const txt = await resp.text();
   throw new Error(`HTTP ${resp.status}: ${txt.substring(0, 200)}`);
 }
-
-
 function setBusyUI(busy, note = "") {
   // Don't change button text anymore - the loader handles the UI feedback
   document.body.style.cursor = busy ? "progress" : "";
 }
-
 // OLD showLoader function removed - was overriding the new one
-
 // ====== NARATIV ======
 function buildNarrative(m, marketHint) {
   const d = m.debug || {};
@@ -646,14 +534,11 @@ function buildNarrative(m, marketHint) {
   const wshare = fmt(d.merge_weight_micro);
   const effPrior = fmt(d.effn_prior);
   const effMicro = fmt(d.effn_micro);
-
   const isGG = marketHint === "gg1h";
   const isO15_1H = marketHint === "1h_over15";
   const isO15_FT = marketHint === "ft_over15";
-
   let s = `${m.team1} vs ${m.team2}: ligaški baseline je oko ${leagueBase}. `;
   s += `Prior (recent forma + H2H) procenjuje ${prior}, dok mikro-signali (oček. SOT=${expSOT}, DA=${expDA}, posjed-edge=${pos}) daju ${micro}. `;
-
   if (isO15_1H) {
     const lt = fmt(d.lambda_total),
       lh = fmt(d.lambda_home),
@@ -670,20 +555,17 @@ function buildNarrative(m, marketHint) {
     const rho = d.rho != null ? `, ρ≈${fmt(d.rho)}` : "";
     s += `Ind. verovatnoće da oba tima postignu gol u 1H su ${m.team1} ${ph} i ${m.team2} ${pa}${rho}. `;
   }
-
   s += `Spajanje je urađeno po preciznosti (effN prior=${effPrior}, micro=${effMicro}; udeo micro≈${wshare}), što daje konačnih ${fmt(
     m.final_percent,
     "%"
   )}.`;
   return s;
 }
-
 function buildSimplifiedNarrative(m, marketHint) {
   const d = m.debug || {};
   const isGG = marketHint === "gg1h";
   const isO15_1H = marketHint === "1h_over15";
   const isO15_FT = marketHint === "ft_over15";
-
   let marketDescription = "";
   if (isGG) {
     marketDescription = "da oba tima postignu gol u prvom poluvremenu";
@@ -694,13 +576,10 @@ function buildSimplifiedNarrative(m, marketHint) {
   } else {
     marketDescription = "da bude preko 0.5 golova u prvom poluvremenu";
   }
-
   const formData = "forma timova i istorijski rezultati";
   const microData = "mikro-signali i statistike";
-
   return `Na osnovu analize ${formData}, kao i ${microData}, finalna verovatnoća da će na ovom meču doći ${marketDescription} iznosi ${fmt(m.final_percent, '%')}.`;
 }
-
 // ====== RENDER ======
 function getAnalysisTitle(market) {
   const titles = {
@@ -711,22 +590,17 @@ function getAnalysisTitle(market) {
   };
   return titles[market] || '📈 Rezultati analize';
 }
-
 // Global variables for results
 let allResults = [];
-
 async function renderResults(data, market) {
   const currentMarket = market || "1h_over05";
   window.currentAnalysisResults = data;
   window.currentAnalysisMarket = currentMarket;
-  
   // Initialize with data
   allResults = Array.isArray(data) ? data : [];
-
   // Set total count - use data.total if available, otherwise use array length
   const totalResultsCount = data?.total || allResults.length;
   const total = totalResultsCount;
-
   // Dodaj naslov analize iznad rezultata
   const analysisTitle = getAnalysisTitle(currentMarket);
   const resultsSection = document.querySelector('.results');
@@ -744,19 +618,14 @@ async function renderResults(data, market) {
     titleEl.querySelector('h2').textContent = analysisTitle;
     titleEl.querySelector('.analysis-subtitle').textContent = `Analiza završena • ${total} mečeva pronađeno`;
   }
-
   // Render matches (max 7)
   renderMatches();
 }
-
 function renderMatches() {
   const matchesContent = document.getElementById('matchesContent');
-
   if (!matchesContent) return;
-
   // Clear content area
   matchesContent.innerHTML = '';
-
   const cardHTML = (m) => {
     // Format kickoff time
     const formatKickoffTime = (kickoff) => {
@@ -775,7 +644,6 @@ function renderMatches() {
         return "—";
       }
     };
-
     return `
       <div class="match">
         <div class="match-header">
@@ -783,7 +651,6 @@ function renderMatches() {
           <div class="match-teams">${fmt(m.team1)} vs ${fmt(m.team2)}</div>
           <div class="match-kickoff">${formatKickoffTime(m.kickoff)}</div>
         </div>
-
         <div class="final-result">
           <div class="final-probability">
             <span class="final-label">Final Probability</span>
@@ -796,12 +663,10 @@ function renderMatches() {
       </div>
     `;
   };
-
   // Sort by final_percent descending and take max 7
   const sortedResults = allResults
     .sort((a, b) => (b.final_percent || 0) - (a.final_percent || 0))
     .slice(0, 7);
-
   if (sortedResults.length > 0) {
     sortedResults.forEach((match) => {
       matchesContent.innerHTML += cardHTML(match);
@@ -810,8 +675,6 @@ function renderMatches() {
     matchesContent.innerHTML = '<div class="placeholder">Nema rezultata za ovaj period.</div>';
   }
 }
-
-
 // ====== HELPERS ======
 function normalizeResults(json) {
   if (Array.isArray(json)) return json;
@@ -821,45 +684,36 @@ function normalizeResults(json) {
   if (Array.isArray(json.matches)) return json.matches;
   return [];
 }
-
 function setDefaultDatesIfEmpty() {
   const fromEl = document.getElementById("fromDate");
   const toEl = document.getElementById("toDate");
   if (!fromEl || !toEl) return;
-  
   const today = new Date();
   const pad = (n) => String(n).padStart(2, "0");
-  
   // Set to 8AM today
   const fromDate = new Date(today);
   fromDate.setHours(8, 0, 0, 0);
-  
   // Set to 22PM (10PM) today
   const toDate = new Date(today);
   toDate.setHours(22, 0, 0, 0);
-  
   const toLocal = (d) =>
     `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
       d.getHours()
     )}:${pad(d.getMinutes())}`;
-    
   if (!fromEl.value) fromEl.value = toLocal(fromDate);
   if (!toEl.value) toEl.value = toLocal(toDate);
 }
-
 function localYMD(d) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
-
 // ====== AUTHENTICATION CHECK ======
 function isUserLoggedIn() {
   const user = localStorage.getItem('user');
   return user !== null && user !== undefined;
 }
-
 function showAuthRequiredModal() {
   showCustomModal(
     "🔐 Potrebna je autentifikacija",
@@ -882,7 +736,6 @@ function showAuthRequiredModal() {
     ]
   );
 }
-
 // ====== MAIN ACTION ======
 async function fetchAnalysis(type) {
   // Check if user is logged in first
@@ -890,44 +743,35 @@ async function fetchAnalysis(type) {
     showAuthRequiredModal();
     return;
   }
-
   const analysisTitles = {
     '1p': '🎯 Analiziram 1+ gol...',
     'GG': '⚽ Analiziram oba tima da postignu gol...',
     'O15': '🔥 Analiziram preko 1.5 golova...',
     'FT_O15': '🚀 Analiziram preko 1.5 golova ceo meč...'
   };
-
   // 1) Proveri da li se radi Prepare Day
   const isPrepareRunning = await isPrepareDayRunning();
   if (isPrepareRunning) {
-    console.log("⏳ [ANALYSIS] Prepare Day is running, waiting for completion...");
     showLoader("⏳ Čekam da se završi priprema dana...");
     setBusyUI(true, "Čekam pripremu dana...");
-    
     // Čekaj da se Prepare Day završi
     await waitForPrepareDayToComplete();
   }
-
   // 2) Pokreni analizu
   showLoader(analysisTitles[type] || '🔍 Analiziram...');
-  
   // Prikaži sekciju sa rezultatima
   const resultsSection = document.getElementById('resultsSection');
   if (resultsSection) {
     resultsSection.style.display = 'block';
   }
-
   try {
     const fromEl = document.getElementById("fromDate");
     const toEl = document.getElementById("toDate");
-
     if (!fromEl || !toEl || !fromEl.value || !toEl.value) {
       showError("Potrebno je odabrati datume", "Molim vas odaberite i početni i završni datum.");
       hideLoader();
       return;
     }
-
     const fromDate = new Date(fromEl.value);
     const toDate = new Date(toEl.value);
     if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
@@ -940,20 +784,16 @@ async function fetchAnalysis(type) {
       hideLoader();
       return;
     }
-
     const fromIso = fromDate.toISOString();
     const toIso = toDate.toISOString();
-
     const fh = fromDate.getHours();
     const th = toDate.getHours() + ((toDate.getMinutes() || toDate.getSeconds()) ? 1 : 0);
-
     // market
     let market;
     if (type === "GG") market = "gg1h";
     else if (type === "O15") market = "1h_over15";
     else if (type === "FT_O15") market = "ft_over15";
     else market = "1h_over05";
-
     const url =
       `${BACKEND_URL}/api/analyze` +
       `?from_date=${encodeURIComponent(fromIso)}` +
@@ -961,27 +801,20 @@ async function fetchAnalysis(type) {
       `&from_hour=${fh}` +
       `&to_hour=${th}` +
       `&market=${encodeURIComponent(market)}&no_api=1`;
-
-    console.log("👉 calling:", url);
-
     setBusyUI(true);
-
     const MAX_RETRIES = 6;
     let attempt = 0;
     while (true) {
       const res = await fetch(url, { headers: { Accept: "application/json" } });
       const raw = await res.text();
-
       let json;
       try {
         json = JSON.parse(raw);
       } catch {
-        console.error("Non-JSON response:", raw);
         showError("Greška servera", `Server je vratio neispravan odgovor (nije JSON):\n${raw.slice(0, 300)}...`);
         hideLoader();
         break;
       }
-
       if (res.status === 429) {
         attempt += 1;
         if (attempt > MAX_RETRIES) {
@@ -997,19 +830,13 @@ async function fetchAnalysis(type) {
         await sleep(wait);
         continue;
       }
-
       if (!res.ok) {
         const msg = json?.detail || json?.error || JSON.stringify(json).slice(0, 300);
-        console.error("Server error:", msg);
         showError("Greška servera", `Greška servera: ${msg}`);
         hideLoader();
         break;
       }
-
       const data = normalizeResults(json);
-      console.log("🔎 Raw JSON:", json);
-      console.log("✅ Normalized results length:", data.length);
-
       data.sort((a, b) => (b.final_percent ?? 0) - (a.final_percent ?? 0));
       renderResults(data, market);
       showToast(`Završeno • ${data.length} mečeva`, "ok");
@@ -1017,16 +844,13 @@ async function fetchAnalysis(type) {
       break;
     }
   } catch (err) {
-    console.error("Fetch/parse error:", err);
     showError("Greška analize", `Greška tokom analize: ${err}`);
     hideLoader();
   } finally {
     setBusyUI(false);
   }
 }
-
 async function prepareDay() {
-  console.log("🔍 [DEBUG] prepareDay function called!");
   try {
     // izaberi datum (From -> ili To -> ili danas)
     const fromEl = document.getElementById("fromDate");
@@ -1035,17 +859,12 @@ async function prepareDay() {
     if (fromEl && fromEl.value) base = new Date(fromEl.value);
     else if (toEl && toEl.value) base = new Date(toEl.value);
     const dayStr = localYMD(base); // tvoja postojeća util funkcija
-
-    console.log("🔍 [DEBUG] prepareDay - about to show loader");
     setBusyUI(true, `Pripremam ${dayStr}…`);
     showLoader(`🚀 Preparing ${dayStr}...`);
-    console.log("🔍 [DEBUG] prepareDay - loader should be visible now");
-
     // 1) enqueue
     const user = localStorage.getItem('user');
     const userData = user ? JSON.parse(user) : null;
     const sessionId = userData ? userData.session_id : null;
-    
     const resp = await fetch(`/api/prepare-day`, {
       method: "POST",
       headers: { 
@@ -1056,7 +875,6 @@ async function prepareDay() {
       body: JSON.stringify({ date: dayStr, prewarm: true, session_id: sessionId })
     });
     const data = await parseJsonSafe(resp);
-    
     // Check for admin access error
     if (resp.status === 403) {
       throw new Error("Access denied. Admin privileges required.");
@@ -1064,16 +882,11 @@ async function prepareDay() {
     if (resp.status === 401) {
       throw new Error("Authentication required. Please log in.");
     }
-    
     if (!data.ok || !data.job_id) throw new Error("Neuspešno pokretanje prepare posla");
-
     const jobId = data.job_id;
     updateLoader("queued");
-
     // 2) Pokreni globalni loader polling
-    console.log("🌍 [GLOBAL LOADER] Starting global loader for prepare day");
     // startGlobalLoaderPolling(); // DISABLED - was hiding our loader
-
     // 3) poll status
     let lastProgress = -1;
     while (true) {
@@ -1082,7 +895,6 @@ async function prepareDay() {
         headers: { "Accept": "application/json" }
       });
       const sData = await parseJsonSafe(sResp);
-
       if (sData.status === "queued" || sData.status === "running") {
         if (sData.progress !== lastProgress) {
           lastProgress = sData.progress;
@@ -1090,9 +902,7 @@ async function prepareDay() {
         }
         continue;
       }
-
       if (sData.status === "done") {
-        console.log("🔍 [DEBUG] prepareDay - status done, hiding loader");
         updateLoader("finished");
         const r = sData.result || {};
         const s = [
@@ -1108,27 +918,21 @@ async function prepareDay() {
         hideLoader();
         break;
       }
-
       if (sData.status === "error") {
         throw new Error(`Prepare-day greška: ${sData.detail || "nepoznato"}`);
       }
-
       await sleep(1500);
     }
   } catch (err) {
-    console.log("🔍 [DEBUG] prepareDay - error occurred, hiding loader");
-    console.error(err);
     showError("Prepare Day Error", `Prepare day error: ${err}`);
     showToast("Prepare-day greška", "error");
     hideLoader();
   } finally {
-    console.log("🔍 [DEBUG] prepareDay - finally block, stopping global loader");
     setBusyUI(false);
     // Zaustavi globalni loader polling
     stopGlobalLoaderPolling();
   }
 }
-
 // ====== AUTHENTICATION FUNCTIONS ======
 function checkAuthStatus() {
   const user = localStorage.getItem('user');
@@ -1138,7 +942,6 @@ function checkAuthStatus() {
   const userEmail = document.getElementById('userEmail');
   const prepareDayBtn = document.getElementById('prepareDay');
   const usersBtn = document.getElementById('usersBtn');
-  
   if (user) {
     // User is logged in
     const userData = JSON.parse(user);
@@ -1146,10 +949,8 @@ function checkAuthStatus() {
     if (userMenu) userMenu.style.display = 'flex';
     if (userName) userName.textContent = userData.name || 'User';
     if (userEmail) userEmail.textContent = userData.email || 'user@example.com';
-    
     // Show admin buttons only for admin user
     const isAdmin = userData.email === 'klisaricf@gmail.com';
-    
     if (prepareDayBtn) {
       if (isAdmin) {
         prepareDayBtn.style.display = 'flex';
@@ -1160,14 +961,11 @@ function checkAuthStatus() {
       if (usersBtn) {
     if (isAdmin) {
       usersBtn.style.display = 'flex';
-      console.log('✅ Users button shown for admin');
-    } else {
+      } else {
       usersBtn.style.display = 'none';
-      console.log('❌ Users button hidden for non-admin');
-    }
+      }
   } else {
-    console.log('❌ Users button element not found');
-  }
+    }
   } else {
     // User is not logged in
     if (authButtons) authButtons.style.display = 'flex';
@@ -1176,7 +974,6 @@ function checkAuthStatus() {
     if (usersBtn) usersBtn.style.display = 'none';
   }
 }
-
 async function logout() {
   try {
     const user = localStorage.getItem('user');
@@ -1196,19 +993,15 @@ async function logout() {
       }
     }
   } catch (error) {
-    console.error('Logout error:', error);
-  } finally {
+    } finally {
     // Always clear local storage and update UI
     localStorage.removeItem('user');
-    
     // Clear analysis results
     clearAnalysisResults();
-    
     checkAuthStatus();
     showToast('Logged out successfully!', 'success');
   }
 }
-
 // Clear analysis results
 function clearAnalysisResults() {
   // Hide results section
@@ -1216,7 +1009,6 @@ function clearAnalysisResults() {
   if (resultsSection) {
     resultsSection.style.display = 'none';
   }
-  
   // Clear results content
   const top5Content = document.getElementById('top5Content');
   const otherContent = document.getElementById('otherContent');
@@ -1226,13 +1018,11 @@ function clearAnalysisResults() {
   if (otherContent) {
     otherContent.innerHTML = '<div class="placeholder">Nema rezultata analize još.</div>';
   }
-  
   // Reset counts
   const countTop = document.getElementById('countTop');
   const countOther = document.getElementById('countOther');
   if (countTop) countTop.textContent = '(0)';
   if (countOther) countOther.textContent = '(0)';
-  
   // Hide pagination
   const pagination = document.getElementById('resultsPagination');
   const paginationTop = document.getElementById('resultsPaginationTop');
@@ -1242,22 +1032,17 @@ function clearAnalysisResults() {
   if (paginationTop) {
     paginationTop.style.display = 'none';
   }
-  
   // Remove analysis title
   const analysisTitle = document.getElementById('analysis-title');
   if (analysisTitle) {
     analysisTitle.remove();
   }
-  
   // Reset pagination variables
   currentResultsPage = 1;
   allResults = [];
   top5Results = [];
   totalResultsCount = 0;
-  
-  console.log('🧹 Analysis results cleared');
-}
-
+  }
 // Function to hide controls on users page
 function hideControlsOnUsersPage() {
   if (window.location.pathname === '/users') {
@@ -1267,26 +1052,19 @@ function hideControlsOnUsersPage() {
     }
   }
 }
-
 // ====== WIRE EVENTS once DOM is ready ======
 document.addEventListener("DOMContentLoaded", () => {
   // NE proveravaj globalni loader status automatski - samo kada je potrebno
   // 1) Kreiraj moderni shell (radi i sa starim HTML-om)
   ensureModernShell();
-
   // 2) Tema
   initTheme();
-
   // 3) Authentication
   checkAuthStatus();
-  
   // 3.1) Check if we're on users page
-  console.log("🔍 [DEBUG] Current pathname:", window.location.pathname);
   if (window.location.pathname === '/users') {
-    console.log("🔍 [DEBUG] On users page, initializing users functionality");
     initUsersPage();
   } else {
-    console.log("🔍 [DEBUG] Not on users page, ensuring controls are visible");
     // Ensure controls are visible on non-users pages
     document.body.removeAttribute('data-page');
     const controlsPanel = document.querySelector('.panel.controls');
@@ -1295,45 +1073,34 @@ document.addEventListener("DOMContentLoaded", () => {
       controlsPanel.classList.remove('hidden-on-users');
     }
   }
-  
   // 3.2) Hide controls on users page - wait for DOM to be ready
   if (window.location.pathname === '/users') {
     setTimeout(() => {
       const controlsPanel = document.querySelector('.panel.controls');
       if (controlsPanel) {
         controlsPanel.style.display = 'none';
-        console.log('✅ Controls panel hidden on users page');
-      } else {
-        console.log('❌ Controls panel not found');
-      }
+        } else {
+        }
     }, 500);
   }
-  
   // 4) Initialize logout button
   const logoutBtn = document.getElementById('logoutBtn');
   if (logoutBtn) {
     logoutBtn.addEventListener('click', logout);
   }
-
   // 5) Podrazumijevani datumi (ako su prazni)
   setDefaultDatesIfEmpty();
-  
   // 4) Start checking for global loader status
   // checkGlobalLoaderStatus(); // DISABLED - was causing too many requests
   // setInterval(checkGlobalLoaderStatus, 3000); // DISABLED
-
   // 4) Initialize prepare day modal
   initPrepareDayModal();
-  
   // 5) Dugmad
-  console.log("🔍 [DEBUG] Looking for buttons...");
   const btn1p = document.getElementById("analyze1p");
   const btnGG = document.getElementById("analyzeGG");
   const btn1pls = document.getElementById("analyze2plus");
   const btnFT2pl = document.getElementById("analyzeFT2plus");
   const btnPrep = document.getElementById("prepareDay");
-  console.log("🔍 [DEBUG] prepareDay button found:", btnPrep);
-
   // Teams Stats Button
   const teamsStatsBtn = document.getElementById("teamsStatsBtn");
   if (teamsStatsBtn) {
@@ -1349,13 +1116,10 @@ document.addEventListener("DOMContentLoaded", () => {
   if (btn1pls) btn1pls.addEventListener("click", () => fetchAnalysis("O15"));
   if (btnFT2pl) btnFT2pl.addEventListener("click", () => fetchAnalysis("FT_O15"));
   if (btnPrep) {
-    console.log("🔍 [DEBUG] Adding click listener to prepareDay button");
     btnPrep.addEventListener("click", () => {
-      console.log("🔍 [DEBUG] Prepare Day button clicked!");
       showPrepareDayModal();
     });
   }
-
   // Teams Stats buttons
   const teamGGHT = document.getElementById("teamGGHT");
   const team1plusHT = document.getElementById("team1plusHT");
@@ -1367,7 +1131,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const teamGGFT = document.getElementById("teamGGFT");
   const teamGG3plusFT = document.getElementById("teamGG3plusFT");
   const teamXHT = document.getElementById("teamXHT");
-
   if (teamGGHT) teamGGHT.addEventListener("click", () => handleTeamStats("GG", "HT"));
   if (team1plusHT) team1plusHT.addEventListener("click", () => handleTeamStats("1+", "HT"));
   if (team2plusHT) team2plusHT.addEventListener("click", () => handleTeamStats("2+", "HT"));
@@ -1378,41 +1141,33 @@ document.addEventListener("DOMContentLoaded", () => {
   if (teamGGFT) teamGGFT.addEventListener("click", () => handleTeamStats("GG", "FT"));
   if (teamGG3plusFT) teamGG3plusFT.addEventListener("click", () => handleTeamStats("GG3+", "FT"));
   if (teamXHT) teamXHT.addEventListener("click", () => handleTeamStats("X", "HT"));
-  
   // Users button is now a direct link - no JavaScript needed
-  
   // Final check to hide controls on users page
   setTimeout(() => {
     hideControlsOnUsersPage();
   }, 100);
 });
-
 // Listen for URL changes (for SPA navigation)
 window.addEventListener('popstate', () => {
   setTimeout(() => {
     hideControlsOnUsersPage();
   }, 50);
 });
-
 // Listen for hash changes
 window.addEventListener('hashchange', () => {
   setTimeout(() => {
     hideControlsOnUsersPage();
   }, 50);
 });
-
 // ===== TEAMS STATS FUNCTIONS =====
-
 function toggleTeamsStats(show) {
   const group = document.getElementById('teamsStatsButtonsGroup');
   const backBar = document.getElementById('teamStatsBackBar');
   const mainActions = document.getElementById('teamStatsActions');
   const dateRangeRow = document.getElementById('dateRangeRow');
   if (!group || !backBar || !mainActions) return;
-
   // Ensure grid when visible
   if (show) group.style.display = 'grid';
-
   // Toggle visibility
   group.classList.toggle('hidden', !show);
   backBar.classList.toggle('hidden', !show);
@@ -1423,69 +1178,47 @@ function toggleTeamsStats(show) {
     dateRangeRow.classList.toggle('hidden', !show);
   }
 }
-
-
-
 // Handle team stats button clicks
 function handleTeamStats(market, period) {
-  console.log('🏆 Team Stats clicked:', { market, period });
-  
   // Show loading state
   showToast('Loading team stats...', 'info');
-  
-  // TODO: Implement team stats API call
   // For now, just show a placeholder message
   setTimeout(() => {
     showToast(`Team Stats: ${market} ${period} - Coming soon!`, 'success');
   }, 1000);
 }
-
 // ===== USERS PAGE FUNCTIONS =====
-
 // Load users.js script dynamically
 function loadUsersScript() {
   if (!window.usersScriptLoaded) {
-    console.log("🔍 [DEBUG] Loading users.js dynamically");
     const script = document.createElement('script');
     script.src = '/static/users.js';
     script.defer = true;
     script.onload = function() {
-      console.log("✅ users.js loaded successfully");
       window.usersScriptLoaded = true;
     };
     script.onerror = function() {
-      console.error("❌ Failed to load users.js");
-    };
+      };
     document.head.appendChild(script);
   }
 }
-
-
 async function initUsersPage() {
-  console.log("🔍 [DEBUG] Initializing users page");
-  console.log("🔍 [DEBUG] Current URL:", window.location.href);
-  console.log("🔍 [DEBUG] Current pathname:", window.location.pathname);
-  
   try {
     // Set page attribute for CSS targeting (this will hide controls via CSS)
     document.body.setAttribute('data-page', 'users');
-    
     // Hide controls panel on users page
     const controlsPanel = document.querySelector('.panel.controls');
     if (controlsPanel) {
       controlsPanel.style.display = 'none';
       controlsPanel.classList.add('hidden-on-users');
     }
-    
     // Load users.js dynamically when needed
     loadUsersScript();
-    
     // Wait a bit for script to load, then initialize
     setTimeout(() => {
       if (window.initUsersPage) {
         window.initUsersPage();
       } else {
-        console.log("❌ initUsersPage not available yet, retrying...");
         setTimeout(() => {
           if (window.initUsersPage) {
             window.initUsersPage();
@@ -1493,26 +1226,18 @@ async function initUsersPage() {
         }, 500);
       }
     }, 100);
-    
     // Check if user is admin
     const user = localStorage.getItem('user');
     const userData = user ? JSON.parse(user) : null;
-    console.log("🔍 [DEBUG] User data:", userData);
-    
     if (!userData || userData.email !== 'klisaricf@gmail.com') {
-      console.log("❌ [DEBUG] User is not admin, redirecting to home");
       window.location.href = '/';
       return;
     }
-    
-    console.log("✅ [DEBUG] User is admin, loading users");
-    
     // Show admin info
     const adminInfo = document.getElementById('adminInfo');
     const adminEmail = document.getElementById('adminEmail');
     if (adminInfo) adminInfo.style.display = 'flex';
     if (adminEmail) adminEmail.textContent = userData.email;
-    
     // Load users from API
     const sessionId = userData.session_id;
     const response = await fetch('/api/users', {
@@ -1520,34 +1245,23 @@ async function initUsersPage() {
         'Authorization': `Bearer ${sessionId}`
       }
     });
-    
     if (!response.ok) {
       throw new Error(`Failed to load users: ${response.status}`);
     }
-    
     const data = await response.json();
-    console.log("✅ [DEBUG] Users loaded:", data.users.length);
-    
     // Render users table
     renderUsersTable(data.users);
-    
   } catch (error) {
-    console.error("❌ [ERROR] Failed to initialize users page:", error);
     showError("Failed to load users page. Please try again.");
   }
 }
-
 function renderUsersTable(users) {
-  console.log("🔍 [DEBUG] Rendering users table with", users.length, "users");
-  
   const loading = document.getElementById('tableLoading');
   const error = document.getElementById('tableError');
   const table = document.getElementById('usersTable');
   const noUsers = document.getElementById('noUsers');
-  
   if (loading) loading.style.display = 'none';
   if (error) error.style.display = 'none';
-  
   if (!users || users.length === 0) {
     if (noUsers) {
       noUsers.style.display = 'flex';
@@ -1556,16 +1270,13 @@ function renderUsersTable(users) {
     if (table) table.style.display = 'none';
     return;
   }
-  
   if (noUsers) noUsers.style.display = 'none';
   if (table) table.style.display = 'table';
-  
   // Update stats
   const totalUsers = document.getElementById('totalUsers');
   const showingUsers = document.getElementById('showingUsers');
   if (totalUsers) totalUsers.textContent = users.length;
   if (showingUsers) showingUsers.textContent = users.length;
-  
   // Render table
   const tbody = document.getElementById('usersTableBody');
   if (tbody) {
@@ -1582,28 +1293,20 @@ function renderUsersTable(users) {
       `;
     }).join('');
   }
-  
-  console.log("✅ [DEBUG] Users table rendered successfully");
-}
-
+  }
 function showError(message) {
   const error = document.getElementById('tableError');
   const errorMessage = document.getElementById('errorMessage');
   if (error) error.style.display = 'flex';
   if (errorMessage) errorMessage.textContent = message;
 }
-
 // hideMainContent function removed - not needed for separate /users route
-
 // All old users page functions removed - now using separate /users route
-
 // ===== PREPARE DAY MODAL FUNCTIONS =====
-
 // Check if user is admin
 function isAdmin() {
   const user = localStorage.getItem('user');
   if (!user) return false;
-  
   try {
     const userData = JSON.parse(user);
     return userData.email === 'klisaricf@gmail.com';
@@ -1611,7 +1314,6 @@ function isAdmin() {
     return false;
   }
 }
-
 // Initialize prepare day modal
 function initPrepareDayModal() {
   const prepareDayModal = document.getElementById('prepareDayModal');
@@ -1620,91 +1322,70 @@ function initPrepareDayModal() {
   const cancelPrepareBtn = document.getElementById('cancelPrepare');
   const closePrepareModal = document.getElementById('closePrepareModal');
   const prepareStatus = document.getElementById('prepareStatus');
-  
   if (!prepareDayModal || !prepareDatePicker || !confirmPrepareBtn) {
-    console.log("🔍 [DEBUG] Prepare day modal elements not found");
     return;
   }
-  
   // Set date picker constraints (next 3 days)
   const today = new Date();
   const maxDate = new Date(today);
   maxDate.setDate(today.getDate() + 3);
-  
   prepareDatePicker.min = today.toISOString().split('T')[0];
   prepareDatePicker.max = maxDate.toISOString().split('T')[0];
-  
   // Set default to today
   prepareDatePicker.value = today.toISOString().split('T')[0];
-  
   // Add event listeners
   confirmPrepareBtn.addEventListener('click', handleConfirmPrepare);
   cancelPrepareBtn.addEventListener('click', closeModal);
   closePrepareModal.addEventListener('click', closeModal);
   prepareDatePicker.addEventListener('change', handlePrepareDateChange);
-  
   // Close modal when clicking outside
   prepareDayModal.addEventListener('click', (e) => {
     if (e.target === prepareDayModal) {
       closeModal();
     }
   });
-  
-  console.log("🔍 [DEBUG] Prepare day modal initialized");
-}
-
+  }
 // Show prepare day modal
 function showPrepareDayModal() {
   const modal = document.getElementById('prepareDayModal');
   const prepareDatePicker = document.getElementById('prepareDatePicker');
   const prepareStatus = document.getElementById('prepareStatus');
-  
   if (!isAdmin()) {
     showError("Access Denied", "Admin privileges required to prepare days.");
     return;
   }
-  
   // Reset modal state
   prepareDatePicker.value = new Date().toISOString().split('T')[0];
   prepareStatus.textContent = '';
   prepareStatus.className = 'prepare-status';
-  
   // Show modal
   modal.style.display = 'flex';
   document.body.style.overflow = 'hidden';
-  
   // Check initial date status
   handlePrepareDateChange();
 }
-
 // Close modal
 function closeModal() {
   const modal = document.getElementById('prepareDayModal');
   const prepareStatus = document.getElementById('prepareStatus');
-  
   // Clear status message
   prepareStatus.textContent = '';
   prepareStatus.className = 'prepare-status';
-  
   modal.style.display = 'none';
   document.body.style.overflow = 'auto';
 }
-
 // Handle prepare date picker change
 async function handlePrepareDateChange() {
   const prepareDatePicker = document.getElementById('prepareDatePicker');
   const prepareStatus = document.getElementById('prepareStatus');
-  
   if (prepareDatePicker.value) {
     prepareStatus.textContent = `Checking analysis status for ${prepareDatePicker.value}...`;
     prepareStatus.className = 'prepare-status info';
-    
     // Check if analysis already exists
     try {
       const analysisStatus = await checkAnalysisExists(prepareDatePicker.value);
       updatePrepareStatus(analysisStatus);
     } catch (error) {
-      console.error("Error checking analysis status:", error);
       prepareStatus.textContent = `Error checking status: ${error.message}`;
       prepareStatus.className = 'prepare-status error';
     }
@@ -1713,38 +1394,31 @@ async function handlePrepareDateChange() {
     prepareStatus.className = 'prepare-status';
   }
 }
-
 // Check if analysis exists for a specific date
 async function checkAnalysisExists(dateStr) {
   const user = localStorage.getItem('user');
   const userData = user ? JSON.parse(user) : null;
   const sessionId = userData ? userData.session_id : null;
-  
   const response = await fetch(`/api/check-analysis-exists?date=${dateStr}`, {
     method: "GET",
     headers: {
       "Authorization": `Bearer ${sessionId}`
     }
   });
-  
   if (!response.ok) {
     const errorData = await response.json();
     throw new Error(errorData.error || 'Failed to check analysis status');
   }
-  
   return await response.json();
 }
-
 // Update prepare status display
 function updatePrepareStatus(status) {
   const prepareStatus = document.getElementById('prepareStatus');
   const confirmPrepareBtn = document.getElementById('confirmPrepare');
-  
   // Safely get values with fallbacks
   const date = status.date || 'selected date';
   const fixturesCount = status.fixtures_count || 0;
   const outputsCount = status.model_outputs_count || 0;
-  
   if (status.analysis_complete) {
     prepareStatus.textContent = `✅ Analysis complete for ${date} (${fixturesCount} fixtures, ${outputsCount} outputs)`;
     prepareStatus.className = 'prepare-status success';
@@ -1762,43 +1436,33 @@ function updatePrepareStatus(status) {
     confirmPrepareBtn.disabled = false;
   }
 }
-
 // Handle confirm prepare
 async function handleConfirmPrepare() {
   const prepareDatePicker = document.getElementById('prepareDatePicker');
   const confirmPrepareBtn = document.getElementById('confirmPrepare');
   const prepareStatus = document.getElementById('prepareStatus');
-  
   if (!prepareDatePicker.value) {
     prepareStatus.textContent = 'Please select a date first';
     prepareStatus.className = 'prepare-status error';
     return;
   }
-  
   const selectedDate = prepareDatePicker.value;
-  console.log("🔍 [DEBUG] Preparing selected day:", selectedDate);
-  
   // Disable button and show loading
   confirmPrepareBtn.disabled = true;
   confirmPrepareBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 4h-4l-2-2H5a1 1 0 0 0-1 1v16h16V5a1 1 0 0 0-1-1z"/></svg><span>Preparing...</span>';
   prepareStatus.textContent = `Starting preparation for ${selectedDate}...`;
   prepareStatus.className = 'prepare-status info';
-  
   try {
     // Call prepare day for selected date
     await prepareDayForDate(selectedDate);
-    
     // Show success and close modal
     prepareStatus.textContent = `Successfully started preparation for ${selectedDate}`;
     prepareStatus.className = 'prepare-status success';
-    
     // Close modal after a short delay
     setTimeout(() => {
       closeModal();
     }, 1500);
-    
   } catch (error) {
-    console.error("Error preparing selected day:", error);
     prepareStatus.textContent = `Error: ${error.message}`;
     prepareStatus.className = 'prepare-status error';
   } finally {
@@ -1807,27 +1471,17 @@ async function handleConfirmPrepare() {
     confirmPrepareBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 4h-4l-2-2H5a1 1 0 0 0-1 1v16h16V5a1 1 0 0 0-1-1z"/></svg><span>Prepare Selected Day</span>';
   }
 }
-
 // Prepare day for specific date
 async function prepareDayForDate(dateStr) {
-  console.log("🔍 [DEBUG] prepareDayForDate called with date:", dateStr);
-  
   try {
     // Show loader
     showLoader(`🚀 Preparing ${dateStr}...`);
-    
     // Get user session
     const user = localStorage.getItem('user');
     const userData = user ? JSON.parse(user) : null;
     const sessionId = userData ? userData.session_id : null;
-    
-    console.log("🔍 [DEBUG] Session ID:", sessionId);
-    console.log("🔍 [DEBUG] User data:", userData);
-    
     // Call prepare day API
     const requestBody = { date: dateStr, prewarm: true, session_id: sessionId };
-    console.log("🔍 [DEBUG] Request body:", requestBody);
-    
     const resp = await fetch(`/api/prepare-day`, {
       method: "POST",
       headers: { 
@@ -1837,13 +1491,7 @@ async function prepareDayForDate(dateStr) {
       },
       body: JSON.stringify(requestBody)
     });
-    
-    console.log("🔍 [DEBUG] Response status:", resp.status);
-    console.log("🔍 [DEBUG] Response headers:", Object.fromEntries(resp.headers.entries()));
-    
     const data = await parseJsonSafe(resp);
-    console.log("🔍 [DEBUG] Response data:", data);
-    
     // Check for errors
     if (resp.status === 403) {
       throw new Error("Access denied. Admin privileges required.");
@@ -1851,37 +1499,27 @@ async function prepareDayForDate(dateStr) {
     if (resp.status === 401) {
       throw new Error("Authentication required. Please log in.");
     }
-    
     if (!data || !data.ok || !data.job_id) {
       throw new Error(`Failed to start prepare job: ${data?.error || 'Unknown error'}`);
     }
-    
     const jobId = data.job_id;
     updateLoader("queued");
-    
     // Poll for completion
     let lastProgress = -1;
     while (true) {
       await sleep(3000);
-      
       const statusResp = await fetch(`/api/prepare-day/status?job_id=${jobId}`);
       const sData = await parseJsonSafe(statusResp);
-      
       if (sData.status === "done") {
-        console.log("🔍 [DEBUG] prepareDayForDate - status done, hiding loader");
-        console.log("🔍 [DEBUG] sData.result:", sData.result);
-        
         const result = sData.result || {};
         const fixturesCount = result.fixtures_in_db || result.fixtures || 0;
         const pairsCount = result.pairs || 0;
         const teamsCount = result.teams || 0;
         const duration = result.duration || 'unknown time';
-        
         showSuccess("Prepare Day Complete", `Analysis preparation completed successfully for ${dateStr}!\n\n📊 Processed ${fixturesCount} fixtures\n👥 ${teamsCount} teams analyzed\n🔗 ${pairsCount} pairs created\n⏱️ Completed in ${duration}`);
         hideLoader();
         break;
       }
-      
       if (sData.status === "error") {
         const errorDetail = sData.detail || "unknown";
         if (errorDetail.includes("pool exhausted") || errorDetail.includes("connection")) {
@@ -1892,18 +1530,13 @@ async function prepareDayForDate(dateStr) {
           throw new Error(`Prepare-day error: ${errorDetail}`);
         }
       }
-      
       // Update progress
       if (sData.progress !== lastProgress) {
         lastProgress = sData.progress;
         updateLoader(sData.detail || "Processing...");
       }
     }
-    
   } catch (err) {
-    console.log("🔍 [DEBUG] prepareDayForDate - error occurred, hiding loader");
-    console.error(err);
-    
     // Check if it's a database connection error
     if (err.message.includes("Database connection error") || err.message.includes("pool exhausted")) {
       showError("Server Busy", `The server is currently busy with other requests. Please wait a moment and try again.\n\nError: ${err.message}`);
@@ -1912,7 +1545,6 @@ async function prepareDayForDate(dateStr) {
     } else {
       showError("Prepare Day Error", `Prepare day error: ${err.message}`);
     }
-    
     showToast("Prepare-day greška", "error");
     hideLoader();
     throw err;
@@ -1920,17 +1552,12 @@ async function prepareDayForDate(dateStr) {
     setBusyUI(false);
   }
 }
-
 // Safety net: ako je DOM već gotov (npr. skripta učitana kasnije), pozovi ručno
 if (document.readyState === "interactive" || document.readyState === "complete") {
   const evt = new Event("DOMContentLoaded");
   document.dispatchEvent(evt);
 }
-
 // Log da znamo da je JS podignut
-console.log("app.js loaded");
-
-
 window.addEventListener('load', function(){
   try {
     // Initialize Team Stats date inputs mirrors

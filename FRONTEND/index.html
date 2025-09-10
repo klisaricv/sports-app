@@ -1,21 +1,17 @@
 <!DOCTYPE html>
-
 <html data-theme="auto" lang="en">
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width,initial-scale=1" name="viewport"/>
 <meta content="light dark" name="color-scheme"/>
 <title>STATS FK</title>
-<!-- Fonts (optional, feel free to remove if ne želiš eksterno) -->
 <link href="https://fonts.googleapis.com" rel="preconnect"/>
 <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
-<!-- App styles & script -->
 <link href="/static/style.css" rel="stylesheet"/>
 <script defer="" src="/static/app.js"></script>
 </head>
 <body>
-<!-- ===== Header / Navbar ===== -->
 <header class="app-header">
 <div class="app-header__inner">
 <div class="brand">
@@ -26,18 +22,14 @@
 <stop offset="100%" style="stop-color:#16a34a;stop-opacity:1"></stop>
 </lineargradient>
 </defs>
-<!-- Football -->
 <circle cx="8" cy="8" fill="url(#logoGradient)" opacity="0.9" r="6"></circle>
 <path d="M8 2L10.5 5.5L8 8L5.5 5.5L8 2Z" fill="white" opacity="0.8"></path>
 <path d="M8 8L10.5 10.5L8 13L5.5 10.5L8 8Z" fill="white" opacity="0.6"></path>
 <path d="M8 13L10.5 15.5L8 18L5.5 15.5L8 13Z" fill="white" opacity="0.4"></path>
-<!-- Curved Arc -->
 <path d="M2 8Q8 2 14 8Q20 14 16 20" fill="none" opacity="0.7" stroke="url(#logoGradient)" stroke-width="2"></path>
-<!-- Bar Chart -->
 <rect fill="url(#logoGradient)" height="4" opacity="0.8" width="2" x="14" y="12"></rect>
 <rect fill="url(#logoGradient)" height="6" opacity="0.9" width="2" x="16.5" y="10"></rect>
 <rect fill="url(#logoGradient)" height="8" width="2" x="19" y="8"></rect>
-<!-- Line Graph -->
 <path d="M14 12L16.5 10L19 8L21 6" fill="none" opacity="0.9" stroke="white" stroke-width="1.5"></path>
 <circle cx="16.5" cy="10" fill="white" r="1"></circle>
 <circle cx="21" cy="6" fill="white" r="1"></circle>
@@ -48,7 +40,6 @@
 </div>
 </div>
 <div class="header-actions">
-<!-- Auth buttons (shown when not logged in) -->
 <div class="auth-buttons" id="authButtons" style="display: none;">
 <a class="btn auth-btn secondary" href="/login">
 <svg fill="none" height="18" viewbox="0 0 24 24" width="18" xmlns="http://www.w3.org/2000/svg">
@@ -68,7 +59,6 @@
 <span>Register</span>
 </a>
 </div>
-<!-- User menu (shown when logged in) -->
 <div class="user-menu" id="userMenu" style="display: none;">
 <div class="user-info">
 <span class="user-name" id="userName">User</span>
@@ -83,7 +73,6 @@
 <span>Logout</span>
 </button>
 </div>
-<!-- Theme toggle -->
 <button aria-label="Toggle theme" class="icon-btn" id="themeToggle" title="Toggle theme">
 <svg aria-hidden="true" class="icon-sun" height="20" viewbox="0 0 24 24" width="20"><path d="M6.76 4.84l-1.8-1.79-1.41 1.41 1.79 1.8 1.42-1.42zm10.48 14.32l1.79 1.8 1.41-1.41-1.8-1.79-1.4 1.4zM12 4V1h-1v3h1zm0 19v-3h-1v3h1zM4 13H1v-1h3v1zm19 0h-3v-1h3v1zM6.76 19.16l-1.42 1.42-1.79-1.8 1.41-1.41 1.8 1.79zM20.45 4.46l-1.41-1.41-1.8 1.79 1.42 1.42 1.79-1.8zM12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10z"></path></svg>
 <svg aria-hidden="true" class="icon-moon" height="20" viewbox="0 0 24 24" width="20"><path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 1 0 9.79 9.79z"></path></svg>
@@ -91,9 +80,7 @@
 </div>
 </div>
 </header>
-<!-- ===== Main Content ===== -->
 <main class="container">
-<!-- Controls -->
 <section class="panel controls">
 <div class="section hidden" id="teamStatsBackBar">
 <button class="btn secondary" id="backFromTeamStats">⟵ BACK TO ANALYZE</button>
@@ -183,7 +170,6 @@
 </svg>
 <span>Users Management</span>
 </a>
-<!-- Teams Stats Buttons (hidden by default) -->
 <div class="hidden" id="teamsStatsButtonsGroup">
 <button class="btn" id="teamGGHT">
 <svg aria-hidden="true" fill="currentColor" height="20" viewbox="0 0 24 24" width="20">
@@ -277,7 +263,6 @@
 </div>
 </div>
 </section>
-<!-- Results -->
 <section class="panel results" id="resultsSection" style="display: none;">
 <div class="results__grid">
 <article class="section" id="matches">
@@ -294,9 +279,7 @@
 </div>
 </section>
 </main>
-<!-- Toasts (optional, for future JS use) -->
 <div aria-atomic="true" aria-live="polite" id="toast-root"></div>
-<!-- Prepare Day Calendar Modal -->
 <div class="modal-overlay" id="prepareDayModal" style="display: none;">
 <div class="modal-content prepare-modal">
 <div class="modal-header">

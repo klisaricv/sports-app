@@ -1407,18 +1407,34 @@ function toggleTeamsStats(show) {
   const group = document.getElementById('teamsStatsButtonsGroup');
   const backBar = document.getElementById('teamStatsBackBar');
   const mainActions = document.getElementById('teamStatsActions');
-  if (!group || !backBar || !mainActions) return;
 
-  // osiguraj grid kada je vidljivo
-  if (show) group.style.display = 'grid';
+  // 1) TEAMS STATS dugmad
+  if (group) {
+    if (show) {
+      group.classList.remove('hidden');
+      group.style.display = 'grid'; // garantuj grid kada je vidljivo
+    } else {
+      group.classList.add('hidden');
+      group.style.display = '';     // vrati na CSS podrazumevano
+    }
+  }
 
-  // sakrivanje/prikaz preko klase .hidden
-  group.classList.toggle('hidden', !show);
-  backBar.classList.toggle('hidden', !show);
-  mainActions.classList.toggle('hidden', show);
+  // 2) BACK bar
+  if (backBar) {
+    if (show) {
+      backBar.classList.remove('hidden');
+      backBar.style.display = '';   // ne ostavljaj hard-coded none
+    } else {
+      backBar.classList.add('hidden');
+      backBar.style.display = '';   // pusti .hidden da radi
+    }
+  }
+
+  // 3) Glavne akcije (filtri + ANALYZE dugmad) sakrij u Team Stats režimu
+  if (mainActions) {
+    mainActions.classList.toggle('hidden', show);
+  }
 }
-
-
 
 // Handle team stats button clicks
 function handleTeamStats(market, period) {

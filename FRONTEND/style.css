@@ -3287,7 +3287,7 @@ body.users-page .panel.controls {
 
 /* ===== TEAMS STATS (konsolidovano) ===== */
 #teamStatsBackBar{
-  display:none; /* pali/gaši JS */
+  /* više NEMA display:none ovde – koristimo .hidden klasu */
   margin-bottom:12px;
 }
 

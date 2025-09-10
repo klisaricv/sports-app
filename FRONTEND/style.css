@@ -2695,11 +2695,22 @@ body.users-page .panel.controls {
   gap: var(--spacing-sm);
   padding: var(--spacing-md);
   font-size: var(--font-size-sm);
-  white-space: nowrap;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.2;
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
 }
 #teamsStatsButtonsGroup .btn span{
   flex:1;
-  text-align:left;
+  text-align:center;
+}
+#teamsStatsButtonsGroup .btn:hover{
+  background-color: var(--bg-primary);
+  border-color: var(--accent-color);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 @media (max-width:768px){
   #teamsStatsButtonsGroup{

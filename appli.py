@@ -1268,6 +1268,16 @@ def run_prepare_job(job_id: str, day_iso: str, prewarm: bool = True, *_args, **_
             except Exception as e:
                 print("prewarm_extras failed:", e)
 
+        # Update team stats table with latest data
+        update_prepare_job(job_id, progress=18, detail="team stats update")
+        try:
+            # First ensure table exists and is populated
+            populate_team_stats_if_needed()
+            # Then update stats for teams playing today
+            update_team_stats_for_teams(team_ids, fixtures)
+        except Exception as e:
+            print("team stats update failed:", e)
+
         # 3) History/H2H – dopuni samo nedostajuće
         update_prepare_job(job_id, progress=15, detail="history/h2h")
         hist_missing = _history_missing(team_ids, DAY_PREFETCH_LAST_N, CACHE_TTL_HOURS)
@@ -7171,6 +7181,104 @@ def populate_team_stats_if_needed():
         
     except Exception as e:
         print(f"Error populating team stats: {e}")
+
+def update_team_stats_for_teams(team_ids: set, fixtures: list):
+    """
+    Update team stats for specific teams playing today.
+    This is more efficient than recalculating all teams.
+    """
+    try:
+        conn = get_mysql_connection()
+        cur = conn.cursor()
+        
+        # Get league info for teams
+        team_leagues = {}
+        for fixture in fixtures:
+            teams = fixture.get('teams', {})
+            home_team = teams.get('home', {})
+            away_team = teams.get('away', {})
+            league_id = fixture.get('league', {}).get('id')
+            
+            if home_team.get('id') and league_id:
+                team_leagues[home_team['id']] = league_id
+            if away_team.get('id') and league_id:
+                team_leagues[away_team['id']] = league_id
+        
+        # Update stats for each team
+        for team_id in team_ids:
+            league_id = team_leagues.get(team_id)
+            if not league_id:
+                continue
+                
+            # Get season from current date
+            season = datetime.now().year
+            
+            # Calculate stats for this team
+            stats = calculate_team_basic_stats(team_id, league_id, season)
+            
+            if stats:
+                # Update team stats
+                cur.execute("""
+                    INSERT INTO team_stats (
+                        team_id, league_id, season,
+                        gg_1h_success_rate, gg_1h_total_matches, gg_1h_successful_matches,
+                        over05_1h_success_rate, over05_1h_total_matches, over05_1h_successful_matches,
+                        over15_1h_success_rate, over15_1h_total_matches, over15_1h_successful_matches,
+                        over15_ft_success_rate, over15_ft_total_matches, over15_ft_successful_matches,
+                        over25_ft_success_rate, over25_ft_total_matches, over25_ft_successful_matches,
+                        gg_ft_success_rate, gg_ft_total_matches, gg_ft_successful_matches,
+                        gg3plus_ft_success_rate, gg3plus_ft_total_matches, gg3plus_ft_successful_matches,
+                        x_ht_success_rate, x_ht_total_matches, x_ht_successful_matches,
+                        avg_goals_scored, avg_goals_conceded
+                    ) VALUES (
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                    ) ON DUPLICATE KEY UPDATE
+                        gg_1h_success_rate = VALUES(gg_1h_success_rate),
+                        gg_1h_total_matches = VALUES(gg_1h_total_matches),
+                        gg_1h_successful_matches = VALUES(gg_1h_successful_matches),
+                        over05_1h_success_rate = VALUES(over05_1h_success_rate),
+                        over05_1h_total_matches = VALUES(over05_1h_total_matches),
+                        over05_1h_successful_matches = VALUES(over05_1h_successful_matches),
+                        over15_1h_success_rate = VALUES(over15_1h_success_rate),
+                        over15_1h_total_matches = VALUES(over15_1h_total_matches),
+                        over15_1h_successful_matches = VALUES(over15_1h_successful_matches),
+                        over15_ft_success_rate = VALUES(over15_ft_success_rate),
+                        over15_ft_total_matches = VALUES(over15_ft_total_matches),
+                        over15_ft_successful_matches = VALUES(over15_ft_successful_matches),
+                        over25_ft_success_rate = VALUES(over25_ft_success_rate),
+                        over25_ft_total_matches = VALUES(over25_ft_total_matches),
+                        over25_ft_successful_matches = VALUES(over25_ft_successful_matches),
+                        gg_ft_success_rate = VALUES(gg_ft_success_rate),
+                        gg_ft_total_matches = VALUES(gg_ft_total_matches),
+                        gg_ft_successful_matches = VALUES(gg_ft_successful_matches),
+                        gg3plus_ft_success_rate = VALUES(gg3plus_ft_success_rate),
+                        gg3plus_ft_total_matches = VALUES(gg3plus_ft_total_matches),
+                        gg3plus_ft_successful_matches = VALUES(gg3plus_ft_successful_matches),
+                        x_ht_success_rate = VALUES(x_ht_success_rate),
+                        x_ht_total_matches = VALUES(x_ht_total_matches),
+                        x_ht_successful_matches = VALUES(x_ht_successful_matches),
+                        avg_goals_scored = VALUES(avg_goals_scored),
+                        avg_goals_conceded = VALUES(avg_goals_conceded),
+                        updated_at = CURRENT_TIMESTAMP
+                """, (
+                    team_id, league_id, season,
+                    stats.get('gg_1h_success_rate', 0), stats.get('gg_1h_total_matches', 0), stats.get('gg_1h_successful_matches', 0),
+                    stats.get('over05_1h_success_rate', 0), stats.get('over05_1h_total_matches', 0), stats.get('over05_1h_successful_matches', 0),
+                    stats.get('over15_1h_success_rate', 0), stats.get('over15_1h_total_matches', 0), stats.get('over15_1h_successful_matches', 0),
+                    stats.get('over15_ft_success_rate', 0), stats.get('over15_ft_total_matches', 0), stats.get('over15_ft_successful_matches', 0),
+                    stats.get('over25_ft_success_rate', 0), stats.get('over25_ft_total_matches', 0), stats.get('over25_ft_successful_matches', 0),
+                    stats.get('gg_ft_success_rate', 0), stats.get('gg_ft_total_matches', 0), stats.get('gg_ft_successful_matches', 0),
+                    stats.get('gg3plus_ft_success_rate', 0), stats.get('gg3plus_ft_total_matches', 0), stats.get('gg3plus_ft_successful_matches', 0),
+                    stats.get('x_ht_success_rate', 0), stats.get('x_ht_total_matches', 0), stats.get('x_ht_successful_matches', 0),
+                    stats.get('avg_goals_scored', 0), stats.get('avg_goals_conceded', 0)
+                ))
+        
+        conn.commit()
+        conn.close()
+        print(f"Updated team stats for {len(team_ids)} teams")
+        
+    except Exception as e:
+        print(f"Error updating team stats for teams: {e}")
 
 def calculate_team_basic_stats(team_id: int, league_id: int, season: int) -> dict:
     """

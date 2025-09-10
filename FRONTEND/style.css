@@ -2718,3 +2718,17 @@ body.users-page .panel.controls {
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+
+/* Grid za Team Stats dugmiće */
+#teamsStatsButtonsGroup {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  margin-top: 16px;
+}
+@media (max-width: 700px) {
+  #teamsStatsButtonsGroup {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

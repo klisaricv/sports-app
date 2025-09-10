@@ -339,6 +339,45 @@ def create_all_tables():
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         """)
 
+        # Team stats table for aggregated statistics
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS team_stats (
+            team_id INT NOT NULL,
+            league_id INT NOT NULL,
+            season INT NOT NULL,
+            gg_1h_success_rate DECIMAL(5,4) DEFAULT 0,
+            gg_1h_total_matches INT DEFAULT 0,
+            gg_1h_successful_matches INT DEFAULT 0,
+            over05_1h_success_rate DECIMAL(5,4) DEFAULT 0,
+            over05_1h_total_matches INT DEFAULT 0,
+            over05_1h_successful_matches INT DEFAULT 0,
+            over15_1h_success_rate DECIMAL(5,4) DEFAULT 0,
+            over15_1h_total_matches INT DEFAULT 0,
+            over15_1h_successful_matches INT DEFAULT 0,
+            over15_ft_success_rate DECIMAL(5,4) DEFAULT 0,
+            over15_ft_total_matches INT DEFAULT 0,
+            over15_ft_successful_matches INT DEFAULT 0,
+            over25_ft_success_rate DECIMAL(5,4) DEFAULT 0,
+            over25_ft_total_matches INT DEFAULT 0,
+            over25_ft_successful_matches INT DEFAULT 0,
+            gg_ft_success_rate DECIMAL(5,4) DEFAULT 0,
+            gg_ft_total_matches INT DEFAULT 0,
+            gg_ft_successful_matches INT DEFAULT 0,
+            gg3plus_ft_success_rate DECIMAL(5,4) DEFAULT 0,
+            gg3plus_ft_total_matches INT DEFAULT 0,
+            gg3plus_ft_successful_matches INT DEFAULT 0,
+            x_ht_success_rate DECIMAL(5,4) DEFAULT 0,
+            x_ht_total_matches INT DEFAULT 0,
+            x_ht_successful_matches INT DEFAULT 0,
+            avg_goals_scored DECIMAL(4,2) DEFAULT 0,
+            avg_goals_conceded DECIMAL(4,2) DEFAULT 0,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (team_id, league_id, season),
+            INDEX idx_team_stats_team (team_id),
+            INDEX idx_team_stats_league (league_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        """)
+
         # Users table for authentication
         cur.execute("""
         CREATE TABLE IF NOT EXISTS users (

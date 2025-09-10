@@ -6988,6 +6988,9 @@ def get_team_stats_for_market(from_date: datetime, to_date: datetime, fh: int, t
     Returns list of teams with their success rates.
     """
     try:
+        # First, try to populate team_stats table if it's empty
+        populate_team_stats_if_needed()
+        
         conn = get_mysql_connection()
         cur = conn.cursor()
         
@@ -7066,3 +7069,258 @@ def get_team_stats_for_market(from_date: datetime, to_date: datetime, fh: int, t
     except Exception as e:
         print(f"Error getting team stats: {e}")
         return []
+
+def populate_team_stats_if_needed():
+    """
+    Populate team_stats table with data from fixtures if it's empty.
+    This is a simplified version that calculates basic statistics.
+    """
+    try:
+        conn = get_mysql_connection()
+        cur = conn.cursor()
+        
+        # Check if team_stats table has any data
+        cur.execute("SELECT COUNT(*) FROM team_stats")
+        count = cur.fetchone()[0]
+        
+        if count > 0:
+            conn.close()
+            return  # Already populated
+        
+        print("Populating team_stats table...")
+        
+        # Get all teams and leagues from fixtures
+        cur.execute("""
+            SELECT DISTINCT f.team_home_id, f.league_id, f.date
+            FROM fixtures f
+            WHERE f.stats_json IS NOT NULL
+            UNION
+            SELECT DISTINCT f.team_away_id, f.league_id, f.date
+            FROM fixtures f
+            WHERE f.stats_json IS NOT NULL
+        """)
+        
+        team_league_pairs = cur.fetchall()
+        
+        for team_id, league_id, match_date in team_league_pairs:
+            # Get season from date (simplified)
+            season = match_date.year if match_date else 2024
+            
+            # Calculate basic stats for this team
+            stats = calculate_team_basic_stats(team_id, league_id, season)
+            
+            if stats:
+                # Insert or update team stats
+                cur.execute("""
+                    INSERT INTO team_stats (
+                        team_id, league_id, season,
+                        gg_1h_success_rate, gg_1h_total_matches, gg_1h_successful_matches,
+                        over05_1h_success_rate, over05_1h_total_matches, over05_1h_successful_matches,
+                        over15_1h_success_rate, over15_1h_total_matches, over15_1h_successful_matches,
+                        over15_ft_success_rate, over15_ft_total_matches, over15_ft_successful_matches,
+                        over25_ft_success_rate, over25_ft_total_matches, over25_ft_successful_matches,
+                        gg_ft_success_rate, gg_ft_total_matches, gg_ft_successful_matches,
+                        gg3plus_ft_success_rate, gg3plus_ft_total_matches, gg3plus_ft_successful_matches,
+                        x_ht_success_rate, x_ht_total_matches, x_ht_successful_matches,
+                        avg_goals_scored, avg_goals_conceded
+                    ) VALUES (
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                    ) ON DUPLICATE KEY UPDATE
+                        gg_1h_success_rate = VALUES(gg_1h_success_rate),
+                        gg_1h_total_matches = VALUES(gg_1h_total_matches),
+                        gg_1h_successful_matches = VALUES(gg_1h_successful_matches),
+                        over05_1h_success_rate = VALUES(over05_1h_success_rate),
+                        over05_1h_total_matches = VALUES(over05_1h_total_matches),
+                        over05_1h_successful_matches = VALUES(over05_1h_successful_matches),
+                        over15_1h_success_rate = VALUES(over15_1h_success_rate),
+                        over15_1h_total_matches = VALUES(over15_1h_total_matches),
+                        over15_1h_successful_matches = VALUES(over15_1h_successful_matches),
+                        over15_ft_success_rate = VALUES(over15_ft_success_rate),
+                        over15_ft_total_matches = VALUES(over15_ft_total_matches),
+                        over15_ft_successful_matches = VALUES(over15_ft_successful_matches),
+                        over25_ft_success_rate = VALUES(over25_ft_success_rate),
+                        over25_ft_total_matches = VALUES(over25_ft_total_matches),
+                        over25_ft_successful_matches = VALUES(over25_ft_successful_matches),
+                        gg_ft_success_rate = VALUES(gg_ft_success_rate),
+                        gg_ft_total_matches = VALUES(gg_ft_total_matches),
+                        gg_ft_successful_matches = VALUES(gg_ft_successful_matches),
+                        gg3plus_ft_success_rate = VALUES(gg3plus_ft_success_rate),
+                        gg3plus_ft_total_matches = VALUES(gg3plus_ft_total_matches),
+                        gg3plus_ft_successful_matches = VALUES(gg3plus_ft_successful_matches),
+                        x_ht_success_rate = VALUES(x_ht_success_rate),
+                        x_ht_total_matches = VALUES(x_ht_total_matches),
+                        x_ht_successful_matches = VALUES(x_ht_successful_matches),
+                        avg_goals_scored = VALUES(avg_goals_scored),
+                        avg_goals_conceded = VALUES(avg_goals_conceded)
+                """, (
+                    team_id, league_id, season,
+                    stats.get('gg_1h_success_rate', 0), stats.get('gg_1h_total_matches', 0), stats.get('gg_1h_successful_matches', 0),
+                    stats.get('over05_1h_success_rate', 0), stats.get('over05_1h_total_matches', 0), stats.get('over05_1h_successful_matches', 0),
+                    stats.get('over15_1h_success_rate', 0), stats.get('over15_1h_total_matches', 0), stats.get('over15_1h_successful_matches', 0),
+                    stats.get('over15_ft_success_rate', 0), stats.get('over15_ft_total_matches', 0), stats.get('over15_ft_successful_matches', 0),
+                    stats.get('over25_ft_success_rate', 0), stats.get('over25_ft_total_matches', 0), stats.get('over25_ft_successful_matches', 0),
+                    stats.get('gg_ft_success_rate', 0), stats.get('gg_ft_total_matches', 0), stats.get('gg_ft_successful_matches', 0),
+                    stats.get('gg3plus_ft_success_rate', 0), stats.get('gg3plus_ft_total_matches', 0), stats.get('gg3plus_ft_successful_matches', 0),
+                    stats.get('x_ht_success_rate', 0), stats.get('x_ht_total_matches', 0), stats.get('x_ht_successful_matches', 0),
+                    stats.get('avg_goals_scored', 0), stats.get('avg_goals_conceded', 0)
+                ))
+        
+        conn.commit()
+        conn.close()
+        print("Team stats table populated successfully!")
+        
+    except Exception as e:
+        print(f"Error populating team stats: {e}")
+
+def calculate_team_basic_stats(team_id: int, league_id: int, season: int) -> dict:
+    """
+    Calculate basic team statistics from fixtures data.
+    This is a simplified version for demonstration.
+    """
+    try:
+        conn = get_mysql_connection()
+        cur = conn.cursor()
+        
+        # Get team's matches
+        cur.execute("""
+            SELECT f.id, f.stats_json, f.fixture_json
+            FROM fixtures f
+            WHERE (f.team_home_id = %s OR f.team_away_id = %s)
+            AND f.stats_json IS NOT NULL
+            AND f.fixture_json IS NOT NULL
+            ORDER BY f.date DESC
+            LIMIT 50
+        """, (team_id, team_id))
+        
+        matches = cur.fetchall()
+        conn.close()
+        
+        if not matches:
+            return None
+        
+        # Initialize counters
+        stats = {
+            'gg_1h_total_matches': 0,
+            'gg_1h_successful_matches': 0,
+            'over05_1h_total_matches': 0,
+            'over05_1h_successful_matches': 0,
+            'over15_1h_total_matches': 0,
+            'over15_1h_successful_matches': 0,
+            'over15_ft_total_matches': 0,
+            'over15_ft_successful_matches': 0,
+            'over25_ft_total_matches': 0,
+            'over25_ft_successful_matches': 0,
+            'gg_ft_total_matches': 0,
+            'gg_ft_successful_matches': 0,
+            'gg3plus_ft_total_matches': 0,
+            'gg3plus_ft_successful_matches': 0,
+            'x_ht_total_matches': 0,
+            'x_ht_successful_matches': 0,
+            'total_goals_scored': 0,
+            'total_goals_conceded': 0,
+            'total_matches': 0
+        }
+        
+        for fixture_id, stats_json, fixture_json in matches:
+            try:
+                stats_data = json.loads(stats_json) if isinstance(stats_json, str) else stats_json
+                fixture_data = json.loads(fixture_json) if isinstance(fixture_json, str) else fixture_json
+                
+                if not stats_data or not fixture_data:
+                    continue
+                
+                # Determine if team is home or away
+                teams = fixture_data.get('teams', {})
+                home_team_id = teams.get('home', {}).get('id')
+                away_team_id = teams.get('away', {}).get('id')
+                
+                if team_id not in [home_team_id, away_team_id]:
+                    continue
+                
+                is_home = team_id == home_team_id
+                
+                # Get goals
+                goals = fixture_data.get('goals', {})
+                home_goals = goals.get('home', 0) or 0
+                away_goals = goals.get('away', 0) or 0
+                
+                team_goals = home_goals if is_home else away_goals
+                opponent_goals = away_goals if is_home else home_goals
+                
+                stats['total_goals_scored'] += team_goals
+                stats['total_goals_conceded'] += opponent_goals
+                stats['total_matches'] += 1
+                
+                # First half goals (simplified - assume half of total goals)
+                team_1h_goals = team_goals // 2
+                opponent_1h_goals = opponent_goals // 2
+                
+                # Check various markets
+                # GG 1H
+                stats['gg_1h_total_matches'] += 1
+                if team_1h_goals > 0 and opponent_1h_goals > 0:
+                    stats['gg_1h_successful_matches'] += 1
+                
+                # Over 0.5 1H
+                stats['over05_1h_total_matches'] += 1
+                if team_1h_goals + opponent_1h_goals > 0:
+                    stats['over05_1h_successful_matches'] += 1
+                
+                # Over 1.5 1H
+                stats['over15_1h_total_matches'] += 1
+                if team_1h_goals + opponent_1h_goals > 1:
+                    stats['over15_1h_successful_matches'] += 1
+                
+                # Over 1.5 FT
+                stats['over15_ft_total_matches'] += 1
+                if team_goals + opponent_goals > 1:
+                    stats['over15_ft_successful_matches'] += 1
+                
+                # Over 2.5 FT
+                stats['over25_ft_total_matches'] += 1
+                if team_goals + opponent_goals > 2:
+                    stats['over25_ft_successful_matches'] += 1
+                
+                # GG FT
+                stats['gg_ft_total_matches'] += 1
+                if team_goals > 0 and opponent_goals > 0:
+                    stats['gg_ft_successful_matches'] += 1
+                
+                # GG3+ FT
+                stats['gg3plus_ft_total_matches'] += 1
+                if team_goals > 0 and opponent_goals > 0 and team_goals + opponent_goals >= 3:
+                    stats['gg3plus_ft_successful_matches'] += 1
+                
+                # X HT (draw at half time)
+                stats['x_ht_total_matches'] += 1
+                if team_1h_goals == opponent_1h_goals:
+                    stats['x_ht_successful_matches'] += 1
+                
+            except Exception as e:
+                print(f"Error processing match {fixture_id}: {e}")
+                continue
+        
+        # Calculate success rates
+        for market in ['gg_1h', 'over05_1h', 'over15_1h', 'over15_ft', 'over25_ft', 'gg_ft', 'gg3plus_ft', 'x_ht']:
+            total_key = f'{market}_total_matches'
+            successful_key = f'{market}_successful_matches'
+            success_rate_key = f'{market}_success_rate'
+            
+            if stats[total_key] > 0:
+                stats[success_rate_key] = stats[successful_key] / stats[total_key]
+            else:
+                stats[success_rate_key] = 0
+        
+        # Calculate average goals
+        if stats['total_matches'] > 0:
+            stats['avg_goals_scored'] = stats['total_goals_scored'] / stats['total_matches']
+            stats['avg_goals_conceded'] = stats['total_goals_conceded'] / stats['total_matches']
+        else:
+            stats['avg_goals_scored'] = 0
+            stats['avg_goals_conceded'] = 0
+        
+        return stats
+        
+    except Exception as e:
+        print(f"Error calculating team stats: {e}")
+        return None

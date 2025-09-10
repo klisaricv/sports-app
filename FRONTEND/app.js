@@ -1579,3 +1579,16 @@ window.addEventListener('load', function(){
     })();
   } catch(e) { console.warn('initTeamStatsDates failed', e); }
 });
+
+function toggleTeamsStats(show) {
+  const group = document.getElementById('teamsStatsButtonsGroup');
+  const backBar = document.getElementById('teamStatsBackBar');
+  const mainActions = document.getElementById('teamStatsActions');
+  const dateRow = document.getElementById('dateRangeRow');
+  if (!group || !backBar || !mainActions || !dateRow) return;
+
+  group.classList.toggle('hidden', !show);
+  backBar.classList.toggle('hidden', !show);
+  dateRow.classList.toggle('hidden', !show);
+  mainActions.classList.toggle('hidden', show);
+}

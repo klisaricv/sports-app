@@ -3206,6 +3206,75 @@ body.users-page .panel.controls {
   }
 }
 
+/* ===== TEAM STATS STYLES ===== */
+.team-stats {
+  margin-top: var(--spacing-md);
+  padding: var(--spacing-md);
+  background: var(--surface);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-sm);
+}
+
+.stat-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  transition: var(--transition);
+}
+
+.stat-item:hover {
+  background: var(--surface-elevated);
+  border-color: var(--primary);
+}
+
+.stat-label {
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-sm);
+  flex: 1;
+}
+
+.stat-value {
+  color: var(--text-primary);
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-sm);
+  margin-left: var(--spacing-sm);
+  text-align: right;
+  min-width: 60px;
+}
+
+/* Team stats responsive */
+@media (max-width: 768px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-xs);
+  }
+  
+  .stat-item {
+    padding: var(--spacing-xs);
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-xs);
+  }
+  
+  .stat-value {
+    margin-left: 0;
+    text-align: left;
+    min-width: auto;
+  }
+}
+
 /* ===== USERS PAGE MOBILE FIXES ===== */
 @media (max-width: 768px) {
   /* Page header mobile layout */

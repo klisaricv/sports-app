@@ -1421,17 +1421,242 @@ function toggleTeamsStats(show) {
 
 
 // Handle team stats button clicks
-function handleTeamStats(market, period) {
+async function handleTeamStats(market, period) {
   console.log('🏆 Team Stats clicked:', { market, period });
   
-  // Show loading state
-  showToast('Loading team stats...', 'info');
+  // Check if user is logged in first
+  if (!isUserLoggedIn()) {
+    showAuthRequiredModal();
+    return;
+  }
   
-  // TODO: Implement team stats API call
-  // For now, just show a placeholder message
-  setTimeout(() => {
-    showToast(`Team Stats: ${market} ${period} - Coming soon!`, 'success');
-  }, 1000);
+  // Show loading state
+  showLoader(`📊 Loading Team Stats: ${market} ${period}...`);
+  
+  try {
+    const fromEl = document.getElementById("fromDate");
+    const toEl = document.getElementById("toDate");
+
+    if (!fromEl || !toEl || !fromEl.value || !toEl.value) {
+      showError("Potrebno je odabrati datume", "Molim vas odaberite i početni i završni datum.");
+      hideLoader();
+      return;
+    }
+
+    const fromDate = new Date(fromEl.value);
+    const toDate = new Date(toEl.value);
+    if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+      showError("Neispravni datumi", "Neispravne vrednosti datuma.");
+      hideLoader();
+      return;
+    }
+    if (toDate < fromDate) {
+      showError("Neispravan opseg datuma", "Završni datum/vreme mora biti posle početnog datuma/vremena.");
+      hideLoader();
+      return;
+    }
+
+    const fromIso = fromDate.toISOString();
+    const toIso = toDate.toISOString();
+
+    const url = `${BACKEND_URL}/api/team-stats` +
+      `?from_date=${encodeURIComponent(fromIso)}` +
+      `&to_date=${encodeURIComponent(toIso)}` +
+      `&market=${encodeURIComponent(market)}` +
+      `&period=${encodeURIComponent(period)}` +
+      `&no_api=1`;
+
+    console.log("👉 calling team stats:", url);
+
+    const response = await fetch(url, { 
+      headers: { 
+        Accept: "application/json" 
+      } 
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.detail || `HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log("✅ Team stats response:", data);
+
+    // Display team stats results
+    displayTeamStats(data, market, period);
+    showToast(`Team Stats loaded: ${data.total} teams found`, 'success');
+    hideLoader();
+
+  } catch (error) {
+    console.error("Team stats error:", error);
+    showError("Greška učitavanja team stats", `Greška: ${error.message}`);
+    hideLoader();
+  }
+}
+
+// Display team stats results
+function displayTeamStats(data, market, period) {
+  console.log('📊 Displaying team stats:', data);
+  
+  // Show results section
+  const resultsSection = document.getElementById('resultsSection');
+  if (resultsSection) {
+    resultsSection.style.display = 'block';
+  }
+  
+  // Create team stats title
+  const analysisTitle = getTeamStatsTitle(market, period);
+  const resultsSectionEl = document.querySelector('.results');
+  if (resultsSectionEl && !document.getElementById('team-stats-title')) {
+    const titleElement = document.createElement('div');
+    titleElement.id = 'team-stats-title';
+    titleElement.className = 'analysis-title';
+    titleElement.innerHTML = `
+      <h2>${analysisTitle}</h2>
+      <div class="analysis-subtitle">Team Statistics • ${data.total} teams found</div>
+    `;
+    resultsSectionEl.insertBefore(titleElement, resultsSectionEl.firstChild);
+  } else if (document.getElementById('team-stats-title')) {
+    const titleEl = document.getElementById('team-stats-title');
+    titleEl.querySelector('h2').textContent = analysisTitle;
+    titleEl.querySelector('.analysis-subtitle').textContent = `Team Statistics • ${data.total} teams found`;
+  }
+  
+  // Render team stats
+  renderTeamStats(data.teams, market, period);
+}
+
+// Get team stats title based on market and period
+function getTeamStatsTitle(market, period) {
+  const titles = {
+    'GG': '🥅 Both Teams to Score',
+    '1+': '⚽ Over 0.5 Goals',
+    '2+': '⚽ Over 1.5 Goals', 
+    '3+': '⚽ Over 2.5 Goals',
+    '4+': '⚽ Over 3.5 Goals',
+    'AVG_MOST_SCORED': '📈 Most Goals Scored (Average)',
+    'AVG_MOST_CONCEDED': '📉 Most Goals Conceded (Average)',
+    'GG3+': '🥅 Both Teams to Score + Over 2.5 Goals',
+    'X': '❌ No Goals (0-0)'
+  };
+  
+  const periodText = period === 'HT' ? '1st Half' : 'Full Time';
+  const baseTitle = titles[market] || `Team Stats: ${market}`;
+  return `${baseTitle} - ${periodText}`;
+}
+
+// Render team stats in the results section
+function renderTeamStats(teams, market, period) {
+  const matchesContent = document.getElementById('matchesContent');
+  if (!matchesContent) return;
+  
+  // Clear content area
+  matchesContent.innerHTML = '';
+  
+  if (!teams || teams.length === 0) {
+    matchesContent.innerHTML = '<div class="placeholder">No team statistics found for the selected period.</div>';
+    return;
+  }
+  
+  // Create team stats cards
+  teams.forEach((team, index) => {
+    const teamCard = createTeamStatsCard(team, market, period, index + 1);
+    matchesContent.innerHTML += teamCard;
+  });
+}
+
+// Create a team stats card
+function createTeamStatsCard(team, market, period, index) {
+  const stats = team.statistics || {};
+  
+  // Extract relevant statistics based on market and period
+  const relevantStats = extractRelevantStats(stats, market, period);
+  
+  return `
+    <div class="match">
+      <div class="match-header">
+        <div class="match-league">${team.league} • Season ${team.season}</div>
+        <div class="match-teams">${team.team_name}</div>
+        <div class="match-kickoff">Team ID: ${team.team_id}</div>
+      </div>
+      
+      <div class="team-stats">
+        <div class="stats-grid">
+          ${Object.entries(relevantStats).map(([key, value]) => `
+            <div class="stat-item">
+              <span class="stat-label">${formatStatLabel(key)}</span>
+              <span class="stat-value">${formatStatValue(value)}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// Extract relevant statistics based on market and period
+function extractRelevantStats(stats, market, period) {
+  const relevant = {};
+  
+  // Common statistics that are always relevant
+  const commonStats = [
+    'Goals For', 'Goals Against', 'Shots on Goal', 'Shots off Goal',
+    'Total Shots', 'Blocked Shots', 'Shots insidebox', 'Shots outsidebox',
+    'Fouls', 'Corner Kicks', 'Offsides', 'Ball Possession', 'Yellow Cards',
+    'Red Cards', 'Goalkeeper Saves', 'Total Passes', 'Passes Accurate',
+    'Passes %', 'Dangerous Attacks'
+  ];
+  
+  // Extract statistics from the API response
+  if (stats.response && Array.isArray(stats.response)) {
+    stats.response.forEach(stat => {
+      if (stat.type && commonStats.includes(stat.type)) {
+        relevant[stat.type] = stat.value;
+      }
+    });
+  }
+  
+  return relevant;
+}
+
+// Format statistic label for display
+function formatStatLabel(label) {
+  const labels = {
+    'Goals For': 'Goals Scored',
+    'Goals Against': 'Goals Conceded', 
+    'Shots on Goal': 'Shots on Target',
+    'Shots off Goal': 'Shots off Target',
+    'Total Shots': 'Total Shots',
+    'Blocked Shots': 'Blocked Shots',
+    'Shots insidebox': 'Shots Inside Box',
+    'Shots outsidebox': 'Shots Outside Box',
+    'Fouls': 'Fouls',
+    'Corner Kicks': 'Corners',
+    'Offsides': 'Offsides',
+    'Ball Possession': 'Possession %',
+    'Yellow Cards': 'Yellow Cards',
+    'Red Cards': 'Red Cards',
+    'Goalkeeper Saves': 'Saves',
+    'Total Passes': 'Total Passes',
+    'Passes Accurate': 'Accurate Passes',
+    'Passes %': 'Pass Accuracy %',
+    'Dangerous Attacks': 'Dangerous Attacks'
+  };
+  
+  return labels[label] || label;
+}
+
+// Format statistic value for display
+function formatStatValue(value) {
+  if (value === null || value === undefined) return '—';
+  if (typeof value === 'number') {
+    if (Number.isInteger(value)) {
+      return value.toString();
+    } else {
+      return value.toFixed(2);
+    }
+  }
+  return value.toString();
 }
 
 // ===== USERS PAGE FUNCTIONS =====

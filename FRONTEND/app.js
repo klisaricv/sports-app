@@ -1105,7 +1105,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const teamsStatsBtn = document.getElementById("teamsStatsBtn");
   if (teamsStatsBtn) {
     // Klik na TEAMS STATS uvek ULAZI u Team Stats režim
-    teamsStatsBtn.addEventListener("click", () => toggleTeamsStats(true));
+    teamsStatsBtn.addEventListener("click", () => {
+      alert("TEAMS STATS clicked!");
+      toggleTeamsStats(true);
+    });
     const backFromTeamStats = document.getElementById('backFromTeamStats');
     // Klik na BACK bar uvek IZLAZI iz Team Stats režima
     if (backFromTeamStats) backFromTeamStats.addEventListener('click', () => toggleTeamsStats(false));
@@ -1161,13 +1164,17 @@ window.addEventListener('hashchange', () => {
 });
 // ===== TEAMS STATS FUNCTIONS =====
 function toggleTeamsStats(show) {
+  alert("toggleTeamsStats called with show: " + show);
+  
   const group = document.getElementById('teamsStatsButtonsGroup');
   const backBar = document.getElementById('teamStatsBackBar');
   const mainActions = document.getElementById('teamStatsActions');
   const dateRangeRow = document.getElementById('dateRangeRow');
   
+  alert("Elements found: group=" + !!group + ", backBar=" + !!backBar + ", mainActions=" + !!mainActions + ", dateRangeRow=" + !!dateRangeRow);
+  
   if (!group || !backBar || !mainActions || !dateRangeRow) {
-    console.warn('Missing required elements for toggleTeamsStats');
+    alert('Missing required elements for toggleTeamsStats');
     return;
   }
   
@@ -1183,6 +1190,8 @@ function toggleTeamsStats(show) {
   
   // Hide the main actions (analyze buttons etc.) while in Team Stats
   mainActions.classList.toggle('hidden', show);
+  
+  alert("After toggle - group hidden: " + group.classList.contains('hidden') + ", backBar hidden: " + backBar.classList.contains('hidden'));
 }
 // Handle team stats button clicks
 function handleTeamStats(market, period) {

@@ -7130,7 +7130,7 @@ def get_team_stats_for_market(market: str) -> list:
             JOIN leagues l ON ts.league_id = l.id
             WHERE ts.{success_rate_col} IS NOT NULL
             AND ts.{success_rate_col} > 0
-            AND ts.{total_matches_col} >= 30
+            AND ts.{total_matches_col} >= 1
             ORDER BY ts.{success_rate_col} DESC
             LIMIT 10
         """
@@ -7327,15 +7327,15 @@ def populate_team_stats_if_needed():
         
         print("DEBUG: Populating team_stats table...")
         
-        # Get all teams and leagues from fixtures
+        # Get all teams and leagues from fixtures (use fixture_json instead of stats_json)
         cur.execute("""
             SELECT DISTINCT f.team_home_id, f.league_id, f.date
             FROM fixtures f
-            WHERE f.stats_json IS NOT NULL
+            WHERE f.fixture_json IS NOT NULL
             UNION
             SELECT DISTINCT f.team_away_id, f.league_id, f.date
             FROM fixtures f
-            WHERE f.stats_json IS NOT NULL
+            WHERE f.fixture_json IS NOT NULL
         """)
         
         team_league_pairs = cur.fetchall()
@@ -7545,7 +7545,6 @@ def calculate_team_basic_stats(team_id: int, league_id: int, season: int) -> dic
             SELECT f.id, f.stats_json, f.fixture_json
             FROM fixtures f
             WHERE (f.team_home_id = %s OR f.team_away_id = %s)
-            AND f.stats_json IS NOT NULL
             AND f.fixture_json IS NOT NULL
             ORDER BY f.date DESC
             LIMIT 50
@@ -7585,10 +7584,9 @@ def calculate_team_basic_stats(team_id: int, league_id: int, season: int) -> dic
         
         for fixture_id, stats_json, fixture_json in matches:
             try:
-                stats_data = json.loads(stats_json) if isinstance(stats_json, str) else stats_json
                 fixture_data = json.loads(fixture_json) if isinstance(fixture_json, str) else fixture_json
                 
-                if not stats_data or not fixture_data:
+                if not fixture_data:
                     continue
                 
                 # Determine if team is home or away
@@ -7605,6 +7603,10 @@ def calculate_team_basic_stats(team_id: int, league_id: int, season: int) -> dic
                 goals = fixture_data.get('goals', {})
                 home_goals = goals.get('home', 0) or 0
                 away_goals = goals.get('away', 0) or 0
+                
+                # Debug: Log goals for first few matches
+                if stats['total_matches'] < 3:
+                    print(f"DEBUG: Match {fixture_id}: home_goals={home_goals}, away_goals={away_goals}, team_goals={team_goals if 'team_goals' in locals() else 'N/A'}")
                 
                 team_goals = home_goals if is_home else away_goals
                 opponent_goals = away_goals if is_home else home_goals

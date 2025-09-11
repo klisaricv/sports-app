@@ -7039,59 +7039,73 @@ def get_team_stats_for_market(market: str) -> list:
         cur = conn.cursor()
         print(f"DEBUG: Connected to database for market {market}")
         
-        # Map market to database column
-        market_columns = {
-            'gg1h': 'gg_1h_success_rate',
-            '1h_over05': 'over05_1h_success_rate', 
-            '1h_over15': 'over15_1h_success_rate',
-            'ft_over15': 'over15_ft_success_rate',
-            'ft_over25': 'over25_ft_success_rate',
-            'ggft': 'gg_ft_success_rate',
-            'gg3plus_ft': 'gg3plus_ft_success_rate',
-            'x_ht': 'x_ht_success_rate'
+        # Map market to database columns
+        market_config = {
+            'gg1h': {
+                'success_rate': 'gg_1h_success_rate',
+                'total_matches': 'gg_1h_total_matches', 
+                'successful_matches': 'gg_1h_successful_matches'
+            },
+            '1h_over05': {
+                'success_rate': 'over05_1h_success_rate',
+                'total_matches': 'over05_1h_total_matches',
+                'successful_matches': 'over05_1h_successful_matches'
+            },
+            '1h_over15': {
+                'success_rate': 'over15_1h_success_rate',
+                'total_matches': 'over15_1h_total_matches',
+                'successful_matches': 'over15_1h_successful_matches'
+            },
+            'ft_over15': {
+                'success_rate': 'over15_ft_success_rate',
+                'total_matches': 'over15_ft_total_matches',
+                'successful_matches': 'over15_ft_successful_matches'
+            },
+            'ft_over25': {
+                'success_rate': 'over25_ft_success_rate',
+                'total_matches': 'over25_ft_total_matches',
+                'successful_matches': 'over25_ft_successful_matches'
+            },
+            'ggft': {
+                'success_rate': 'gg_ft_success_rate',
+                'total_matches': 'gg_ft_total_matches',
+                'successful_matches': 'gg_ft_successful_matches'
+            },
+            'gg3plus_ft': {
+                'success_rate': 'gg3plus_ft_success_rate',
+                'total_matches': 'gg3plus_ft_total_matches',
+                'successful_matches': 'gg3plus_ft_successful_matches'
+            },
+            'x_ht': {
+                'success_rate': 'x_ht_success_rate',
+                'total_matches': 'x_ht_total_matches',
+                'successful_matches': 'x_ht_successful_matches'
+            }
         }
         
-        success_rate_col = market_columns.get(market, 'gg_1h_success_rate')
+        config = market_config.get(market, market_config['gg1h'])
+        success_rate_col = config['success_rate']
+        total_matches_col = config['total_matches']
+        successful_matches_col = config['successful_matches']
         
-        # Build query based on market type
-        if market in ['gg1h', '1h_over05', '1h_over15', 'x_ht']:
-            # First half markets
-            query = f"""
-                SELECT 
-                    t.name as team_name,
-                    l.name as league,
-                    ts.{success_rate_col} as success_rate,
-                    ts.gg_1h_total_matches as total_matches,
-                    ts.gg_1h_successful_matches as successful_matches,
-                    ts.avg_goals_scored
-                FROM team_stats ts
-                JOIN teams t ON ts.team_id = t.id
-                JOIN leagues l ON ts.league_id = l.id
-                WHERE ts.{success_rate_col} IS NOT NULL
-                AND ts.{success_rate_col} > 0
-                AND ts.gg_1h_total_matches >= 5
-                ORDER BY ts.{success_rate_col} DESC
-                LIMIT 10
-            """
-        else:
-            # Full time markets
-            query = f"""
-                SELECT 
-                    t.name as team_name,
-                    l.name as league,
-                    ts.{success_rate_col} as success_rate,
-                    ts.gg_ft_total_matches as total_matches,
-                    ts.gg_ft_successful_matches as successful_matches,
-                    ts.avg_goals_scored
-                FROM team_stats ts
-                JOIN teams t ON ts.team_id = t.id
-                JOIN leagues l ON ts.league_id = l.id
-                WHERE ts.{success_rate_col} IS NOT NULL
-                AND ts.{success_rate_col} > 0
-                AND ts.gg_ft_total_matches >= 5
-                ORDER BY ts.{success_rate_col} DESC
-                LIMIT 10
-            """
+        # Build query
+        query = f"""
+            SELECT 
+                t.name as team_name,
+                l.name as league,
+                ts.{success_rate_col} as success_rate,
+                ts.{total_matches_col} as total_matches,
+                ts.{successful_matches_col} as successful_matches,
+                ts.avg_goals_scored
+            FROM team_stats ts
+            JOIN teams t ON ts.team_id = t.id
+            JOIN leagues l ON ts.league_id = l.id
+            WHERE ts.{success_rate_col} IS NOT NULL
+            AND ts.{success_rate_col} > 0
+            AND ts.{total_matches_col} >= 30
+            ORDER BY ts.{success_rate_col} DESC
+            LIMIT 10
+        """
         
         cur.execute(query)
         results = cur.fetchall()
@@ -7102,12 +7116,17 @@ def get_team_stats_for_market(market: str) -> list:
         # Convert to list of dictionaries
         team_stats = []
         for row in results:
+            total_matches = row[3] or 0
+            successful_matches = row[4] or 0
+            success_rate = float(row[2]) if row[2] else 0
+            
             team_stats.append({
                 'team_name': row[0],
                 'league': row[1], 
-                'success_rate': float(row[2]) * 100,  # Convert to percentage
-                'total_matches': row[3],
-                'successful_matches': row[4],
+                'success_rate': round(success_rate, 2),
+                'total_matches': total_matches,
+                'successful_matches': successful_matches,
+                'matches_display': f"{successful_matches}/{total_matches}",
                 'avg_goals_scored': float(row[5]) if row[5] else None
             })
         

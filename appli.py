@@ -6958,14 +6958,26 @@ async def api_team_stats(request: Request):
         # Convert results to team stats format
         team_stats = []
         for result in results:
+            # Only include teams with at least 30 matches
+            total_matches = result.get('team1_total', 0)
+            if total_matches < 30:
+                continue
+                
+            successful_matches = result.get('team1_hits', 0)
+            success_rate = (successful_matches / total_matches) * 100 if total_matches > 0 else 0
+            
             team_stats.append({
                 'team_name': result.get('team1', 'Unknown'),
                 'league': result.get('league', 'Unknown'),
-                'success_rate': result.get('final_percent', 0),
-                'total_matches': result.get('team1_total', 0),
-                'successful_matches': result.get('team1_hits', 0),
-                'avg_goals_scored': result.get('team1_percent', 0)
+                'success_rate': round(success_rate, 2),
+                'total_matches': total_matches,
+                'successful_matches': successful_matches,
+                'matches_display': f"{successful_matches}/{total_matches}"
             })
+        
+        # Sort by success rate (descending) and limit to top 10
+        team_stats.sort(key=lambda x: x['success_rate'], reverse=True)
+        team_stats = team_stats[:10]
         
         print(f"DEBUG: Returning {len(team_stats)} team stats")
         return JSONResponse(status_code=200, content={

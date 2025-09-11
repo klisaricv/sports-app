@@ -1366,8 +1366,7 @@ function renderTeamStatsList() {
   
   const teamCardHTML = (team) => {
     const successRate = team.success_rate || 0;
-    const totalMatches = team.total_matches || 0;
-    const successfulMatches = team.successful_matches || 0;
+    const matchesDisplay = team.matches_display || '0/0';
     
     return `
       <div class="team-stat">
@@ -1382,14 +1381,8 @@ function renderTeamStatsList() {
           </div>
           <div class="stat-item">
             <span class="stat-label">Uspešni mečevi</span>
-            <span class="stat-value">${successfulMatches}/${totalMatches}</span>
+            <span class="stat-value">${matchesDisplay}</span>
           </div>
-          ${team.avg_goals_scored ? `
-          <div class="stat-item">
-            <span class="stat-label">Prosek golova</span>
-            <span class="stat-value">${fmt(team.avg_goals_scored, '')}</span>
-          </div>
-          ` : ''}
         </div>
       </div>
     `;
@@ -1801,3 +1794,4 @@ window.addEventListener('load', function(){
     })();
   } catch(e) { console.warn('initTeamStatsDates failed', e); }
 });
+

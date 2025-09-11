@@ -1267,6 +1267,34 @@ def run_prepare_job(job_id: str, day_iso: str, prewarm: bool = True, *_args, **_
                 prewarm_extras_for_fixtures(fixtures, include_odds=True, include_team_stats=True)
             except Exception as e:
                 print("prewarm_extras failed:", e)
+        
+        # Populate stats_json for fixtures
+        update_prepare_job(job_id, progress=14, detail="populating stats_json")
+        try:
+            print(f"DEBUG: Populating stats_json for {len(fixtures)} fixtures")
+            updated_count = 0
+            for fixture in fixtures:
+                fixture_id = ((fixture.get("fixture") or {}).get("id"))
+                if fixture_id:
+                    # Get fixture statistics and update stats_json
+                    stats = repo.get_fixture_stats(fixture_id, no_api=False)
+                    if stats:
+                        # Update fixtures table with stats_json
+                        conn = get_mysql_connection()
+                        cur = conn.cursor()
+                        cur.execute("""
+                            UPDATE fixtures 
+                            SET stats_json = %s 
+                            WHERE id = %s
+                        """, (json.dumps(stats, ensure_ascii=False), fixture_id))
+                        conn.commit()
+                        conn.close()
+                        updated_count += 1
+            print(f"DEBUG: Finished populating stats_json. Updated {updated_count} fixtures.")
+        except Exception as e:
+            print("populating stats_json failed:", e)
+            import traceback
+            traceback.print_exc()
 
         # Update team stats table with latest data
         update_prepare_job(job_id, progress=18, detail="team stats update")

@@ -1268,20 +1268,7 @@ def run_prepare_job(job_id: str, day_iso: str, prewarm: bool = True, *_args, **_
             except Exception as e:
                 print("prewarm_extras failed:", e)
 
-        # Update team stats table with latest data
-        update_prepare_job(job_id, progress=18, detail="team stats update")
-        try:
-            print(f"DEBUG: Starting team stats update for {len(team_ids)} teams")
-            # First ensure table exists and is populated
-            populate_team_stats_if_needed()
-            print("DEBUG: populate_team_stats_if_needed completed")
-            # Then update stats for teams playing today
-            update_team_stats_for_teams(team_ids, fixtures)
-            print("DEBUG: update_team_stats_for_teams completed")
-        except Exception as e:
-            print("team stats update failed:", e)
-            import traceback
-            traceback.print_exc()
+        # Team stats are now calculated directly from fixtures, no need to update team_stats table
 
         # 3) History/H2H – dopuni samo nedostajuće
         update_prepare_job(job_id, progress=15, detail="history/h2h")
@@ -1369,7 +1356,8 @@ def run_prepare_job(job_id: str, day_iso: str, prewarm: bool = True, *_args, **_
     except Exception as e:
         update_prepare_job(job_id, status="error", detail=str(e)[:255])
         try:
-            logging.exception("prepare job failed")
+            import traceback
+            traceback.print_exc()
         except Exception:
             pass
     finally:
@@ -7456,8 +7444,23 @@ def calculate_team_historical_stats(market: str) -> list:
     Returns list of teams with their success rates from last 30 matches.
     """
     try:
-        conn = get_db_connection()
+        conn = get_mysql_connection()
         cur = conn.cursor()
+        
+        # First check if we have any fixtures at all
+        cur.execute("SELECT COUNT(*) FROM fixtures WHERE fixture_json IS NOT NULL")
+        fixtures_count = cur.fetchone()[0]
+        print(f"DEBUG: Found {fixtures_count} fixtures with fixture_json")
+        
+        # Check if teams table exists and has data
+        cur.execute("SELECT COUNT(*) FROM teams")
+        teams_count = cur.fetchone()[0]
+        print(f"DEBUG: Found {teams_count} teams")
+        
+        # Check if leagues table exists and has data
+        cur.execute("SELECT COUNT(*) FROM leagues")
+        leagues_count = cur.fetchone()[0]
+        print(f"DEBUG: Found {leagues_count} leagues")
         
         # Get all teams that have played matches
         cur.execute("""
@@ -7477,9 +7480,11 @@ def calculate_team_historical_stats(market: str) -> list:
         """)
         
         teams_data = cur.fetchall()
+        print(f"DEBUG: Found {len(teams_data)} teams with league data")
         conn.close()
         
         if not teams_data:
+            print("DEBUG: No teams data found, returning empty list")
             return []
         
         team_stats = []
@@ -7535,7 +7540,7 @@ def calculate_team_historical_stats(market: str) -> list:
 def get_team_last_matches(team_id: int, limit: int = 30) -> list:
     """Get team's last N matches from fixtures."""
     try:
-        conn = get_db_connection()
+        conn = get_mysql_connection()
         cur = conn.cursor()
         
         cur.execute("""

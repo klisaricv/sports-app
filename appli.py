@@ -6955,6 +6955,28 @@ async def api_team_stats(request: Request):
         results = read_precomputed_results(from_date, to_date, fh, th, market)
         print(f"DEBUG: read_precomputed_results returned {len(results)} results")
 
+        # Get league country information from database
+        league_countries = {}
+        if results:
+            conn = get_db_connection()
+            cur = conn.cursor()
+            
+            # Get unique league names from results
+            league_names = list(set([result.get('league', '') for result in results if result.get('league')]))
+            
+            if league_names:
+                placeholders = ','.join(['%s'] * len(league_names))
+                cur.execute(f"""
+                    SELECT name, country 
+                    FROM leagues 
+                    WHERE name IN ({placeholders})
+                """, league_names)
+                
+                for league_name, country in cur.fetchall():
+                    league_countries[league_name] = country
+                    
+            conn.close()
+
         # Convert results to team stats format
         team_stats = []
         for result in results:
@@ -6966,9 +6988,14 @@ async def api_team_stats(request: Request):
             successful_matches = result.get('team1_hits', 0)
             success_rate = (successful_matches / total_matches) * 100 if total_matches > 0 else 0
             
+            # Format league with country
+            league_name = result.get('league', 'Unknown')
+            league_country = league_countries.get(league_name, '')
+            league_display = f"{league_name}" + (f" ({league_country})" if league_country else "")
+            
             team_stats.append({
                 'team_name': result.get('team1', 'Unknown'),
-                'league': result.get('league', 'Unknown'),
+                'league': league_display,
                 'success_rate': round(success_rate, 2),
                 'total_matches': total_matches,
                 'successful_matches': successful_matches,

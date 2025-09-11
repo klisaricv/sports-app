@@ -1268,7 +1268,20 @@ def run_prepare_job(job_id: str, day_iso: str, prewarm: bool = True, *_args, **_
             except Exception as e:
                 print("prewarm_extras failed:", e)
 
-        # Team stats are now calculated directly from fixtures, no need to update team_stats table
+        # Update team stats table with latest data
+        update_prepare_job(job_id, progress=18, detail="team stats update")
+        try:
+            print(f"DEBUG: Starting team stats update for {len(team_ids)} teams")
+            # First ensure table exists and is populated
+            populate_team_stats_if_needed()
+            print("DEBUG: populate_team_stats_if_needed completed")
+            # Then update stats for teams playing today
+            update_team_stats_for_teams(team_ids, fixtures)
+            print("DEBUG: update_team_stats_for_teams completed")
+        except Exception as e:
+            print("team stats update failed:", e)
+            import traceback
+            traceback.print_exc()
 
         # 3) History/H2H – dopuni samo nedostajuće
         update_prepare_job(job_id, progress=15, detail="history/h2h")
@@ -6916,7 +6929,7 @@ async def api_team_stats(request: Request):
     """
     Get team statistics for specific market and period.
     Returns top 10 teams with highest success rate for the given market.
-    Calculates historical statistics directly from fixtures data.
+    Uses precomputed data from team_stats table.
     """
     try:
         q = request.query_params
@@ -6928,14 +6941,14 @@ async def api_team_stats(request: Request):
 
         print(f"DEBUG: api_team_stats called with market={market}")
 
-        # Calculate team statistics directly from fixtures
-        team_stats = calculate_team_historical_stats(market)
-        print(f"DEBUG: calculate_team_historical_stats returned {len(team_stats)} results")
+        # Get team statistics from precomputed team_stats table
+        team_stats = get_team_stats_for_market(market)
+        print(f"DEBUG: get_team_stats_for_market returned {len(team_stats)} results")
 
         # Get league country information from database
         league_countries = {}
         if team_stats:
-            conn = get_db_connection()
+            conn = get_mysql_connection()
             cur = conn.cursor()
             
             # Get unique league names from results
@@ -7012,7 +7025,7 @@ async def save_pdf(data: dict):
     c.save()
     return FileResponse(file_path, filename="analysis_results.pdf")
 
-def get_team_stats_for_market(from_date: datetime, to_date: datetime, fh: int, th: int, market: str) -> list:
+def get_team_stats_for_market(market: str) -> list:
     """
     Get team statistics for a specific market and period.
     Returns list of teams with their success rates.
@@ -7438,215 +7451,6 @@ def update_team_stats_for_teams(team_ids: set, fixtures: list):
     except Exception as e:
         print(f"Error updating team stats for teams: {e}")
 
-def calculate_team_historical_stats(market: str) -> list:
-    """
-    Calculate historical team statistics for a specific market.
-    Returns list of teams with their success rates from last 30 matches.
-    """
-    try:
-        conn = get_mysql_connection()
-        cur = conn.cursor()
-        
-        # First check if we have any fixtures at all
-        cur.execute("SELECT COUNT(*) FROM fixtures WHERE fixture_json IS NOT NULL")
-        fixtures_count = cur.fetchone()[0]
-        print(f"DEBUG: Found {fixtures_count} fixtures with fixture_json")
-        
-        # Check if teams table exists and has data
-        cur.execute("SELECT COUNT(*) FROM teams")
-        teams_count = cur.fetchone()[0]
-        print(f"DEBUG: Found {teams_count} teams")
-        
-        # Check if leagues table exists and has data
-        cur.execute("SELECT COUNT(*) FROM leagues")
-        leagues_count = cur.fetchone()[0]
-        print(f"DEBUG: Found {leagues_count} leagues")
-        
-        # Get all teams that have played matches
-        cur.execute("""
-            SELECT DISTINCT 
-                COALESCE(t_home.id, t_away.id) as team_id,
-                COALESCE(t_home.name, t_away.name) as team_name,
-                COALESCE(l_home.id, l_away.id) as league_id,
-                COALESCE(l_home.name, l_away.name) as league_name
-            FROM fixtures f
-            LEFT JOIN teams t_home ON f.team_home_id = t_home.id
-            LEFT JOIN teams t_away ON f.team_away_id = t_away.id
-            LEFT JOIN leagues l_home ON f.league_id = l_home.id
-            LEFT JOIN leagues l_away ON f.league_id = l_away.id
-            WHERE f.fixture_json IS NOT NULL
-            AND (t_home.id IS NOT NULL OR t_away.id IS NOT NULL)
-            AND (l_home.id IS NOT NULL OR l_away.id IS NOT NULL)
-        """)
-        
-        teams_data = cur.fetchall()
-        print(f"DEBUG: Found {len(teams_data)} teams with league data")
-        conn.close()
-        
-        if not teams_data:
-            print("DEBUG: No teams data found, returning empty list")
-            return []
-        
-        team_stats = []
-        
-        for team_id, team_name, league_id, league_name in teams_data:
-            if not team_id or not team_name:
-                continue
-                
-            # Get team's last 30 matches
-            team_matches = get_team_last_matches(team_id, 30)
-            
-            if not team_matches or len(team_matches) < 30:
-                continue
-            
-            # Calculate statistics based on market
-            if market == "gg1h":
-                success_rate, hits, total = team_1h_gg_stats(team_matches)
-            elif market == "1h_over05":
-                success_rate, hits, total = team_1h_goal_stats(team_matches)
-            elif market == "1h_over15":
-                success_rate, hits, total = team_1h_over15_stats(team_matches)
-            elif market == "ft_over15":
-                success_rate, hits, total = team_ft_over15_stats(team_matches)
-            elif market == "ft_over25":
-                success_rate, hits, total = team_ft_over25_stats(team_matches)
-            elif market == "ggft":
-                success_rate, hits, total = team_ft_gg_stats(team_matches)
-            elif market == "gg3plus_ft":
-                success_rate, hits, total = team_ft_gg3plus_stats(team_matches)
-            elif market == "x_ht":
-                success_rate, hits, total = team_ht_x_stats(team_matches)
-            else:
-                continue
-            
-            if total >= 30:  # Only include teams with at least 30 matches
-                team_stats.append({
-                    'team_name': team_name,
-                    'league': league_name or 'Unknown',
-                    'success_rate': round(success_rate, 2),
-                    'total_matches': total,
-                    'successful_matches': hits,
-                    'matches_display': f"{hits}/{total}"
-                })
-        
-        return team_stats
-        
-    except Exception as e:
-        print(f"Error calculating team historical stats: {e}")
-        import traceback
-        traceback.print_exc()
-        return []
-
-def get_team_last_matches(team_id: int, limit: int = 30) -> list:
-    """Get team's last N matches from fixtures."""
-    try:
-        conn = get_mysql_connection()
-        cur = conn.cursor()
-        
-        cur.execute("""
-            SELECT f.fixture_json
-            FROM fixtures f
-            WHERE (f.team_home_id = %s OR f.team_away_id = %s)
-            AND f.fixture_json IS NOT NULL
-            ORDER BY f.date DESC
-            LIMIT %s
-        """, (team_id, team_id, limit))
-        
-        matches = []
-        for (fixture_json,) in cur.fetchall():
-            try:
-                fixture_data = json.loads(fixture_json) if isinstance(fixture_json, str) else fixture_json
-                if fixture_data:
-                    matches.append(fixture_data)
-            except Exception:
-                continue
-        
-        conn.close()
-        return matches
-        
-    except Exception as e:
-        print(f"Error getting team matches: {e}")
-        return []
-
-def team_1h_over15_stats(team_matches):
-    """Vrati (percent, hits, total) za 1H Over 1.5 iz istorije tima."""
-    total = 0
-    hits = 0
-    for m in team_matches or []:
-        ht = (m.get('score', {}) or {}).get('halftime', {}) or {}
-        h = ht.get('home') or 0
-        a = ht.get('away') or 0
-        if h is None: h = 0
-        if a is None: a = 0
-        total += 1
-        if (h + a) >= 2:
-            hits += 1
-    pct = round((hits / total) * 100, 2) if total else 0
-    return pct, hits, total
-
-def team_ft_over25_stats(team_matches):
-    """Vrati (percent, hits, total) za FT Over 2.5 iz istorije tima."""
-    total = 0
-    hits = 0
-    for m in team_matches or []:
-        ft = (m.get('score', {}) or {}).get('fulltime', {}) or {}
-        h = ft.get('home') or 0
-        a = ft.get('away') or 0
-        if h is None: h = 0
-        if a is None: a = 0
-        total += 1
-        if (h + a) >= 3:
-            hits += 1
-    pct = round((hits / total) * 100, 2) if total else 0
-    return pct, hits, total
-
-def team_ft_gg_stats(team_matches):
-    """Vrati (percent, hits, total) za FT GG iz istorije tima."""
-    total = 0
-    hits = 0
-    for m in team_matches or []:
-        ft = (m.get('score', {}) or {}).get('fulltime', {}) or {}
-        h = ft.get('home') or 0
-        a = ft.get('away') or 0
-        if h is None: h = 0
-        if a is None: a = 0
-        total += 1
-        if h > 0 and a > 0:
-            hits += 1
-    pct = round((hits / total) * 100, 2) if total else 0
-    return pct, hits, total
-
-def team_ft_gg3plus_stats(team_matches):
-    """Vrati (percent, hits, total) za FT GG 3+ iz istorije tima."""
-    total = 0
-    hits = 0
-    for m in team_matches or []:
-        ft = (m.get('score', {}) or {}).get('fulltime', {}) or {}
-        h = ft.get('home') or 0
-        a = ft.get('away') or 0
-        if h is None: h = 0
-        if a is None: a = 0
-        total += 1
-        if h > 0 and a > 0 and (h + a) >= 3:
-            hits += 1
-    pct = round((hits / total) * 100, 2) if total else 0
-    return pct, hits, total
-
-def team_ht_x_stats(team_matches):
-    """Vrati (percent, hits, total) za HT X (nerešeno) iz istorije tima."""
-    total = 0
-    hits = 0
-    for m in team_matches or []:
-        ht = (m.get('score', {}) or {}).get('halftime', {}) or {}
-        h = ht.get('home') or 0
-        a = ht.get('away') or 0
-        if h is None: h = 0
-        if a is None: a = 0
-        total += 1
-        if h == a:  # Nerešeno - isti broj golova (0-0, 1-1, 2-2, itd.)
-            hits += 1
-    pct = round((hits / total) * 100, 2) if total else 0
-    return pct, hits, total
 
 def calculate_team_basic_stats(team_id: int, league_id: int, season: int) -> dict:
     """

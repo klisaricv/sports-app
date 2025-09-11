@@ -7107,6 +7107,7 @@ def get_team_stats_for_market(market: str) -> list:
             LIMIT 10
         """
         
+        print(f"DEBUG: Executing query for market {market}:\n{query}")
         cur.execute(query)
         results = cur.fetchall()
         conn.close()
@@ -7301,15 +7302,20 @@ def populate_team_stats_if_needed():
         """)
         
         team_league_pairs = cur.fetchall()
+        print(f"DEBUG: Found {len(team_league_pairs)} unique team-league pairs to process for initial population.")
         
+        inserted_count = 0
         for team_id, league_id, match_date in team_league_pairs:
             # Get season from date (simplified)
             season = match_date.year if match_date else 2024
+            
+            print(f"DEBUG: Processing team {team_id}, league {league_id}, season {season}")
             
             # Calculate basic stats for this team
             stats = calculate_team_basic_stats(team_id, league_id, season)
             
             if stats:
+                inserted_count += 1
                 # Insert or update team stats
                 cur.execute("""
                     INSERT INTO team_stats (
@@ -7367,6 +7373,7 @@ def populate_team_stats_if_needed():
         
         conn.commit()
         conn.close()
+        print(f"DEBUG: Finished populating team_stats table. Inserted/Updated {inserted_count} records.")
         print("Team stats table populated successfully!")
         
     except Exception as e:
@@ -7477,6 +7484,7 @@ def calculate_team_basic_stats(team_id: int, league_id: int, season: int) -> dic
     This is a simplified version for demonstration.
     """
     try:
+        print(f"DEBUG: calculate_team_basic_stats called for team {team_id}, league {league_id}, season {season}")
         conn = get_mysql_connection()
         cur = conn.cursor()
         
@@ -7494,7 +7502,10 @@ def calculate_team_basic_stats(team_id: int, league_id: int, season: int) -> dic
         matches = cur.fetchall()
         conn.close()
         
+        print(f"DEBUG: Found {len(matches)} matches for team {team_id}")
+        
         if not matches:
+            print(f"DEBUG: No matches found for team {team_id}")
             return None
         
         # Initialize counters
@@ -7618,6 +7629,7 @@ def calculate_team_basic_stats(team_id: int, league_id: int, season: int) -> dic
             stats['avg_goals_scored'] = 0
             stats['avg_goals_conceded'] = 0
         
+        print(f"DEBUG: calculate_team_basic_stats returning stats for team {team_id}: total_matches={stats['total_matches']}, gg_1h_total_matches={stats['gg_1h_total_matches']}, gg_1h_successful_matches={stats['gg_1h_successful_matches']}")
         return stats
         
     except Exception as e:

@@ -7301,21 +7301,23 @@ def populate_team_stats_if_needed():
             WHERE f.stats_json IS NOT NULL
         """)
         
-        # Debug: Check total fixtures and fixtures with stats_json
-        cur.execute("SELECT COUNT(*) FROM fixtures")
-        total_fixtures = cur.fetchone()[0]
-        print(f"DEBUG: Total fixtures in database: {total_fixtures}")
-        
-        cur.execute("SELECT COUNT(*) FROM fixtures WHERE stats_json IS NOT NULL")
-        fixtures_with_stats = cur.fetchone()[0]
-        print(f"DEBUG: Fixtures with stats_json: {fixtures_with_stats}")
-        
-        cur.execute("SELECT COUNT(*) FROM fixtures WHERE fixture_json IS NOT NULL")
-        fixtures_with_fixture_json = cur.fetchone()[0]
-        print(f"DEBUG: Fixtures with fixture_json: {fixtures_with_fixture_json}")
-        
         team_league_pairs = cur.fetchall()
         print(f"DEBUG: Found {len(team_league_pairs)} unique team-league pairs to process for initial population.")
+        
+        # Debug: Check total fixtures and fixtures with stats_json (using separate cursor)
+        debug_cur = conn.cursor()
+        debug_cur.execute("SELECT COUNT(*) FROM fixtures")
+        total_fixtures = debug_cur.fetchone()[0]
+        print(f"DEBUG: Total fixtures in database: {total_fixtures}")
+        
+        debug_cur.execute("SELECT COUNT(*) FROM fixtures WHERE stats_json IS NOT NULL")
+        fixtures_with_stats = debug_cur.fetchone()[0]
+        print(f"DEBUG: Fixtures with stats_json: {fixtures_with_stats}")
+        
+        debug_cur.execute("SELECT COUNT(*) FROM fixtures WHERE fixture_json IS NOT NULL")
+        fixtures_with_fixture_json = debug_cur.fetchone()[0]
+        print(f"DEBUG: Fixtures with fixture_json: {fixtures_with_fixture_json}")
+        debug_cur.close()
         
         inserted_count = 0
         for team_id, league_id, match_date in team_league_pairs:

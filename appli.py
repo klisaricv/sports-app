@@ -7456,8 +7456,23 @@ def calculate_team_historical_stats(market: str) -> list:
     Returns list of teams with their success rates from last 30 matches.
     """
     try:
-        conn = get_db_connection()
+        conn = get_mysql_connection()
         cur = conn.cursor()
+        
+        # First check if we have any fixtures at all
+        cur.execute("SELECT COUNT(*) FROM fixtures WHERE fixture_json IS NOT NULL")
+        fixtures_count = cur.fetchone()[0]
+        print(f"DEBUG: Found {fixtures_count} fixtures with fixture_json")
+        
+        # Check if teams table exists and has data
+        cur.execute("SELECT COUNT(*) FROM teams")
+        teams_count = cur.fetchone()[0]
+        print(f"DEBUG: Found {teams_count} teams")
+        
+        # Check if leagues table exists and has data
+        cur.execute("SELECT COUNT(*) FROM leagues")
+        leagues_count = cur.fetchone()[0]
+        print(f"DEBUG: Found {leagues_count} leagues")
         
         # Get all teams that have played matches
         cur.execute("""
@@ -7477,9 +7492,11 @@ def calculate_team_historical_stats(market: str) -> list:
         """)
         
         teams_data = cur.fetchall()
+        print(f"DEBUG: Found {len(teams_data)} teams with league data")
         conn.close()
         
         if not teams_data:
+            print("DEBUG: No teams data found, returning empty list")
             return []
         
         team_stats = []
@@ -7535,7 +7552,7 @@ def calculate_team_historical_stats(market: str) -> list:
 def get_team_last_matches(team_id: int, limit: int = 30) -> list:
     """Get team's last N matches from fixtures."""
     try:
-        conn = get_db_connection()
+        conn = get_mysql_connection()
         cur = conn.cursor()
         
         cur.execute("""

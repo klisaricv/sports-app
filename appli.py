@@ -7312,6 +7312,15 @@ def populate_team_stats_if_needed():
         print(f"DEBUG: team_stats table has {count} records")
         
         if count > 0:
+            # Debug: Show sample data from team_stats table
+            cur.execute("""
+                SELECT team_id, league_id, gg_1h_total_matches, gg_1h_successful_matches, gg_1h_success_rate
+                FROM team_stats 
+                LIMIT 5
+            """)
+            sample_data = cur.fetchall()
+            print(f"DEBUG: Sample team_stats data: {sample_data}")
+            
             conn.close()
             print("DEBUG: team_stats table already populated, skipping")
             return  # Already populated

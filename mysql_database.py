@@ -339,33 +339,6 @@ def create_all_tables():
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         """)
 
-        # Teams table
-        cur.execute("""
-        CREATE TABLE IF NOT EXISTS teams (
-            id INT PRIMARY KEY,
-            name VARCHAR(255) NOT NULL,
-            country VARCHAR(100),
-            logo VARCHAR(500),
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            INDEX idx_teams_name (name)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-        """)
-
-        # Leagues table
-        cur.execute("""
-        CREATE TABLE IF NOT EXISTS leagues (
-            id INT PRIMARY KEY,
-            name VARCHAR(255) NOT NULL,
-            country VARCHAR(100),
-            logo VARCHAR(500),
-            type VARCHAR(50),
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            INDEX idx_leagues_name (name)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-        """)
-
         # Team stats table for aggregated statistics
         cur.execute("""
         CREATE TABLE IF NOT EXISTS team_stats (

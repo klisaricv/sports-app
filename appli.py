@@ -1280,15 +1280,16 @@ def run_prepare_job(job_id: str, day_iso: str, prewarm: bool = True, *_args, **_
                     stats = repo.get_fixture_stats(fixture_id, no_api=False)
                     if stats:
                         # Update fixtures table with stats_json
-                        with get_mysql_connection_context() as conn:
-                            cur = conn.cursor()
-                            cur.execute("""
-                                UPDATE fixtures 
-                                SET stats_json = %s 
-                                WHERE id = %s
-                            """, (json.dumps(stats, ensure_ascii=False), fixture_id))
-                            conn.commit()
-                            updated_count += 1
+                        conn = get_mysql_connection()
+                        cur = conn.cursor()
+                        cur.execute("""
+                            UPDATE fixtures 
+                            SET stats_json = %s 
+                            WHERE id = %s
+                        """, (json.dumps(stats, ensure_ascii=False), fixture_id))
+                        conn.commit()
+                        conn.close()
+                        updated_count += 1
             print(f"DEBUG: Finished populating stats_json. Updated {updated_count} fixtures.")
         except Exception as e:
             print("populating stats_json failed:", e)
@@ -2501,7 +2502,6 @@ from mysql_database import (
     delete_session,
     cleanup_expired_sessions,
     get_mysql_connection,
-    get_mysql_connection_context,
 )
 
 # ====== AUTHENTICATION MODELS ======
@@ -6976,22 +6976,24 @@ async def api_team_stats(request: Request):
         # Get league country information from database
         league_countries = {}
         if team_stats:
-            with get_mysql_connection_context() as conn:
-                cur = conn.cursor()
+            conn = get_mysql_connection()
+            cur = conn.cursor()
+            
+            # Get unique league names from results
+            league_names = list(set([team.get('league', '') for team in team_stats if team.get('league')]))
+            
+            if league_names:
+                placeholders = ','.join(['%s'] * len(league_names))
+                cur.execute(f"""
+                    SELECT name, country 
+                    FROM leagues 
+                    WHERE name IN ({placeholders})
+                """, league_names)
                 
-                # Get unique league names from results
-                league_names = list(set([team.get('league', '') for team in team_stats if team.get('league')]))
-                
-                if league_names:
-                    placeholders = ','.join(['%s'] * len(league_names))
-                    cur.execute(f"""
-                        SELECT name, country 
-                        FROM leagues 
-                        WHERE name IN ({placeholders})
-                    """, league_names)
+                for league_name, country in cur.fetchall():
+                    league_countries[league_name] = country
                     
-                    for league_name, country in cur.fetchall():
-                        league_countries[league_name] = country
+            conn.close()
 
         # Format league with country
         for team in team_stats:
@@ -7061,81 +7063,82 @@ def get_team_stats_for_market(market: str) -> list:
         # First, try to populate team_stats table if it's empty
         populate_team_stats_if_needed()
         
-        with get_mysql_connection_context() as conn:
-            cur = conn.cursor()
-            print(f"DEBUG: Connected to database for market {market}")
-            
-            # Map market to database columns
-            market_config = {
-                'gg1h': {
-                    'success_rate': 'gg_1h_success_rate',
-                    'total_matches': 'gg_1h_total_matches', 
-                    'successful_matches': 'gg_1h_successful_matches'
-                },
-                '1h_over05': {
-                    'success_rate': 'over05_1h_success_rate',
-                    'total_matches': 'over05_1h_total_matches',
-                    'successful_matches': 'over05_1h_successful_matches'
-                },
-                '1h_over15': {
-                    'success_rate': 'over15_1h_success_rate',
-                    'total_matches': 'over15_1h_total_matches',
-                    'successful_matches': 'over15_1h_successful_matches'
-                },
-                'ft_over15': {
-                    'success_rate': 'over15_ft_success_rate',
-                    'total_matches': 'over15_ft_total_matches',
-                    'successful_matches': 'over15_ft_successful_matches'
-                },
-                'ft_over25': {
-                    'success_rate': 'over25_ft_success_rate',
-                    'total_matches': 'over25_ft_total_matches',
-                    'successful_matches': 'over25_ft_successful_matches'
-                },
-                'ggft': {
-                    'success_rate': 'gg_ft_success_rate',
-                    'total_matches': 'gg_ft_total_matches',
-                    'successful_matches': 'gg_ft_successful_matches'
-                },
-                'gg3plus_ft': {
-                    'success_rate': 'gg3plus_ft_success_rate',
-                    'total_matches': 'gg3plus_ft_total_matches',
-                    'successful_matches': 'gg3plus_ft_successful_matches'
-                },
-                'x_ht': {
-                    'success_rate': 'x_ht_success_rate',
-                    'total_matches': 'x_ht_total_matches',
-                    'successful_matches': 'x_ht_successful_matches'
-                }
+        conn = get_mysql_connection()
+        cur = conn.cursor()
+        print(f"DEBUG: Connected to database for market {market}")
+        
+        # Map market to database columns
+        market_config = {
+            'gg1h': {
+                'success_rate': 'gg_1h_success_rate',
+                'total_matches': 'gg_1h_total_matches', 
+                'successful_matches': 'gg_1h_successful_matches'
+            },
+            '1h_over05': {
+                'success_rate': 'over05_1h_success_rate',
+                'total_matches': 'over05_1h_total_matches',
+                'successful_matches': 'over05_1h_successful_matches'
+            },
+            '1h_over15': {
+                'success_rate': 'over15_1h_success_rate',
+                'total_matches': 'over15_1h_total_matches',
+                'successful_matches': 'over15_1h_successful_matches'
+            },
+            'ft_over15': {
+                'success_rate': 'over15_ft_success_rate',
+                'total_matches': 'over15_ft_total_matches',
+                'successful_matches': 'over15_ft_successful_matches'
+            },
+            'ft_over25': {
+                'success_rate': 'over25_ft_success_rate',
+                'total_matches': 'over25_ft_total_matches',
+                'successful_matches': 'over25_ft_successful_matches'
+            },
+            'ggft': {
+                'success_rate': 'gg_ft_success_rate',
+                'total_matches': 'gg_ft_total_matches',
+                'successful_matches': 'gg_ft_successful_matches'
+            },
+            'gg3plus_ft': {
+                'success_rate': 'gg3plus_ft_success_rate',
+                'total_matches': 'gg3plus_ft_total_matches',
+                'successful_matches': 'gg3plus_ft_successful_matches'
+            },
+            'x_ht': {
+                'success_rate': 'x_ht_success_rate',
+                'total_matches': 'x_ht_total_matches',
+                'successful_matches': 'x_ht_successful_matches'
             }
-            
-            config = market_config.get(market, market_config['gg1h'])
-            success_rate_col = config['success_rate']
-            total_matches_col = config['total_matches']
-            successful_matches_col = config['successful_matches']
-            
-            # Build query
-            query = f"""
-                SELECT 
-                    t.name as team_name,
-                    l.name as league,
-                    ts.{success_rate_col} as success_rate,
-                    ts.{total_matches_col} as total_matches,
-                    ts.{successful_matches_col} as successful_matches,
-                    ts.avg_goals_scored
-                FROM team_stats ts
-                JOIN teams t ON ts.team_id = t.id
-                JOIN leagues l ON ts.league_id = l.id
-                WHERE ts.{success_rate_col} IS NOT NULL
-                AND ts.{success_rate_col} > 0
-                AND ts.{total_matches_col} >= 1
-                ORDER BY ts.{success_rate_col} DESC
-                LIMIT 10
-            """
-            
-            print(f"DEBUG: Executing query for market {market}:\n{query}")
-            cur.execute(query)
-            results = cur.fetchall()
+        }
+        
+        config = market_config.get(market, market_config['gg1h'])
+        success_rate_col = config['success_rate']
+        total_matches_col = config['total_matches']
+        successful_matches_col = config['successful_matches']
+        
+        # Build query
+        query = f"""
+            SELECT 
+                t.name as team_name,
+                l.name as league,
+                ts.{success_rate_col} as success_rate,
+                ts.{total_matches_col} as total_matches,
+                ts.{successful_matches_col} as successful_matches,
+                ts.avg_goals_scored
+            FROM team_stats ts
+            JOIN teams t ON ts.team_id = t.id
+            JOIN leagues l ON ts.league_id = l.id
+            WHERE ts.{success_rate_col} IS NOT NULL
+            AND ts.{success_rate_col} > 0
+            AND ts.{total_matches_col} >= 1
+            ORDER BY ts.{success_rate_col} DESC
+            LIMIT 10
+        """
+        
+        print(f"DEBUG: Executing query for market {market}:\n{query}")
+        cur.execute(query)
+        results = cur.fetchall()
+        conn.close()
         
         print(f"DEBUG: Query returned {len(results)} results for market {market}")
         
@@ -7169,118 +7172,120 @@ def populate_teams_and_leagues_if_needed():
     """
     try:
         print("DEBUG: populate_teams_and_leagues_if_needed started")
-        with get_mysql_connection_context() as conn:
-            cur = conn.cursor()
-            
-            # Check if teams table has any data
-            cur.execute("SELECT COUNT(*) FROM teams")
-            teams_count = cur.fetchone()[0]
-            print(f"DEBUG: teams table has {teams_count} records")
-            
-            # Check if leagues table has any data
-            cur.execute("SELECT COUNT(*) FROM leagues")
-            leagues_count = cur.fetchone()[0]
-            print(f"DEBUG: leagues table has {leagues_count} records")
-            
-            if teams_count > 0 and leagues_count > 0:
-                print("DEBUG: teams and leagues tables already populated, skipping")
-                return  # Already populated
+        conn = get_mysql_connection()
+        cur = conn.cursor()
         
-            print("DEBUG: Populating teams and leagues tables...")
-            
-            # Get all unique teams and leagues from fixtures
-            cur.execute("""
-                SELECT DISTINCT 
-                    f.team_home_id as team_id,
-                    f.league_id,
-                    f.fixture_json
-                FROM fixtures f
-                WHERE f.fixture_json IS NOT NULL
-                UNION
-                SELECT DISTINCT 
-                    f.team_away_id as team_id,
-                    f.league_id,
-                    f.fixture_json
-                FROM fixtures f
-                WHERE f.fixture_json IS NOT NULL
-            """)
-            
-            team_league_data = cur.fetchall()
-            
-            teams_data = {}
-            leagues_data = {}
-            
-            for team_id, league_id, fixture_json in team_league_data:
-                try:
-                    fixture_data = json.loads(fixture_json) if isinstance(fixture_json, str) else fixture_json
-                    
-                    if not fixture_data:
-                        continue
-                    
-                    # Extract team info
-                    teams = fixture_data.get('teams', {})
-                    home_team = teams.get('home', {})
-                    away_team = teams.get('away', {})
-                    league = fixture_data.get('league', {})
-                    
-                    # Store team data
-                    if home_team.get('id') and home_team.get('name'):
-                        teams_data[home_team['id']] = {
-                            'id': home_team['id'],
-                            'name': home_team['name'],
-                            'country': home_team.get('country', ''),
-                            'logo': home_team.get('logo', '')
-                        }
-                    
-                    if away_team.get('id') and away_team.get('name'):
-                        teams_data[away_team['id']] = {
-                            'id': away_team['id'],
-                            'name': away_team['name'],
-                            'country': away_team.get('country', ''),
-                            'logo': away_team.get('logo', '')
-                        }
-                    
-                    # Store league data
-                    if league.get('id') and league.get('name'):
-                        leagues_data[league['id']] = {
-                            'id': league['id'],
-                            'name': league['name'],
-                            'country': league.get('country', ''),
-                            'logo': league.get('logo', ''),
-                            'type': league.get('type', '')
-                        }
-                    
-                except Exception as e:
-                    print(f"Error processing fixture data: {e}")
+        # Check if teams table has any data
+        cur.execute("SELECT COUNT(*) FROM teams")
+        teams_count = cur.fetchone()[0]
+        print(f"DEBUG: teams table has {teams_count} records")
+        
+        # Check if leagues table has any data
+        cur.execute("SELECT COUNT(*) FROM leagues")
+        leagues_count = cur.fetchone()[0]
+        print(f"DEBUG: leagues table has {leagues_count} records")
+        
+        if teams_count > 0 and leagues_count > 0:
+            conn.close()
+            print("DEBUG: teams and leagues tables already populated, skipping")
+            return  # Already populated
+        
+        print("DEBUG: Populating teams and leagues tables...")
+        
+        # Get all unique teams and leagues from fixtures
+        cur.execute("""
+            SELECT DISTINCT 
+                f.team_home_id as team_id,
+                f.league_id,
+                f.fixture_json
+            FROM fixtures f
+            WHERE f.fixture_json IS NOT NULL
+            UNION
+            SELECT DISTINCT 
+                f.team_away_id as team_id,
+                f.league_id,
+                f.fixture_json
+            FROM fixtures f
+            WHERE f.fixture_json IS NOT NULL
+        """)
+        
+        team_league_data = cur.fetchall()
+        
+        teams_data = {}
+        leagues_data = {}
+        
+        for team_id, league_id, fixture_json in team_league_data:
+            try:
+                fixture_data = json.loads(fixture_json) if isinstance(fixture_json, str) else fixture_json
+                
+                if not fixture_data:
                     continue
-            
-            # Insert teams
-            for team_data in teams_data.values():
-                cur.execute("""
-                    INSERT INTO teams (id, name, country, logo)
-                    VALUES (%s, %s, %s, %s)
-                    ON DUPLICATE KEY UPDATE
-                        name = VALUES(name),
-                        country = VALUES(country),
-                        logo = VALUES(logo),
-                        updated_at = CURRENT_TIMESTAMP
-                """, (team_data['id'], team_data['name'], team_data['country'], team_data['logo']))
-            
-            # Insert leagues
-            for league_data in leagues_data.values():
-                cur.execute("""
-                    INSERT INTO leagues (id, name, country, logo, type)
-                    VALUES (%s, %s, %s, %s, %s)
-                    ON DUPLICATE KEY UPDATE
-                        name = VALUES(name),
-                        country = VALUES(country),
-                        logo = VALUES(logo),
-                        type = VALUES(type),
-                        updated_at = CURRENT_TIMESTAMP
-                """, (league_data['id'], league_data['name'], league_data['country'], league_data['logo'], league_data['type']))
-            
-            conn.commit()
-            print(f"DEBUG: Populated {len(teams_data)} teams and {len(leagues_data)} leagues")
+                
+                # Extract team info
+                teams = fixture_data.get('teams', {})
+                home_team = teams.get('home', {})
+                away_team = teams.get('away', {})
+                league = fixture_data.get('league', {})
+                
+                # Store team data
+                if home_team.get('id') and home_team.get('name'):
+                    teams_data[home_team['id']] = {
+                        'id': home_team['id'],
+                        'name': home_team['name'],
+                        'country': home_team.get('country', ''),
+                        'logo': home_team.get('logo', '')
+                    }
+                
+                if away_team.get('id') and away_team.get('name'):
+                    teams_data[away_team['id']] = {
+                        'id': away_team['id'],
+                        'name': away_team['name'],
+                        'country': away_team.get('country', ''),
+                        'logo': away_team.get('logo', '')
+                    }
+                
+                # Store league data
+                if league.get('id') and league.get('name'):
+                    leagues_data[league['id']] = {
+                        'id': league['id'],
+                        'name': league['name'],
+                        'country': league.get('country', ''),
+                        'logo': league.get('logo', ''),
+                        'type': league.get('type', '')
+                    }
+                
+            except Exception as e:
+                print(f"Error processing fixture data: {e}")
+                continue
+        
+        # Insert teams
+        for team_data in teams_data.values():
+            cur.execute("""
+                INSERT INTO teams (id, name, country, logo)
+                VALUES (%s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    name = VALUES(name),
+                    country = VALUES(country),
+                    logo = VALUES(logo),
+                    updated_at = CURRENT_TIMESTAMP
+            """, (team_data['id'], team_data['name'], team_data['country'], team_data['logo']))
+        
+        # Insert leagues
+        for league_data in leagues_data.values():
+            cur.execute("""
+                INSERT INTO leagues (id, name, country, logo, type)
+                VALUES (%s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    name = VALUES(name),
+                    country = VALUES(country),
+                    logo = VALUES(logo),
+                    type = VALUES(type),
+                    updated_at = CURRENT_TIMESTAMP
+            """, (league_data['id'], league_data['name'], league_data['country'], league_data['logo'], league_data['type']))
+        
+        conn.commit()
+        conn.close()
+        print(f"DEBUG: Populated {len(teams_data)} teams and {len(leagues_data)} leagues")
         
     except Exception as e:
         print(f"Error populating teams and leagues: {e}")
@@ -7298,60 +7303,61 @@ def populate_team_stats_if_needed():
         # First ensure teams and leagues tables are populated
         populate_teams_and_leagues_if_needed()
         
-        with get_mysql_connection_context() as conn:
-            cur = conn.cursor()
-            
-            # Check if team_stats table has any data
-            cur.execute("SELECT COUNT(*) FROM team_stats")
-            count = cur.fetchone()[0]
-            print(f"DEBUG: team_stats table has {count} records")
-            
-            if count > 0:
-                # Debug: Show sample data from team_stats table
-                cur.execute("""
-                    SELECT team_id, league_id, gg_1h_total_matches, gg_1h_successful_matches, gg_1h_success_rate
-                    FROM team_stats 
-                    LIMIT 5
-                """)
-                sample_data = cur.fetchall()
-                print(f"DEBUG: Sample team_stats data: {sample_data}")
-                
-                print("DEBUG: team_stats table already populated, skipping")
-                return  # Already populated
+        conn = get_mysql_connection()
+        cur = conn.cursor()
         
-            print("DEBUG: Populating team_stats table...")
-            
-            # Get all teams and leagues from fixtures (use fixture_json instead of stats_json)
+        # Check if team_stats table has any data
+        cur.execute("SELECT COUNT(*) FROM team_stats")
+        count = cur.fetchone()[0]
+        print(f"DEBUG: team_stats table has {count} records")
+        
+        if count > 0:
+            # Debug: Show sample data from team_stats table
             cur.execute("""
-                SELECT DISTINCT f.team_home_id, f.league_id, f.date
-                FROM fixtures f
-                WHERE f.fixture_json IS NOT NULL
-                UNION
-                SELECT DISTINCT f.team_away_id, f.league_id, f.date
-                FROM fixtures f
-                WHERE f.fixture_json IS NOT NULL
+                SELECT team_id, league_id, gg_1h_total_matches, gg_1h_successful_matches, gg_1h_success_rate
+                FROM team_stats 
+                LIMIT 5
             """)
+            sample_data = cur.fetchall()
+            print(f"DEBUG: Sample team_stats data: {sample_data}")
             
-            team_league_pairs = cur.fetchall()
-            print(f"DEBUG: Found {len(team_league_pairs)} unique team-league pairs to process for initial population.")
-            
-            # Debug: Check total fixtures and fixtures with stats_json (using separate cursor)
-            debug_cur = conn.cursor()
-            debug_cur.execute("SELECT COUNT(*) FROM fixtures")
-            total_fixtures = debug_cur.fetchone()[0]
-            print(f"DEBUG: Total fixtures in database: {total_fixtures}")
-            
-            debug_cur.execute("SELECT COUNT(*) FROM fixtures WHERE stats_json IS NOT NULL")
-            fixtures_with_stats = debug_cur.fetchone()[0]
-            print(f"DEBUG: Fixtures with stats_json: {fixtures_with_stats}")
-            
-            debug_cur.execute("SELECT COUNT(*) FROM fixtures WHERE fixture_json IS NOT NULL")
-            fixtures_with_fixture_json = debug_cur.fetchone()[0]
-            print(f"DEBUG: Fixtures with fixture_json: {fixtures_with_fixture_json}")
-            debug_cur.close()
+            conn.close()
+            print("DEBUG: team_stats table already populated, skipping")
+            return  # Already populated
         
-            inserted_count = 0
-            for team_id, league_id, match_date in team_league_pairs:
+        print("DEBUG: Populating team_stats table...")
+        
+        # Get all teams and leagues from fixtures (use fixture_json instead of stats_json)
+        cur.execute("""
+            SELECT DISTINCT f.team_home_id, f.league_id, f.date
+            FROM fixtures f
+            WHERE f.fixture_json IS NOT NULL
+            UNION
+            SELECT DISTINCT f.team_away_id, f.league_id, f.date
+            FROM fixtures f
+            WHERE f.fixture_json IS NOT NULL
+        """)
+        
+        team_league_pairs = cur.fetchall()
+        print(f"DEBUG: Found {len(team_league_pairs)} unique team-league pairs to process for initial population.")
+        
+        # Debug: Check total fixtures and fixtures with stats_json (using separate cursor)
+        debug_cur = conn.cursor()
+        debug_cur.execute("SELECT COUNT(*) FROM fixtures")
+        total_fixtures = debug_cur.fetchone()[0]
+        print(f"DEBUG: Total fixtures in database: {total_fixtures}")
+        
+        debug_cur.execute("SELECT COUNT(*) FROM fixtures WHERE stats_json IS NOT NULL")
+        fixtures_with_stats = debug_cur.fetchone()[0]
+        print(f"DEBUG: Fixtures with stats_json: {fixtures_with_stats}")
+        
+        debug_cur.execute("SELECT COUNT(*) FROM fixtures WHERE fixture_json IS NOT NULL")
+        fixtures_with_fixture_json = debug_cur.fetchone()[0]
+        print(f"DEBUG: Fixtures with fixture_json: {fixtures_with_fixture_json}")
+        debug_cur.close()
+        
+        inserted_count = 0
+        for team_id, league_id, match_date in team_league_pairs:
             # Get season from date (simplified)
             season = match_date.year if match_date else 2024
             

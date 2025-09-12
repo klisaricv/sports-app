@@ -1281,15 +1281,17 @@ def run_prepare_job(job_id: str, day_iso: str, prewarm: bool = True, *_args, **_
                     if stats:
                         # Update fixtures table with stats_json
                         conn = get_mysql_connection()
-                        cur = conn.cursor()
-                        cur.execute("""
-                            UPDATE fixtures 
-                            SET stats_json = %s 
-                            WHERE id = %s
-                        """, (json.dumps(stats, ensure_ascii=False), fixture_id))
-                        conn.commit()
-                        conn.close()
-                        updated_count += 1
+                        try:
+                            cur = conn.cursor()
+                            cur.execute("""
+                                UPDATE fixtures 
+                                SET stats_json = %s 
+                                WHERE id = %s
+                            """, (json.dumps(stats, ensure_ascii=False), fixture_id))
+                            conn.commit()
+                            updated_count += 1
+                        finally:
+                            conn.close()
             print(f"DEBUG: Finished populating stats_json. Updated {updated_count} fixtures.")
         except Exception as e:
             print("populating stats_json failed:", e)
@@ -7064,10 +7066,11 @@ def get_team_stats_for_market(market: str) -> list:
         populate_team_stats_if_needed()
         
         conn = get_mysql_connection()
-        cur = conn.cursor()
-        print(f"DEBUG: Connected to database for market {market}")
-        
-        # Map market to database columns
+        try:
+            cur = conn.cursor()
+            print(f"DEBUG: Connected to database for market {market}")
+            
+            # Map market to database columns
         market_config = {
             'gg1h': {
                 'success_rate': 'gg_1h_success_rate',
@@ -7138,7 +7141,8 @@ def get_team_stats_for_market(market: str) -> list:
         print(f"DEBUG: Executing query for market {market}:\n{query}")
         cur.execute(query)
         results = cur.fetchall()
-        conn.close()
+        finally:
+            conn.close()
         
         print(f"DEBUG: Query returned {len(results)} results for market {market}")
         
@@ -7304,129 +7308,130 @@ def populate_team_stats_if_needed():
         populate_teams_and_leagues_if_needed()
         
         conn = get_mysql_connection()
-        cur = conn.cursor()
-        
-        # Check if team_stats table has any data
-        cur.execute("SELECT COUNT(*) FROM team_stats")
-        count = cur.fetchone()[0]
-        print(f"DEBUG: team_stats table has {count} records")
-        
-        if count > 0:
-            # Debug: Show sample data from team_stats table
-            cur.execute("""
-                SELECT team_id, league_id, gg_1h_total_matches, gg_1h_successful_matches, gg_1h_success_rate
-                FROM team_stats 
-                LIMIT 5
-            """)
-            sample_data = cur.fetchall()
-            print(f"DEBUG: Sample team_stats data: {sample_data}")
+        try:
+            cur = conn.cursor()
             
-            conn.close()
-            print("DEBUG: team_stats table already populated, skipping")
-            return  # Already populated
-        
-        print("DEBUG: Populating team_stats table...")
-        
-        # Get all teams and leagues from fixtures (use fixture_json instead of stats_json)
-        cur.execute("""
-            SELECT DISTINCT f.team_home_id, f.league_id, f.date
-            FROM fixtures f
-            WHERE f.fixture_json IS NOT NULL
-            UNION
-            SELECT DISTINCT f.team_away_id, f.league_id, f.date
-            FROM fixtures f
-            WHERE f.fixture_json IS NOT NULL
-        """)
-        
-        team_league_pairs = cur.fetchall()
-        print(f"DEBUG: Found {len(team_league_pairs)} unique team-league pairs to process for initial population.")
-        
-        # Debug: Check total fixtures and fixtures with stats_json (using separate cursor)
-        debug_cur = conn.cursor()
-        debug_cur.execute("SELECT COUNT(*) FROM fixtures")
-        total_fixtures = debug_cur.fetchone()[0]
-        print(f"DEBUG: Total fixtures in database: {total_fixtures}")
-        
-        debug_cur.execute("SELECT COUNT(*) FROM fixtures WHERE stats_json IS NOT NULL")
-        fixtures_with_stats = debug_cur.fetchone()[0]
-        print(f"DEBUG: Fixtures with stats_json: {fixtures_with_stats}")
-        
-        debug_cur.execute("SELECT COUNT(*) FROM fixtures WHERE fixture_json IS NOT NULL")
-        fixtures_with_fixture_json = debug_cur.fetchone()[0]
-        print(f"DEBUG: Fixtures with fixture_json: {fixtures_with_fixture_json}")
-        debug_cur.close()
-        
-        inserted_count = 0
-        for team_id, league_id, match_date in team_league_pairs:
-            # Get season from date (simplified)
-            season = match_date.year if match_date else 2024
+            # Check if team_stats table has any data
+            cur.execute("SELECT COUNT(*) FROM team_stats")
+            count = cur.fetchone()[0]
+            print(f"DEBUG: team_stats table has {count} records")
             
-            print(f"DEBUG: Processing team {team_id}, league {league_id}, season {season}")
-            
-            # Calculate basic stats for this team
-            stats = calculate_team_basic_stats(team_id, league_id, season)
-            
-            if stats:
-                inserted_count += 1
-                # Insert or update team stats
+            if count > 0:
+                # Debug: Show sample data from team_stats table
                 cur.execute("""
-                    INSERT INTO team_stats (
+                    SELECT team_id, league_id, gg_1h_total_matches, gg_1h_successful_matches, gg_1h_success_rate
+                    FROM team_stats 
+                    LIMIT 5
+                """)
+                sample_data = cur.fetchall()
+                print(f"DEBUG: Sample team_stats data: {sample_data}")
+                
+                print("DEBUG: team_stats table already populated, skipping")
+                return  # Already populated
+            
+            print("DEBUG: Populating team_stats table...")
+            
+            # Get all teams and leagues from fixtures (use fixture_json instead of stats_json)
+            cur.execute("""
+                SELECT DISTINCT f.team_home_id, f.league_id, f.date
+                FROM fixtures f
+                WHERE f.fixture_json IS NOT NULL
+                UNION
+                SELECT DISTINCT f.team_away_id, f.league_id, f.date
+                FROM fixtures f
+                WHERE f.fixture_json IS NOT NULL
+            """)
+            
+            team_league_pairs = cur.fetchall()
+            print(f"DEBUG: Found {len(team_league_pairs)} unique team-league pairs to process for initial population.")
+            
+            # Debug: Check total fixtures and fixtures with stats_json (using separate cursor)
+            debug_cur = conn.cursor()
+            debug_cur.execute("SELECT COUNT(*) FROM fixtures")
+            total_fixtures = debug_cur.fetchone()[0]
+            print(f"DEBUG: Total fixtures in database: {total_fixtures}")
+            
+            debug_cur.execute("SELECT COUNT(*) FROM fixtures WHERE stats_json IS NOT NULL")
+            fixtures_with_stats = debug_cur.fetchone()[0]
+            print(f"DEBUG: Fixtures with stats_json: {fixtures_with_stats}")
+            
+            debug_cur.execute("SELECT COUNT(*) FROM fixtures WHERE fixture_json IS NOT NULL")
+            fixtures_with_fixture_json = debug_cur.fetchone()[0]
+            print(f"DEBUG: Fixtures with fixture_json: {fixtures_with_fixture_json}")
+            debug_cur.close()
+            
+            inserted_count = 0
+            for team_id, league_id, match_date in team_league_pairs:
+                # Get season from date (simplified)
+                season = match_date.year if match_date else 2024
+                
+                print(f"DEBUG: Processing team {team_id}, league {league_id}, season {season}")
+                
+                # Calculate basic stats for this team
+                stats = calculate_team_basic_stats(team_id, league_id, season)
+                
+                if stats:
+                    inserted_count += 1
+                    # Insert or update team stats
+                    cur.execute("""
+                        INSERT INTO team_stats (
+                            team_id, league_id, season,
+                            gg_1h_success_rate, gg_1h_total_matches, gg_1h_successful_matches,
+                            over05_1h_success_rate, over05_1h_total_matches, over05_1h_successful_matches,
+                            over15_1h_success_rate, over15_1h_total_matches, over15_1h_successful_matches,
+                            over15_ft_success_rate, over15_ft_total_matches, over15_ft_successful_matches,
+                            over25_ft_success_rate, over25_ft_total_matches, over25_ft_successful_matches,
+                            gg_ft_success_rate, gg_ft_total_matches, gg_ft_successful_matches,
+                            gg3plus_ft_success_rate, gg3plus_ft_total_matches, gg3plus_ft_successful_matches,
+                            x_ht_success_rate, x_ht_total_matches, x_ht_successful_matches,
+                            avg_goals_scored, avg_goals_conceded
+                        ) VALUES (
+                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                        ) ON DUPLICATE KEY UPDATE
+                            gg_1h_success_rate = VALUES(gg_1h_success_rate),
+                            gg_1h_total_matches = VALUES(gg_1h_total_matches),
+                            gg_1h_successful_matches = VALUES(gg_1h_successful_matches),
+                            over05_1h_success_rate = VALUES(over05_1h_success_rate),
+                            over05_1h_total_matches = VALUES(over05_1h_total_matches),
+                            over05_1h_successful_matches = VALUES(over05_1h_successful_matches),
+                            over15_1h_success_rate = VALUES(over15_1h_success_rate),
+                            over15_1h_total_matches = VALUES(over15_1h_total_matches),
+                            over15_1h_successful_matches = VALUES(over15_1h_successful_matches),
+                            over15_ft_success_rate = VALUES(over15_ft_success_rate),
+                            over15_ft_total_matches = VALUES(over15_ft_total_matches),
+                            over15_ft_successful_matches = VALUES(over15_ft_successful_matches),
+                            over25_ft_success_rate = VALUES(over25_ft_success_rate),
+                            over25_ft_total_matches = VALUES(over25_ft_total_matches),
+                            over25_ft_successful_matches = VALUES(over25_ft_successful_matches),
+                            gg_ft_success_rate = VALUES(gg_ft_success_rate),
+                            gg_ft_total_matches = VALUES(gg_ft_total_matches),
+                            gg_ft_successful_matches = VALUES(gg_ft_successful_matches),
+                            gg3plus_ft_success_rate = VALUES(gg3plus_ft_success_rate),
+                            gg3plus_ft_total_matches = VALUES(gg3plus_ft_total_matches),
+                            gg3plus_ft_successful_matches = VALUES(gg3plus_ft_successful_matches),
+                            x_ht_success_rate = VALUES(x_ht_success_rate),
+                            x_ht_total_matches = VALUES(x_ht_total_matches),
+                            x_ht_successful_matches = VALUES(x_ht_successful_matches),
+                            avg_goals_scored = VALUES(avg_goals_scored),
+                            avg_goals_conceded = VALUES(avg_goals_conceded)
+                    """, (
                         team_id, league_id, season,
-                        gg_1h_success_rate, gg_1h_total_matches, gg_1h_successful_matches,
-                        over05_1h_success_rate, over05_1h_total_matches, over05_1h_successful_matches,
-                        over15_1h_success_rate, over15_1h_total_matches, over15_1h_successful_matches,
-                        over15_ft_success_rate, over15_ft_total_matches, over15_ft_successful_matches,
-                        over25_ft_success_rate, over25_ft_total_matches, over25_ft_successful_matches,
-                        gg_ft_success_rate, gg_ft_total_matches, gg_ft_successful_matches,
-                        gg3plus_ft_success_rate, gg3plus_ft_total_matches, gg3plus_ft_successful_matches,
-                        x_ht_success_rate, x_ht_total_matches, x_ht_successful_matches,
-                        avg_goals_scored, avg_goals_conceded
-                    ) VALUES (
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
-                    ) ON DUPLICATE KEY UPDATE
-                        gg_1h_success_rate = VALUES(gg_1h_success_rate),
-                        gg_1h_total_matches = VALUES(gg_1h_total_matches),
-                        gg_1h_successful_matches = VALUES(gg_1h_successful_matches),
-                        over05_1h_success_rate = VALUES(over05_1h_success_rate),
-                        over05_1h_total_matches = VALUES(over05_1h_total_matches),
-                        over05_1h_successful_matches = VALUES(over05_1h_successful_matches),
-                        over15_1h_success_rate = VALUES(over15_1h_success_rate),
-                        over15_1h_total_matches = VALUES(over15_1h_total_matches),
-                        over15_1h_successful_matches = VALUES(over15_1h_successful_matches),
-                        over15_ft_success_rate = VALUES(over15_ft_success_rate),
-                        over15_ft_total_matches = VALUES(over15_ft_total_matches),
-                        over15_ft_successful_matches = VALUES(over15_ft_successful_matches),
-                        over25_ft_success_rate = VALUES(over25_ft_success_rate),
-                        over25_ft_total_matches = VALUES(over25_ft_total_matches),
-                        over25_ft_successful_matches = VALUES(over25_ft_successful_matches),
-                        gg_ft_success_rate = VALUES(gg_ft_success_rate),
-                        gg_ft_total_matches = VALUES(gg_ft_total_matches),
-                        gg_ft_successful_matches = VALUES(gg_ft_successful_matches),
-                        gg3plus_ft_success_rate = VALUES(gg3plus_ft_success_rate),
-                        gg3plus_ft_total_matches = VALUES(gg3plus_ft_total_matches),
-                        gg3plus_ft_successful_matches = VALUES(gg3plus_ft_successful_matches),
-                        x_ht_success_rate = VALUES(x_ht_success_rate),
-                        x_ht_total_matches = VALUES(x_ht_total_matches),
-                        x_ht_successful_matches = VALUES(x_ht_successful_matches),
-                        avg_goals_scored = VALUES(avg_goals_scored),
-                        avg_goals_conceded = VALUES(avg_goals_conceded)
-                """, (
-                    team_id, league_id, season,
-                    stats.get('gg_1h_success_rate', 0), stats.get('gg_1h_total_matches', 0), stats.get('gg_1h_successful_matches', 0),
-                    stats.get('over05_1h_success_rate', 0), stats.get('over05_1h_total_matches', 0), stats.get('over05_1h_successful_matches', 0),
-                    stats.get('over15_1h_success_rate', 0), stats.get('over15_1h_total_matches', 0), stats.get('over15_1h_successful_matches', 0),
-                    stats.get('over15_ft_success_rate', 0), stats.get('over15_ft_total_matches', 0), stats.get('over15_ft_successful_matches', 0),
-                    stats.get('over25_ft_success_rate', 0), stats.get('over25_ft_total_matches', 0), stats.get('over25_ft_successful_matches', 0),
-                    stats.get('gg_ft_success_rate', 0), stats.get('gg_ft_total_matches', 0), stats.get('gg_ft_successful_matches', 0),
-                    stats.get('gg3plus_ft_success_rate', 0), stats.get('gg3plus_ft_total_matches', 0), stats.get('gg3plus_ft_successful_matches', 0),
-                    stats.get('x_ht_success_rate', 0), stats.get('x_ht_total_matches', 0), stats.get('x_ht_successful_matches', 0),
-                    stats.get('avg_goals_scored', 0), stats.get('avg_goals_conceded', 0)
-                ))
-        
-        conn.commit()
-        conn.close()
-        print(f"DEBUG: Finished populating team_stats table. Inserted/Updated {inserted_count} records.")
-        print("Team stats table populated successfully!")
+                        stats.get('gg_1h_success_rate', 0), stats.get('gg_1h_total_matches', 0), stats.get('gg_1h_successful_matches', 0),
+                        stats.get('over05_1h_success_rate', 0), stats.get('over05_1h_total_matches', 0), stats.get('over05_1h_successful_matches', 0),
+                        stats.get('over15_1h_success_rate', 0), stats.get('over15_1h_total_matches', 0), stats.get('over15_1h_successful_matches', 0),
+                        stats.get('over15_ft_success_rate', 0), stats.get('over15_ft_total_matches', 0), stats.get('over15_ft_successful_matches', 0),
+                        stats.get('over25_ft_success_rate', 0), stats.get('over25_ft_total_matches', 0), stats.get('over25_ft_successful_matches', 0),
+                        stats.get('gg_ft_success_rate', 0), stats.get('gg_ft_total_matches', 0), stats.get('gg_ft_successful_matches', 0),
+                        stats.get('gg3plus_ft_success_rate', 0), stats.get('gg3plus_ft_total_matches', 0), stats.get('gg3plus_ft_successful_matches', 0),
+                        stats.get('x_ht_success_rate', 0), stats.get('x_ht_total_matches', 0), stats.get('x_ht_successful_matches', 0),
+                        stats.get('avg_goals_scored', 0), stats.get('avg_goals_conceded', 0)
+                    ))
+            
+            conn.commit()
+            print(f"DEBUG: Finished populating team_stats table. Inserted/Updated {inserted_count} records.")
+            print("Team stats table populated successfully!")
+        finally:
+            conn.close()
         
     except Exception as e:
         print(f"Error populating team stats: {e}")
@@ -7538,20 +7543,22 @@ def calculate_team_basic_stats(team_id: int, league_id: int, season: int) -> dic
     try:
         print(f"DEBUG: calculate_team_basic_stats called for team {team_id}, league {league_id}, season {season}")
         conn = get_mysql_connection()
-        cur = conn.cursor()
-        
-        # Get team's matches
-        cur.execute("""
-            SELECT f.id, f.stats_json, f.fixture_json
-            FROM fixtures f
-            WHERE (f.team_home_id = %s OR f.team_away_id = %s)
-            AND f.fixture_json IS NOT NULL
-            ORDER BY f.date DESC
-            LIMIT 50
-        """, (team_id, team_id))
-        
-        matches = cur.fetchall()
-        conn.close()
+        try:
+            cur = conn.cursor()
+            
+            # Get team's matches
+            cur.execute("""
+                SELECT f.id, f.stats_json, f.fixture_json
+                FROM fixtures f
+                WHERE (f.team_home_id = %s OR f.team_away_id = %s)
+                AND f.fixture_json IS NOT NULL
+                ORDER BY f.date DESC
+                LIMIT 50
+            """, (team_id, team_id))
+            
+            matches = cur.fetchall()
+        finally:
+            conn.close()
         
         print(f"DEBUG: Found {len(matches)} matches for team {team_id}")
         

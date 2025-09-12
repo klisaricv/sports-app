@@ -1,8 +1,9 @@
+import time
 import os
 import json
 from dotenv import load_dotenv
 import mysql.connector
-from mysql.connector import pooling
+from mysql.connector import pooling, PoolError
 
 # čita /etc/statsfk.env (može da se promeni preko STATSFK_ENV_FILE)
 ENV_FILE = os.getenv("STATSFK_ENV_FILE", "/etc/statsfk.env")
@@ -87,12 +88,29 @@ def _build_dbconfig():
 
 def get_mysql_connection():
     global _connection_pool
+    # lazy-init pool
     if _connection_pool is None:
         _connection_pool = pooling.MySQLConnectionPool(
             pool_name="statsfk_pool",
-            pool_size=5,
+            pool_size=int(os.getenv("STATSFK_POOL_SIZE", "30")),
             **_build_dbconfig()
         )
+    # retry if pool temporarily exhausted
+    for attempt in range(5):
+        try:
+            return _connection_pool.get_connection()
+        except Exception as e:
+            msg = str(e)
+            if 'pool exhausted' in msg.lower() or isinstance(e, PoolError):
+                time.sleep(0.4 * (attempt + 1))
+                continue
+            raise
+    # last attempt: rebuild the pool and try once more
+    _connection_pool = pooling.MySQLConnectionPool(
+        pool_name="statsfk_pool",
+        pool_size=int(os.getenv("STATSFK_POOL_SIZE", "30")),
+        **_build_dbconfig()
+    )
     return _connection_pool.get_connection()
 
 def insert_team_matches(team_id: int, matches: list):
@@ -336,6 +354,33 @@ def create_all_tables():
             data JSON,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (team_id, league_id, season)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        """)
+
+        # Teams table
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS teams (
+            id INT PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            country VARCHAR(100),
+            logo VARCHAR(500),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_teams_name (name)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        """)
+
+        # Leagues table
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS leagues (
+            id INT PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            country VARCHAR(100),
+            logo VARCHAR(500),
+            type VARCHAR(50),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_leagues_name (name)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         """)
 

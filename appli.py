@@ -258,7 +258,7 @@ def ensure_analysis_cache_table():
 # ADD: jobs tabela za prepare
 def ensure_prepare_jobs_table():
     with DB_WRITE_LOCK:
-        conn = get_db_connection()
+        conn = get_mysql_connection()
         cur = conn.cursor()
         cur.execute("""
             CREATE TABLE IF NOT EXISTS prepare_jobs (
@@ -285,7 +285,7 @@ def create_prepare_job(day_date):
     return job_id
 
 def update_prepare_job(job_id, *, status=None, progress=None, detail=None, result=None):
-    conn = get_db_connection()
+    conn = get_mysql_connection()
     cur = conn.cursor()
     sets = []
     vals = []
@@ -306,7 +306,7 @@ def update_prepare_job(job_id, *, status=None, progress=None, detail=None, resul
     conn.close()
 
 def read_prepare_job(job_id):
-    conn = get_db_connection()
+    conn = get_mysql_connection()
     cur = conn.cursor()
     cur.execute("SELECT job_id, day, status, progress, detail, result_json FROM prepare_jobs WHERE job_id=%s LIMIT 1", (job_id,))
     row = cur.fetchone()

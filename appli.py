@@ -502,6 +502,9 @@ ALPHA_MODEL = 0.7
 # --- NEW: tier/class gap ---
 WEIGHTS["TIER_GAP"] = 0.35   # uticaj razlike ranga (pozitivno -> jači tim)
 CUP_TIER_MULT = 1.35         # u kupovima pojačaj uticaj class-gapa
+    # Kada je utakmica u kupu, motivacija timova obicno moze biti manja
+    # pa blago penalizujemo modelsku verovatnocu (množitelj < 1). Konfigurable.
+CUP_MOTIVATION_MULT = 0.88
 DEFAULT_TEAM_TIER = 2        # ako ne znamo, tretiraj kao 2. nivo
 MAX_TIER_GAP = 3             # clamp [-3, +3]
 
@@ -2504,7 +2507,7 @@ from mysql_database import (
     get_mysql_connection,
 )
 
-# ====== AUTHENTICATION MODELS ======
+
 class LoginRequest(BaseModel):
     email: str
     password: str
@@ -6110,6 +6113,13 @@ def calculate_final_probability(
         debug["market_odds_over05_1h"] = market_odds_over05_1h
         debug["market_prob_over05_1h"] = round(1.0/float(market_odds_over05_1h), 4)
 
+    # Apply cup motivation multiplier if fixture is a cup
+    lgname_raw = ((fixture.get('league') or {}).get('name') or '')
+    is_cup = _is_cup(lgname_raw) or ((fixture.get('league') or {}).get('type','').lower()=='cup')
+    cup_mult = float(globals().get('CUP_MOTIVATION_MULT', 1.0)) if is_cup else 1.0
+    debug['cup_motivation_mult'] = cup_mult
+    p_final = max(0.0, min(1.0, float(p_final) * cup_mult))
+
     return float(p_final * 100.0), debug
 
 def calculate_final_probability_gg(
@@ -6245,6 +6255,13 @@ def calculate_final_probability_gg(
     if market_odds_btts_1h:
         debug["market_odds_btts_1h"] = market_odds_btts_1h
         debug["market_prob_btts_1h"] = round(1.0/float(market_odds_btts_1h), 4)
+
+    # Apply cup motivation multiplier if fixture is a cup
+    lgname_raw = ((fixture.get('league') or {}).get('name') or '')
+    is_cup = _is_cup(lgname_raw) or ((fixture.get('league') or {}).get('type','').lower()=='cup')
+    cup_mult = float(globals().get('CUP_MOTIVATION_MULT', 1.0)) if is_cup else 1.0
+    debug['cup_motivation_mult'] = cup_mult
+    p_final = max(0.0, min(1.0, float(p_final) * cup_mult))
 
     return float(p_final * 100.0), debug
 
@@ -6410,6 +6427,13 @@ def calculate_final_probability_over15(
     if market_odds_over15_1h:
         debug["market_odds_over15_1h"] = market_odds_over15_1h
         debug["market_prob_over15_1h"] = round(1.0/float(market_odds_over15_1h), 4)
+
+    # Apply cup motivation multiplier if fixture is a cup
+    lgname_raw = ((fixture.get('league') or {}).get('name') or '')
+    is_cup = _is_cup(lgname_raw) or ((fixture.get('league') or {}).get('type','').lower()=='cup')
+    cup_mult = float(globals().get('CUP_MOTIVATION_MULT', 1.0)) if is_cup else 1.0
+    debug['cup_motivation_mult'] = cup_mult
+    p_final = max(0.0, min(1.0, float(p_final) * cup_mult))
 
     return float(p_final * 100.0), debug
 

@@ -473,17 +473,6 @@
     "current_active": true
   },
   {
-    "league_id": 347,
-    "league_name": "Cup",
-    "league_type": "Cup",
-    "country_name": "Czech-Republic",
-    "country_code": "CZ",
-    "first_season": 2019,
-    "last_season": 2025,
-    "seasons_count": 7,
-    "current_active": true
-  },
-  {
     "league_id": 345,
     "league_name": "Czech Liga",
     "league_type": "League",
@@ -1900,17 +1889,6 @@
     "first_season": 2016,
     "last_season": 2025,
     "seasons_count": 10,
-    "current_active": true
-  },
-  {
-    "league_id": 680,
-    "league_name": "Cup",
-    "league_type": "Cup",
-    "country_name": "Slovakia",
-    "country_code": "SK",
-    "first_season": 2020,
-    "last_season": 2025,
-    "seasons_count": 6,
     "current_active": true
   },
   {

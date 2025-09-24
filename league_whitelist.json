@@ -1331,17 +1331,6 @@
     "current_active": true
   },
   {
-    "league_id": 394,
-    "league_name": "Super Liga",
-    "league_type": "League",
-    "country_name": "Moldova",
-    "country_code": "MD",
-    "first_season": 2016,
-    "last_season": 2025,
-    "seasons_count": 10,
-    "current_active": true
-  },
-  {
     "league_id": 355,
     "league_name": "First League",
     "league_type": "League",
@@ -1361,17 +1350,6 @@
     "first_season": 2016,
     "last_season": 2025,
     "seasons_count": 10,
-    "current_active": true
-  },
-  {
-    "league_id": 822,
-    "league_name": "Cup",
-    "league_type": "Cup",
-    "country_name": "Morocco",
-    "country_code": "MA",
-    "first_season": 2020,
-    "last_season": 2024,
-    "seasons_count": 5,
     "current_active": true
   },
   {

@@ -23,6 +23,8 @@ from services.data_repo import DataRepo
 from services.scheduler import start_scheduler
 from typing import Iterable, Set
 from pydantic import BaseModel
+from models.dixon_coles import fit_dc, score_matrix, probs_from_matrix, prob_over_under, prob_asian_handicap, DCParams
+from services.data_repo import gather_dc_training_data, get_fixture_by_id
 import os
 import hashlib
 from fastapi import BackgroundTasks
@@ -98,6 +100,65 @@ def prewarm_statistics_cache(team_last_matches: dict[int, list], max_workers: in
 
     return {"queued": len(missing), "fetched": fetched, "errors": errors}
 
+def ensure_model_params_dc_table():
+    conn = get_mysql_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS model_params_dc(
+            league_id INT PRIMARY KEY,
+            params JSON NOT NULL,
+            meta JSON NOT NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """)
+    conn.commit()
+    conn.close()
+
+ensure_model_params_dc_table()
+
+def _serialize_dc_params(p: DCParams) -> dict:
+    return {
+        "alpha": p.alpha,
+        "home_adv": p.home_adv,
+        "rho": p.rho,
+        "attack": {str(k): float(v) for k, v in p.attack.items()},
+        "defense": {str(k): float(v) for k, v in p.defense.items()},
+    }
+
+def _deserialize_dc_params(o: dict) -> DCParams:
+    attack = {int(k): float(v) for k, v in (o.get("attack") or {}).items()}
+    defense = {int(k): float(v) for k, v in (o.get("defense") or {}).items()}
+    return DCParams(
+        alpha=float(o.get("alpha", 0.0)),
+        home_adv=float(o.get("home_adv", 0.0)),
+        rho=float(o.get("rho", 0.0)),
+        attack=attack,
+        defense=defense,
+    )
+
+def save_dc_model(league_id: int, p: DCParams, meta: dict):
+    conn = get_mysql_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO model_params_dc(league_id, params, meta)
+        VALUES(%s,%s,%s)
+        ON DUPLICATE KEY UPDATE params=VALUES(params), meta=VALUES(meta)
+    """, (int(league_id), json.dumps(_serialize_dc_params(p), ensure_ascii=False), json.dumps(meta, ensure_ascii=False)))
+    conn.commit()
+    conn.close()
+
+def load_dc_model(league_id: int):
+    conn = get_mysql_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT params, meta FROM model_params_dc WHERE league_id=%s", (int(league_id),))
+    row = cur.fetchone()
+    conn.close()
+    if not row:
+        return None
+    params = json.loads(row[0]) if isinstance(row[0], str) else row[0]
+    meta = json.loads(row[1]) if isinstance(row[1], str) else row[1]
+    return _deserialize_dc_params(params), (meta or {})
+
 app = FastAPI()
 repo = DataRepo()
 
@@ -110,6 +171,13 @@ class LeagueWhitelistPayload(BaseModel):
     ids: list[int] | None = None
     names: list[LeagueNameItem] | None = None
     strict: bool | None = None
+
+class DCTrainPayload(BaseModel):
+    league_id: int
+    seasons: list[int]
+    half_life_days: int = 365
+    ridge: float = 0.001
+    maxiter: int = 500
 
 @app.post("/admin/set-league-whitelist")
 async def admin_set_league_whitelist(payload: LeagueWhitelistPayload):
@@ -403,7 +471,7 @@ def upsert_model_output(fixture_id: int, market: str, prob: float, debug: dict):
         conn.close()
 
 # Koliko istorije i H2H nam treba da bi analize radile bez API-ja
-DAY_PREFETCH_LAST_N = 30
+DAY_PREFETCH_LAST_N = 15
 DAY_PREFETCH_H2H_N  = 10
 
 ALLOW_API_DURING_ANALYZE = False
@@ -7713,3 +7781,58 @@ def calculate_team_basic_stats(team_id: int, league_id: int, season: int) -> dic
     except Exception as e:
         print(f"Error calculating team stats: {e}")
         return None
+
+@app.post("/api/dc/train")
+async def api_dc_train(payload: DCTrainPayload):
+    seasons = [int(s) for s in payload.seasons]
+    rows = gather_dc_training_data(payload.league_id, seasons, half_life_days=payload.half_life_days)
+    if len(rows) < 200:
+        raise HTTPException(status_code=400, detail=f"Premalo podataka ({len(rows)} mečeva) za ligu {payload.league_id}.")
+    team_ids = sorted({h for h,_,_,_,_ in rows} | {a for _,a,_,_,_ in rows})
+    p = fit_dc(rows, team_ids, ridge=payload.ridge, maxiter=payload.maxiter)
+    meta = {
+        "seasons": seasons,
+        "half_life_days": payload.half_life_days,
+        "ridge": payload.ridge,
+        "fitted_at": datetime.utcnow().isoformat() + "Z",
+        "teams": team_ids,
+    }
+    save_dc_model(payload.league_id, p, meta)
+    return {"ok": True, "league_id": payload.league_id, "meta": meta}
+
+@app.get("/api/dc/fixture/{fixture_id}")
+async def api_dc_fixture(fixture_id: int):
+    fx = get_fixture_by_id(int(fixture_id))
+    if not fx:
+        raise HTTPException(status_code=404, detail="Fixture nije u kešu (fixtures tabela). Pokreni pripremu dana ili dovedi taj fixture.")
+    league = (fx.get("league") or {})
+    league_id = league.get("id")
+    if not league_id:
+        raise HTTPException(status_code=400, detail="Nedostaje league_id u fixturi.")
+    res = load_dc_model(int(league_id))
+    if not res:
+        raise HTTPException(status_code=400, detail=f"Nema treniran DC model za ligu {league_id}. Pozovi /api/dc/train.")
+    model, meta = res
+    teams = fx.get("teams") or {}
+    home_id = (teams.get("home") or {}).get("id")
+    away_id = (teams.get("away") or {}).get("id")
+    if not (home_id and away_id):
+        raise HTTPException(status_code=400, detail="Nedostaju team_id u fixturi.")
+
+    M = score_matrix(model, int(home_id), int(away_id), max_goals=8)
+    markets = {
+        "1X2": probs_from_matrix(M),
+        "OU_2_5": prob_over_under(M, 2.5),
+        "BTTS": {"yes": float(sum(M[i,j] for i in range(M.shape[0]) for j in range(M.shape[1]) if i>0 and j>0))},
+        "AH_home_-0_25": prob_asian_handicap(M, -0.25),
+        "AH_home_-0_5":  prob_asian_handicap(M, -0.5),
+        "AH_home_0":     prob_asian_handicap(M, 0.0),
+    }
+    return {
+        "fixture_id": fixture_id,
+        "league_id": league_id,
+        "teams": {"home": home_id, "away": away_id},
+        "matrix": M.tolist(),
+        "markets": markets,
+        "meta": meta
+    }

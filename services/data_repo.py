@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime, date, timedelta, timezone
-from typing import Dict, List, Tuple, Optional, Set
+from typing import Dict, List, Tuple, Optional, Set, Iterable
 import json
 import time
 
@@ -799,3 +799,121 @@ def purge_old_data():
         cur.execute(q, p)
     conn.commit()
     conn.close()
+
+# ===== Dixon–Coles helpers: league season cache + training set =====
+
+LEAGUE_SEASON_TTL_DAYS = 14
+
+def ensure_league_season_cache_table():
+    conn = get_mysql_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS league_season_cache(
+            league_id INT NOT NULL,
+            season INT NOT NULL,
+            data JSON NOT NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (league_id, season)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """)
+    conn.commit()
+    conn.close()
+
+def get_league_season_results(league_id: int, season: int, no_api: bool=False) -> list:
+    """
+    Vrati listu FT mečeva za ligu+sezonu (keširano u league_season_cache).
+    """
+    ensure_league_season_cache_table()
+    now = datetime.utcnow()
+    conn = get_mysql_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT data, updated_at FROM league_season_cache WHERE league_id=%s AND season=%s", (league_id, season))
+    row = cur.fetchone()
+    conn.close()
+    if row:
+        try:
+            updated_at = row[1] if isinstance(row[1], datetime) else datetime.fromisoformat(str(row[1]))
+        except Exception:
+            updated_at = now - timedelta(days=LEAGUE_SEASON_TTL_DAYS + 1)
+        if (now - updated_at) <= timedelta(days=LEAGUE_SEASON_TTL_DAYS) or no_api:
+            try:
+                j = row[0]
+                return (json.loads(j) if isinstance(j, str) else j) or []
+            except Exception:
+                return []
+    if no_api:
+        return []
+
+    out = []
+    page = 1
+    while True:
+        resp = rate_limited_request(f"{BASE_URL}/fixtures", params={
+            "league": league_id, "season": season, "status": "FT", "page": page, "timezone": "UTC"
+        })
+        arr = (resp or {}).get("response") or []
+        out.extend(arr)
+        paging = (resp or {}).get("paging") or {}
+        total = int(paging.get("total", 1))
+        if page >= total or not arr:
+            break
+        page += 1
+
+    conn = get_mysql_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO league_season_cache(league_id, season, data)
+        VALUES(%s,%s,%s)
+        ON DUPLICATE KEY UPDATE data=VALUES(data)
+    """, (league_id, season, json.dumps(out, ensure_ascii=False)))
+    conn.commit()
+    conn.close()
+    return out
+
+def gather_dc_training_data(league_id: int, seasons: Iterable[int], half_life_days: int=365) -> list:
+    """
+    List[ (home_id, away_id, goals_h, goals_a, weight) ] sa eksponencijalnim opadanjem (half-life).
+    """
+    def w_from_date(dt: datetime, now_dt: datetime) -> float:
+        dd = max(0.0, (now_dt - dt).days)
+        return 0.5 ** (dd / max(1.0, float(half_life_days)))
+    now_dt = datetime.utcnow().replace(tzinfo=timezone.utc)
+    rows = []
+    seen = set()
+    for s in seasons:
+        fixtures = get_league_season_results(league_id, int(s))
+        for fx in fixtures:
+            fix = fx.get("fixture") or {}
+            if (fix.get("status") or {}).get("short") != "FT":
+                continue
+            fid = fix.get("id")
+            if fid in seen:
+                continue
+            seen.add(fid)
+            dt_str = (fix.get("date") or "").replace("Z","")
+            try:
+                dt = datetime.fromisoformat(dt_str)
+            except Exception:
+                dt = now_dt
+            teams = fx.get("teams") or {}
+            goals = fx.get("goals") or {}
+            h = (teams.get("home") or {}).get("id")
+            a = (teams.get("away") or {}).get("id")
+            gh = int(goals.get("home") or 0)
+            ga = int(goals.get("away") or 0)
+            if not (h and a):
+                continue
+            rows.append((h, a, gh, ga, w_from_date(dt, now_dt)))
+    return rows
+
+def get_fixture_by_id(fixture_id: int) -> Optional[dict]:
+    conn = get_mysql_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT fixture_json FROM fixtures WHERE id=%s", (int(fixture_id),))
+    row = cur.fetchone()
+    conn.close()
+    if not row or not row[0]:
+        return None
+    try:
+        return json.loads(row[0]) if isinstance(row[0], str) else row[0]
+    except Exception:
+        return None
